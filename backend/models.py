@@ -1,0 +1,307 @@
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, Date, ForeignKey, Text, UniqueConstraint
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(100), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    virtual_balance = Column(Numeric(15, 2), default=100000.00)
+    is_bot = Column(Boolean, default=False)
+    # KVKK & Sorumluluk reddi onayı (kayıt sırasında zorunlu)
+    terms_accepted = Column(Boolean, default=False, nullable=False)
+    terms_accepted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
+    bot_logs = relationship("BotLog", back_populates="user", cascade="all, delete-orphan")
+    performance_history = relationship("BotPerformanceHistory", back_populates="user", cascade="all, delete-orphan")
+    user_logs = relationship("UserLog", back_populates="user", cascade="all, delete-orphan")
+    personal_bot = relationship("UserBot", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+
+class Stock(Base):
+    __tablename__ = "stocks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(10), unique=True, nullable=False, index=True)
+    company_name = Column(String(150), nullable=False)
+    is_active = Column(Boolean, default=True)
+
+    # Katılım Endeksi (Helal Finans) Uygunluk Bilgileri
+    is_katilim_compliant = Column(Boolean, default=False)
+    purification_rate = Column(Numeric(5, 2), default=0.00)  # Arınma Oranı (%)
+    non_compliance_reason = Column(String, nullable=True)
+
+    # Relationships
+    prices = relationship("StockPrice", back_populates="stock", cascade="all, delete-orphan")
+    portfolios = relationship("Portfolio", back_populates="stock")
+    bot_logs = relationship("BotLog", back_populates="stock")
+    analysis = relationship("CompanyAnalysis", back_populates="stock", uselist=False, cascade="all, delete-orphan")
+
+
+class StockPrice(Base):
+    __tablename__ = "stock_prices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
+    volume = Column(Integer, nullable=True)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    stock = relationship("Stock", back_populates="prices")
+
+
+class Portfolio(Base):
+    __tablename__ = "portfolios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
+    quantity = Column(Numeric(12, 4), nullable=False)
+    average_cost = Column(Numeric(10, 2), nullable=False)
+    # 0/False: kullanıcının kendi manuel pozisyonu, 1/True: kullanıcının kişisel AI botunun pozisyonu.
+    # Aynı user_id + stock_id çifti hem manuel hem bot pozisyonu olarak ayrı ayrı var olabilsin diye
+    # UNIQUE kısıtı bu kolonu da kapsar.
+    is_bot_portfolio = Column(Boolean, default=False, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "stock_id", "is_bot_portfolio", name="uq_user_stock_bot"),
+    )
+
+    # Relationships
+    user = relationship("User", back_populates="portfolios")
+    stock = relationship("Stock", back_populates="portfolios")
+
+
+class BotLog(Base):
+    __tablename__ = "bot_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
+    action_type = Column(String(10), nullable=False)  # 'AL' or 'SAT'
+    price = Column(Numeric(10, 2), nullable=False)
+    quantity = Column(Numeric(12, 4), nullable=False)
+    reason_text = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="bot_logs")
+    stock = relationship("Stock", back_populates="bot_logs")
+
+
+class BotPerformanceHistory(Base):
+    __tablename__ = "bot_performance_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    total_portfolio_value = Column(Numeric(15, 2), nullable=False)
+    recorded_date = Column(Date, nullable=False, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="performance_history")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 2: Kullanıcı İşlem Logları (UserLog)
+# ---------------------------------------------------------------------------
+class UserLog(Base):
+    """
+    Kullanıcı hareket logları tablosu.
+
+    Amaç   : 10-15 kullanıcı için giriş, işlem, takip ekleme gibi olayları kaydeder.
+    Temizlik: 90 günden eski kayıtlar otomatik olarak silinir (bkz. log_cleanup_job).
+
+    Tahmini Veri Yükü (3 ay / 15 kullanıcı):
+      - Günlük ortalama 20 log/kullanıcı × 15 kullanıcı = 300 satır/gün
+      - 90 gün × 300 satır = 27.000 satır
+      - Satır başı ~200 byte (JSON details dahil) → ~5.4 MB max
+      - Otomatik temizlik ile tüm zamanlar için üst limit ≤ 5 MB'da kalır.
+
+    SQL Şeması (SQLite & PostgreSQL uyumlu):
+      CREATE TABLE user_logs (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          action     VARCHAR(50) NOT NULL,
+          details    TEXT,
+          ip_address VARCHAR(45),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX ix_user_logs_user_id    ON user_logs(user_id);
+      CREATE INDEX ix_user_logs_created_at ON user_logs(created_at);
+
+    PostgreSQL Otomatik Temizlik (Cron):
+      -- Her gece 03:00'da çalıştır:
+      -- 0 3 * * * psql -U app -d bist_db -c "DELETE FROM user_logs WHERE created_at < NOW() - INTERVAL '90 days';"
+    """
+    __tablename__ = "user_logs"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    action     = Column(String(50), nullable=False)   # LOGIN, TRADE_BUY, TRADE_SELL, WATCHLIST_ADD, etc.
+    details    = Column(Text, nullable=True)          # JSON string with extra context
+    ip_address = Column(String(45), nullable=True)    # IPv4 or IPv6
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="user_logs")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 3: Derin Bilanço Analizi (CompanyAnalysis)
+# ---------------------------------------------------------------------------
+class CompanyAnalysis(Base):
+    """Piotroski skoru, F/K, PD/DD ve makul değer analizi (Derin Bilanço Analizi)."""
+    __tablename__ = "company_analysis"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), unique=True, nullable=False)
+    piotroski_score = Column(Integer, nullable=True)   # 0-9 arası
+    pe_ratio = Column(Numeric(10, 2), nullable=True)   # F/K
+    pb_ratio = Column(Numeric(10, 2), nullable=True)   # PD/DD
+    ev_ebitda = Column(Numeric(10, 2), nullable=True)  # FD/FAVÖK
+    sector_pe_avg = Column(Numeric(10, 2), nullable=True)  # Sektör F/K
+    fair_value = Column(Numeric(10, 2), nullable=True)     # Makul Değer (Graham)
+    discount_rate = Column(Numeric(6, 2), nullable=True)   # İskonto %
+    roe = Column(Numeric(6, 2), nullable=True)              # Özkaynak Kârlılığı %
+    gross_margin = Column(Numeric(6, 2), nullable=True)     # Brüt Kâr Marjı %
+    net_margin = Column(Numeric(6, 2), nullable=True)       # Net Kâr Marjı %
+    fx_exposure_text = Column(String, nullable=True)        # Döviz kuru riski açıklaması
+    interest_sensitivity_text = Column(String, nullable=True)  # Faiz hassasiyeti açıklaması
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    stock = relationship("Stock", back_populates="analysis")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 4: İçeriden Öğrenenlerin Ticareti (Insider Trades)
+# ---------------------------------------------------------------------------
+class InsiderTrade(Base):
+    __tablename__ = "insider_trades"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    symbol = Column(String(10), nullable=False)
+    title_person = Column(String(150), nullable=False)
+    trade_type = Column(String(10), nullable=False)  # 'ALIM' / 'SATIM'
+    quantity = Column(Numeric(15, 4), nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
+    trade_date = Column(DateTime, nullable=False, index=True)
+
+    stock = relationship("Stock")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 5: KAP Bildirimleri (Genel Haber Akışı)
+# ---------------------------------------------------------------------------
+class KapNotification(Base):
+    __tablename__ = "kap_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=True)
+    symbol = Column(String(10), nullable=False)
+    title = Column(String(300), nullable=False)
+    summary = Column(Text, nullable=True)
+    kap_url = Column(String(500), nullable=True)
+    publish_date = Column(DateTime, nullable=False, index=True)
+
+    stock = relationship("Stock")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 6: TEFAS Yatırım Fonları
+# ---------------------------------------------------------------------------
+class Fund(Base):
+    __tablename__ = "funds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(10), unique=True, nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    fund_type = Column(String(50), nullable=True)
+    risk_level = Column(Integer, nullable=True)  # 1-7 (TEFAS risk skalası)
+    is_katilim_compliant = Column(Boolean, default=False)
+
+    prices = relationship("FundPrice", back_populates="fund", cascade="all, delete-orphan")
+
+
+class FundPrice(Base):
+    __tablename__ = "fund_prices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    fund_id = Column(Integer, ForeignKey("funds.id", ondelete="CASCADE"), nullable=False)
+    price = Column(Numeric(12, 6), nullable=False)
+    daily_return = Column(Numeric(6, 2), nullable=True)
+    monthly_return = Column(Numeric(6, 2), nullable=True)
+    yearly_return = Column(Numeric(6, 2), nullable=True)
+    recorded_date = Column(Date, nullable=False, index=True)
+
+    fund = relationship("Fund", back_populates="prices")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 7: Halka Arzlar (IPO)
+# ---------------------------------------------------------------------------
+class Ipo(Base):
+    __tablename__ = "ipos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_name = Column(String(200), nullable=False)
+    symbol = Column(String(10), nullable=True)
+    offer_price = Column(Numeric(10, 2), nullable=True)
+    demand_collection_dates = Column(String(60), nullable=True)
+    is_katilim_compliant = Column(Boolean, default=False)
+    lot_distribution_type = Column(String(50), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 8: Hisse Yorumları & Topluluk Duyarlılığı
+# ---------------------------------------------------------------------------
+class StockComment(Base):
+    __tablename__ = "stock_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    comment_text = Column(String(500), nullable=False)
+    sentiment_score = Column(Numeric(4, 2), nullable=True)  # -1.00 .. +1.00
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    user = relationship("User")
+    stock = relationship("Stock")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 9: Çok Kullanıcılı Kişisel Yapay Zeka Botu (UserBot)
+# ---------------------------------------------------------------------------
+class UserBot(Base):
+    """
+    Her kullanıcının kendine ait, kendi sanal bakiyesiyle çalışan kişisel AI botu.
+    Bot pozisyonları portfolios tablosunda aynı user_id ile is_bot_portfolio=1
+    olarak tutulur; işlem günlükleri bot_logs tablosunda yine aynı user_id ile
+    (legacy paylaşımlı demo bot 'yapay_zeka_trader' kullanıcısından farklı bir id
+    olduğu için) çakışma yaşanmaz.
+    """
+    __tablename__ = "user_bots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    bot_name = Column(String(50), nullable=False, default="Kişisel AI Bot")
+    virtual_balance = Column(Numeric(15, 2), default=100000.00)
+    is_active = Column(Boolean, default=True)
+    risk_profile = Column(String(20), default="dengeli")  # 'dusuk' | 'dengeli' | 'yuksek'
+    # Süre & Zaman Dilimi Bazlı Strateji Motoru
+    time_frame = Column(String(4), default="1D")  # '1D' Gün İçi/Scalp, '1W' Swing, '1M' Trend/Pozisyon
+    started_at = Column(DateTime, nullable=True)
+    ends_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="personal_bot")

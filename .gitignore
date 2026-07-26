@@ -1,0 +1,31 @@
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+
+# Python
+backend/venv/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+
+# Databases (local SQLite data — never committed)
+*.db
+*.db-journal
+backend/bist_app.db
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
+frontend/.turbo/
+node_modules/
+
+# Logs / OS
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1006 @@
+import os
+import pandas as pd
+from datetime import datetime, date, timedelta
+from typing import List, Dict, Any
+
+from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import nh3
+
+import models
+from database import engine, get_db
+from schemas import (
+    UserCreate, UserResponse, Token, LoginRequest,
+    StockResponse, StockDetailResponse, StockPriceResponse,
+    TradeRequest, PortfolioResponse, PortfolioItemResponse,
+    BotLogResponse, BotPerformancePoint, LeaderboardItem,
+    StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
+    InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
+    IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
+    DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest
+)
+from auth import (
+    get_password_hash, verify_password, create_access_token, get_current_user
+)
+from scheduler import start_scheduler
+from bot import calculate_technical_indicators, get_strategy_config, BOT_STRATEGY_CONFIG
+from kap_client import fetch_kap_disclosures, get_kap_search_url, fetch_kap_news
+from market_hours import get_market_status_dict, is_market_open
+from analysis_engine import calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError
+from insider_client import fetch_insider_trades, get_recent_insider_buys
+from sentiment import score_sentiment
+
+def _rate_limit_key(request: Request) -> str:
+    """
+    Rate limiti mümkün olduğunda kullanıcı bazlı (JWT 'sub' claim'i), aksi halde
+    istemci IP adresine göre uygular. Böylece aynı IP arkasındaki farklı
+    kullanıcılar birbirini rate-limit'e takmaz, ama IP bazlı spam de engellenir.
+    """
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        try:
+            import jwt as _jwt
+            from auth import SECRET_KEY, ALGORITHM
+            payload = _jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username = payload.get("sub")
+            if username:
+                return f"user:{username}"
+        except Exception:
+            pass
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_rate_limit_key)
+
+app = FastAPI(title="BIST Simülasyonu & AI Trader API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- Production CORS Hardening ---
+# Geliştirme ortamında (FRONTEND_URL / NEXT_PUBLIC_FRONTEND_URL tanımlı değilse) yerel
+# origin'lere izin verilir. Üretimde (Render) ise SADECE Vercel'deki frontend origin'i
+# kabul edilir. Wildcard ('*') KASITLI OLARAK desteklenmez: allow_credentials=True ile
+# wildcard birlikte kullanılırsa tarayıcılar isteği zaten reddeder ve herhangi bir
+# origin'in kimlik doğrulamalı isteği taklit etmesine izin vermiş oluruz.
+_frontend_url = os.environ.get("FRONTEND_URL") or os.environ.get("NEXT_PUBLIC_FRONTEND_URL")
+_allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+if _frontend_url:
+    _allowed_origins.append(_frontend_url)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Start APScheduler on startup
+@app.on_event("startup")
+def startup_event():
+    start_scheduler()
+
+# --- AUTHENTICATION ---
+
+@app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    # Check if username or email already exists
+    if db.query(models.User).filter_by(username=user_data.username).first():
+        raise HTTPException(status_code=400, detail="Bu kullanıcı adı zaten alınmış.")
+    if db.query(models.User).filter_by(email=user_data.email).first():
+        raise HTTPException(status_code=400, detail="Bu e-posta adresi zaten kullanımda.")
+
+    # KVKK & Sorumluluk Reddi: Onay zorunlu
+    if not user_data.terms_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Kullanıcı sözleşmesi, KVKK Aydınlatma Metni ve Sorumluluk Reddi Feragatnamesi'ni onaylamak zorunludur."
+        )
+        
+    hashed_password = get_password_hash(user_data.password)
+    new_user = models.User(
+        username=user_data.username,
+        email=user_data.email,
+        password_hash=hashed_password,
+        virtual_balance=100000.00,
+        is_bot=False,
+        terms_accepted=True,
+        terms_accepted_at=datetime.utcnow(),
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    # Her yeni kullanıcı için kişisel AI Bot otomatik oluşturulur (100.000 TL başlangıç bakiyesi, 1 Günlük varsayılan strateji)
+    now = datetime.utcnow()
+    default_config = get_strategy_config("1D")
+    db.add(models.UserBot(
+        user_id=new_user.id,
+        bot_name=f"{new_user.username} — Kişisel AI Bot",
+        virtual_balance=100000.00,
+        is_active=True,
+        risk_profile="dengeli",
+        time_frame="1D",
+        started_at=now,
+        ends_at=now + default_config["duration"],
+    ))
+    db.commit()
+
+    return new_user
+
+@app.post("/api/auth/login", response_model=Token)
+def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter_by(username=login_data.username).first()
+    if not user or user.is_bot or not verify_password(login_data.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Hatalı kullanıcı adı veya şifre.")
+    
+    # Giriş olayını logla
+    _log_user_action(db, user.id, "LOGIN", f"Kullanıcı giriş yaptı")
+    
+    access_token = create_access_token(subject=user.username)
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def get_me(current_user: models.User = Depends(get_current_user)):
+    return current_user
+
+
+# --- MARKET STATUS ---
+
+@app.get("/api/market/status")
+def market_status():
+    """
+    BİST borsa durumunu döndürür.
+    Geri dönen: is_open, reason, current_time_tr, weekday
+    """
+    return get_market_status_dict()
+
+
+# --- YÜKSEK GÜVENLİKLİ YARDIMCI FONKSİYON ---
+
+def _log_user_action(
+    db: Session,
+    user_id: int,
+    action: str,
+    details: str = "",
+    ip_address: str = None
+):
+    """
+    Kullanıcı hareket logı yazar.
+    Hata oluştursa bile ana işlemi durdurmaz.
+    """
+    try:
+        log_entry = models.UserLog(
+            user_id=user_id,
+            action=action,
+            details=details,
+            ip_address=ip_address,
+            created_at=datetime.utcnow()
+        )
+        db.add(log_entry)
+        db.flush()  # commit öncesi yaz, ana transaction ile birlikte
+    except Exception as e:
+        print(f"[UserLog] Log yazılamıyor ({action}): {e}")
+
+
+# --- FİYAT DEĞERLEME YARDIMCISI ---
+#
+# Portföy/liderlik/bot değerleme hesaplarının TAMAMI veritabanındaki son kayıtlı fiyatı
+# (stock_last_recorded_price_in_db) kullanır. RAM önbelleği (cache.py) yalnızca YENİ fiyat
+# YAZMAK için (scheduler tarafında, is_market_open() guard'ı altında) kullanılır; borsa
+# kapalıyken hiçbir arka plan görevi yeni fiyat yazmadığından DB'deki son fiyat -ve dolayısıyla
+# tüm değerlemeler- Cuma 18:15 kapanışında donmuş kalır. Bu, aynı anda birden fazla worker
+# çalışsa bile (RAM cache process-local olduğu için) tutarlı, tek doğruluk kaynağı sağlar.
+def _get_latest_db_price(db: Session, stock_id: int) -> float:
+    latest_record = (
+        db.query(models.StockPrice)
+        .filter_by(stock_id=stock_id)
+        .order_by(models.StockPrice.recorded_at.desc())
+        .first()
+    )
+    return float(latest_record.price) if latest_record else 0.0
+
+
+# --- STOCKS ---
+
+@app.get("/api/stocks", response_model=List[StockResponse])
+def get_stocks(db: Session = Depends(get_db)):
+    stocks = db.query(models.Stock).filter_by(is_active=True).all()
+
+    response = []
+    for stock in stocks:
+        current_price = 0.0
+        price_change_pct = 0.0
+
+        # Son iki DB kaydına göre günlük değişim — borsa kapalıyken bu kayıtlar
+        # değişmediği için sonuç otomatik olarak son kapanışta donuk kalır.
+        history = db.query(models.StockPrice)\
+            .filter(models.StockPrice.stock_id == stock.id)\
+            .order_by(models.StockPrice.recorded_at.desc())\
+            .limit(2)\
+            .all()
+
+        if history:
+            current_price = float(history[0].price)
+            if len(history) > 1:
+                prev_price = float(history[1].price)
+                if prev_price > 0:
+                    price_change_pct = ((current_price - prev_price) / prev_price) * 100
+
+        response.append({
+            "id": stock.id,
+            "symbol": stock.symbol,
+            "company_name": stock.company_name,
+            "is_active": stock.is_active,
+            "current_price": round(current_price, 2),
+            "price_change_pct": round(price_change_pct, 2),
+            "is_katilim_compliant": bool(stock.is_katilim_compliant),
+            "purification_rate": float(stock.purification_rate or 0.0)
+        })
+        
+    return response
+
+@app.get("/api/stocks/{symbol}", response_model=StockDetailResponse)
+def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+        
+    # Fetch last 100 prices for chart & indicator calculations
+    price_records = db.query(models.StockPrice)\
+        .filter_by(stock_id=stock.id)\
+        .order_by(models.StockPrice.recorded_at.asc())\
+        .limit(100)\
+        .all()
+        
+    if not price_records:
+        raise HTTPException(status_code=400, detail="Bu hisseye ait fiyat verisi bulunmamaktadır.")
+        
+    # Latest price — DB'deki son kayıttan (borsa kapalıyken Cuma kapanışında donuk kalır)
+    current_price = _get_latest_db_price(db, stock.id) or float(price_records[-1].price)
+    
+    # Calculate indicators
+    df_data = {
+        "price": [float(p.price) for p in price_records],
+        "recorded_at": [p.recorded_at for p in price_records]
+    }
+    df = pd.DataFrame(df_data)
+    df = calculate_technical_indicators(df)
+    
+    last_row = df.iloc[-1]
+    indicators = {
+        "rsi": round(float(last_row["rsi"]), 2),
+        "macd": round(float(last_row["macd"]), 2),
+        "macd_signal": round(float(last_row["macd_signal"]), 2),
+        "sma_short": round(float(last_row["sma_short"]), 2),
+        "sma_long": round(float(last_row["sma_long"]), 2),
+        "bb_high": round(float(last_row["bb_high"]), 2),
+        "bb_low": round(float(last_row["bb_low"]), 2)
+    }
+    
+    # Format prices for response (return last 30 for the chart to keep it clean)
+    prices_response = [
+        StockPriceResponse(price=float(p.price), volume=p.volume, recorded_at=p.recorded_at)
+        for p in price_records[-30:]
+    ]
+    
+    return StockDetailResponse(
+        id=stock.id,
+        symbol=stock.symbol,
+        company_name=stock.company_name,
+        current_price=round(current_price, 2),
+        prices=prices_response,
+        indicators=indicators
+    )
+
+
+# --- KAP DISCLOSURES ---
+
+@app.get("/api/stocks/{symbol}/kap-disclosures")
+def get_kap_disclosures(symbol: str, db: Session = Depends(get_db)):
+    """
+    Fetches public KAP (Kamuoyunu Aydınlatma Platformu) disclosures for a given stock symbol.
+    Returns recent public disclosures (major shareholder changes, special situations, etc.)
+    """
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+    
+    disclosures = fetch_kap_disclosures(symbol.upper())
+    kap_url = get_kap_search_url(symbol.upper())
+    
+    return {
+        "symbol": symbol.upper(),
+        "company_name": stock.company_name,
+        "kap_url": kap_url,
+        "disclosures": disclosures
+    }
+
+
+# --- DERİN BİLANÇO ANALİZİ / HELAL FİNANS ANALİZİ ---
+
+@app.get("/api/stocks/{symbol}/analysis", response_model=StockProResponse)
+def get_stock_analysis(symbol: str, db: Session = Depends(get_db)):
+    """
+    Katılım Endeksi (Helal Finans) uygunluğu ve Derin Bilanço Analizi verilerini
+    (Piotroski skoru, F/K, PD/DD, makul değer) döndürür.
+    """
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    return StockProResponse(
+        symbol=stock.symbol,
+        company_name=stock.company_name,
+        katilim=KatilimInfoResponse(
+            is_katilim_compliant=bool(stock.is_katilim_compliant),
+            purification_rate=float(stock.purification_rate or 0.0),
+            non_compliance_reason=stock.non_compliance_reason
+        ),
+        analysis=CompanyAnalysisResponse.model_validate(stock.analysis) if stock.analysis else None
+    )
+
+
+def _run_analysis_refresh(symbol: str, db: Session) -> CompanyAnalysisResponse:
+    """Ortak tazeleme mantığı: yfinance'tan çeker, company_analysis'i günceller, hataları ayrıştırır."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper()).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail=f"'{symbol.upper()}' sembolü bulunamadı.")
+
+    try:
+        analysis = calculate_deep_analysis(db, symbol.upper())
+    except AnalysisFetchError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        print(f"[Analysis] Beklenmeyen hata ({symbol}): {e}")
+        raise HTTPException(status_code=500, detail=f"Analiz hesaplanırken beklenmeyen bir hata oluştu: {e}")
+
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı veya analiz hesaplanamadı.")
+
+    return CompanyAnalysisResponse.model_validate(analysis)
+
+
+@app.post("/api/analysis/{symbol}/refresh", response_model=CompanyAnalysisResponse)
+@limiter.limit("5/minute")
+def refresh_analysis(request: Request, symbol: str, db: Session = Depends(get_db)):
+    """
+    Derin Bilanço Analizi'ni (Piotroski skoru, F/K, Graham makul değeri, sektör F/K,
+    ROE/kâr marjları) yfinance'tan yeniden hesaplayıp company_analysis tablosuna yazar.
+    yfinance'a hiç ulaşılamazsa 502, beklenmeyen bir hata olursa 500 döner — sessizce
+    başarılı görünmez.
+    """
+    return _run_analysis_refresh(symbol, db)
+
+
+@app.post("/api/stocks/{symbol}/analysis/refresh", response_model=CompanyAnalysisResponse)
+@limiter.limit("5/minute")
+def refresh_stock_analysis(request: Request, symbol: str, db: Session = Depends(get_db)):
+    """Geriye dönük uyumluluk için korunan eski uç nokta; /api/analysis/{symbol}/refresh ile aynı mantığı kullanır."""
+    return _run_analysis_refresh(symbol, db)
+
+
+@app.get("/api/stocks/{symbol}/insider-trades", response_model=List[InsiderTradeResponse])
+def get_insider_trades(symbol: str, db: Session = Depends(get_db)):
+    """İçeriden öğrenenlerin (yönetici/patron) alım-satım hareketlerini döner."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    fetch_insider_trades(db, symbol.upper())  # KAP'tan tazele (best-effort)
+    trades = get_recent_insider_buys(db, stock.id, days=90)
+    return [
+        InsiderTradeResponse(
+            id=t.id, symbol=t.symbol, title_person=t.title_person,
+            trade_type=t.trade_type, quantity=float(t.quantity),
+            price=float(t.price), trade_date=t.trade_date
+        ) for t in trades
+    ]
+
+
+@app.post("/api/stocks/{symbol}/dividend-goal")
+def get_dividend_goal(symbol: str, req: DividendGoalRequest, db: Session = Depends(get_db)):
+    """Hedeflenen aylık pasif gelire ulaşmak için gereken lot sayısı ve sermayeyi hesaplar."""
+    result = calculate_dividend_goal(db, symbol.upper(), req.target_monthly_income)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+    return result
+
+
+@app.post("/api/stocks/{symbol}/dca-backtest")
+def get_dca_backtest(symbol: str, req: DcaBacktestRequest, db: Session = Depends(get_db)):
+    """Düzenli (aylık sabit tutar) yatırım stratejisinin geçmiş performansını simüle eder."""
+    result = calculate_dca_backtest(db, symbol.upper(), req.monthly_amount, req.months)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+    return result
+
+
+# --- TOPLULUK YORUMLARI & DUYARLILIK ---
+
+@app.get("/api/stocks/{symbol}/comments", response_model=List[StockCommentResponse])
+def get_stock_comments(symbol: str, db: Session = Depends(get_db)):
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    comments = (
+        db.query(models.StockComment)
+        .filter_by(stock_id=stock.id)
+        .order_by(models.StockComment.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return [
+        StockCommentResponse(
+            id=c.id, username=c.user.username, comment_text=c.comment_text,
+            sentiment_score=float(c.sentiment_score) if c.sentiment_score is not None else None,
+            created_at=c.created_at
+        ) for c in comments
+    ]
+
+
+@app.post("/api/stocks/{symbol}/comments", response_model=StockCommentResponse, status_code=status.HTTP_201_CREATED)
+def post_stock_comment(
+    symbol: str, payload: StockCommentCreate,
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    # XSS Koruması: HTML/script içeriği DB'ye yazılmadan önce tamamen ayıklanır
+    # (React zaten metni escape eder, ancak DB katmanında da savunma derinliği sağlanır).
+    clean_text = nh3.clean(payload.comment_text, tags=set())
+
+    sentiment = score_sentiment(clean_text)
+    comment = models.StockComment(
+        user_id=current_user.id,
+        stock_id=stock.id,
+        comment_text=clean_text,
+        sentiment_score=sentiment,
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+
+    return StockCommentResponse(
+        id=comment.id, username=current_user.username, comment_text=comment.comment_text,
+        sentiment_score=sentiment, created_at=comment.created_at
+    )
+
+
+@app.get("/api/stocks/{symbol}/sentiment", response_model=CommunitySentimentResponse)
+def get_community_sentiment(symbol: str, db: Session = Depends(get_db)):
+    """Topluluk yorumlarını toplulaştırıp 'Topluluk Hissede Boğa (%78 Olumlu)' benzeri özet üretir."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    comments = db.query(models.StockComment).filter_by(stock_id=stock.id).all()
+    scores = [float(c.sentiment_score) for c in comments if c.sentiment_score is not None]
+
+    from sentiment import aggregate_sentiment
+    agg = aggregate_sentiment(scores)
+
+    if not scores:
+        verdict = "Henüz yeterli yorum yok."
+    elif agg["positive_pct"] >= 55:
+        verdict = f"Topluluk Hissede Boğa (%{agg['positive_pct']:.0f} Olumlu)"
+    elif agg["negative_pct"] >= 55:
+        verdict = f"Topluluk Hissede Ayı (%{agg['negative_pct']:.0f} Olumsuz)"
+    else:
+        verdict = "Topluluk Kararsız / Nötr"
+
+    return CommunitySentimentResponse(
+        symbol=symbol.upper(),
+        total_comments=len(comments),
+        positive_pct=agg["positive_pct"],
+        negative_pct=agg["negative_pct"],
+        neutral_pct=agg["neutral_pct"],
+        verdict_text=verdict,
+    )
+
+
+# --- KAP GENEL HABER AKIŞI ---
+
+@app.get("/api/kap/news", response_model=List[KapNotificationResponse])
+def get_kap_news(db: Session = Depends(get_db)):
+    """Takip edilen tüm hisseler için genel KAP bildirim akışını döner (en yeni 30)."""
+    fetch_kap_news(db)  # best-effort tazeleme
+    notifications = (
+        db.query(models.KapNotification)
+        .order_by(models.KapNotification.publish_date.desc())
+        .limit(30)
+        .all()
+    )
+    return notifications
+
+
+# --- TEFAS FONLARI ---
+
+@app.get("/api/funds", response_model=List[FundResponse])
+def get_funds(katilim_only: bool = False, db: Session = Depends(get_db)):
+    query = db.query(models.Fund)
+    if katilim_only:
+        query = query.filter_by(is_katilim_compliant=True)
+    funds = query.all()
+
+    response = []
+    for fund in funds:
+        latest = (
+            db.query(models.FundPrice)
+            .filter_by(fund_id=fund.id)
+            .order_by(models.FundPrice.recorded_date.desc())
+            .first()
+        )
+        response.append(FundResponse(
+            code=fund.code,
+            name=fund.name,
+            fund_type=fund.fund_type,
+            risk_level=fund.risk_level,
+            is_katilim_compliant=bool(fund.is_katilim_compliant),
+            latest_price=FundPriceResponse.model_validate(latest) if latest else None
+        ))
+    return response
+
+
+# --- HALKA ARZLAR (IPO) ---
+
+@app.get("/api/ipos", response_model=List[IpoResponse])
+def get_ipos(db: Session = Depends(get_db)):
+    return db.query(models.Ipo).order_by(models.Ipo.id.desc()).all()
+
+
+# --- PORTFOLIO & TRADING ---
+
+@app.get("/api/portfolio", response_model=PortfolioResponse)
+def get_portfolio(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    portfolios = db.query(models.Portfolio).filter_by(user_id=current_user.id, is_bot_portfolio=False).all()
+
+    items = []
+    total_stock_value = 0.0
+
+    for item in portfolios:
+        stock = item.stock
+        # Total Value = virtual_balance + sum(quantity * stock_last_recorded_price_in_db)
+        current_price = _get_latest_db_price(db, stock.id)
+
+        qty = float(item.quantity)
+        avg_cost = float(item.average_cost)
+        current_value = qty * current_price
+        total_stock_value += current_value
+        
+        profit_loss_pct = 0.0
+        if avg_cost > 0:
+            profit_loss_pct = ((current_price - avg_cost) / avg_cost) * 100
+            
+        items.append(PortfolioItemResponse(
+            symbol=stock.symbol,
+            company_name=stock.company_name,
+            quantity=qty,
+            average_cost=round(avg_cost, 2),
+            current_price=round(current_price, 2),
+            current_value=round(current_value, 2),
+            profit_loss_pct=round(profit_loss_pct, 2)
+        ))
+        
+    total_portfolio_value = float(current_user.virtual_balance) + total_stock_value
+    
+    return PortfolioResponse(
+        balance=round(float(current_user.virtual_balance), 2),
+        total_portfolio_value=round(total_portfolio_value, 2),
+        items=items
+    )
+
+@app.post("/api/trade")
+@limiter.limit("10/minute")
+def execute_trade(request: Request, trade: TradeRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # ── Sıkı Borsa Saatleri Guard'ı ─────────────────────────────────────────
+    # Hafta sonu ya da seans dışı saatlerde (10:00-18:15 dışı) HİÇBİR manuel
+    # alım/satım emri kabul edilmez — fiyatlar donuk olduğu için işlem yapılamaz.
+    open_flag, market_reason = is_market_open()
+    if not open_flag:
+        raise HTTPException(
+            status_code=400,
+            detail="Borsa şu an kapalı. Hafta sonu ve seans dışı saatlerde alım-satım işlemi yapılamaz."
+        )
+    # ─────────────────────────────────────────────────────────────────────────
+
+    action = trade.action_type.upper()
+    if action not in ("AL", "SAT"):
+        raise HTTPException(status_code=400, detail="Geçersiz işlem tipi. 'AL' veya 'SAT' olmalı.")
+
+    stock = db.query(models.Stock).filter_by(symbol=trade.symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    # ── Atomik İşlem Bloğu (Anti-Double-Spending) ───────────────────────────
+    # BEGIN IMMEDIATE ile SQLite üzerinde yazma kilidi hemen alınır; aynı kullanıcı
+    # için eşzamanlı iki alım/satım isteği birbirinin üzerine yazamaz (race condition
+    # önlenir). İşlem başarısız olursa ROLLBACK ile bakiye/portföy tutarlılığı korunur.
+    db.rollback()  # varsa açık implicit transaction'ı temizle
+    db.execute(text("BEGIN IMMEDIATE"))
+    try:
+        # Kullanıcıyı IMMEDIATE yazma kilidi altında (aynı transaction içinde) tekrar oku —
+        # eşzamanlı ikinci bir istek bu satıra erişemeden bu transaction'ın bitmesini bekler.
+        current_user = db.query(models.User).filter_by(id=current_user.id).first()
+
+        # Get current price — DB'deki son kayıttan (tek doğruluk kaynağı)
+        current_price = _get_latest_db_price(db, stock.id)
+        if not current_price:
+            raise HTTPException(status_code=400, detail="Hisse fiyatı bulunamadı.")
+
+        total_cost = trade.quantity * current_price
+        portfolio_entry = db.query(models.Portfolio).filter_by(
+            user_id=current_user.id, stock_id=stock.id, is_bot_portfolio=False
+        ).first()
+
+        if action == "AL":
+            if float(current_user.virtual_balance) < total_cost:
+                raise HTTPException(status_code=400, detail="Yetersiz sanal bakiye.")
+
+            current_user.virtual_balance = float(current_user.virtual_balance) - total_cost
+
+            if portfolio_entry:
+                old_qty = float(portfolio_entry.quantity)
+                old_cost = float(portfolio_entry.average_cost)
+                new_qty = old_qty + trade.quantity
+                new_avg_cost = ((old_qty * old_cost) + total_cost) / new_qty
+                portfolio_entry.quantity = new_qty
+                portfolio_entry.average_cost = new_avg_cost
+            else:
+                new_entry = models.Portfolio(
+                    user_id=current_user.id,
+                    stock_id=stock.id,
+                    quantity=trade.quantity,
+                    average_cost=current_price,
+                    is_bot_portfolio=False,
+                )
+                db.add(new_entry)
+
+            db.commit()
+            return {"message": f"{trade.quantity} adet {stock.symbol} başarıyla alındı.", "balance": current_user.virtual_balance}
+
+        else:  # SAT
+            if not portfolio_entry or float(portfolio_entry.quantity) < trade.quantity:
+                raise HTTPException(status_code=400, detail="Yetersiz hisse miktarı.")
+
+            revenue = trade.quantity * current_price
+            current_user.virtual_balance = float(current_user.virtual_balance) + revenue
+
+            remaining_qty = float(portfolio_entry.quantity) - trade.quantity
+            if remaining_qty == 0:
+                db.delete(portfolio_entry)
+            else:
+                portfolio_entry.quantity = remaining_qty
+
+            db.commit()
+            return {"message": f"{trade.quantity} adet {stock.symbol} başarıyla satıldı.", "balance": current_user.virtual_balance}
+    except Exception:
+        db.rollback()
+        raise
+    # ─────────────────────────────────────────────────────────────────────────
+
+
+# --- AI BOT DATA ---
+
+@app.get("/api/bot/logs", response_model=List[BotLogResponse])
+def get_bot_logs(db: Session = Depends(get_db)):
+    bot = db.query(models.User).filter_by(is_bot=True).first()
+    if not bot:
+        return []
+        
+    logs = db.query(models.BotLog)\
+        .filter_by(user_id=bot.id)\
+        .order_by(models.BotLog.created_at.desc())\
+        .limit(50)\
+        .all()
+        
+    response = []
+    for log in logs:
+        response.append(BotLogResponse(
+            id=log.id,
+            symbol=log.stock.symbol,
+            action_type=log.action_type,
+            price=float(log.price),
+            quantity=float(log.quantity),
+            reason_text=log.reason_text,
+            created_at=log.created_at
+        ))
+    return response
+
+def _build_bot_performance_series(db: Session, owner_user_id: int) -> Dict[str, List[Any]]:
+    """Bot (paylaşımlı demo ya da kişisel) vs BİST100 (basit ortalama) karşılaştırma serisini üretir."""
+    perf = db.query(models.BotPerformanceHistory)\
+        .filter_by(user_id=owner_user_id)\
+        .order_by(models.BotPerformanceHistory.recorded_date.asc())\
+        .all()
+
+    bot_points = []
+    bist100_points = []
+
+    if perf:
+        start_date = perf[0].recorded_date
+        stocks = db.query(models.Stock).filter_by(is_active=True).all()
+
+        start_prices = {}
+        for stock in stocks:
+            sp = db.query(models.StockPrice)\
+                .filter(models.StockPrice.stock_id == stock.id, models.StockPrice.recorded_at <= datetime.combine(start_date, datetime.max.time()))\
+                .order_by(models.StockPrice.recorded_at.desc())\
+                .first()
+            if sp:
+                start_prices[stock.symbol] = float(sp.price)
+
+        for point in perf:
+            d = point.recorded_date
+            bot_val = float(point.total_portfolio_value)
+            bot_points.append({"date": d.isoformat(), "value": bot_val})
+
+            returns = []
+            for stock in stocks:
+                s_price = start_prices.get(stock.symbol)
+                if s_price:
+                    cp_rec = db.query(models.StockPrice)\
+                        .filter(models.StockPrice.stock_id == stock.id, models.StockPrice.recorded_at <= datetime.combine(d, datetime.max.time()))\
+                        .order_by(models.StockPrice.recorded_at.desc())\
+                        .first()
+                    if cp_rec:
+                        cp = float(cp_rec.price)
+                        returns.append(cp / s_price)
+
+            avg_return = sum(returns) / len(returns) if returns else 1.0
+            bist100_val = 100000.0 * avg_return
+            bist100_points.append({"date": d.isoformat(), "value": round(bist100_val, 2)})
+    else:
+        today_str = date.today().isoformat()
+        bot_points = [{"date": today_str, "value": 100000.00}]
+        bist100_points = [{"date": today_str, "value": 100000.00}]
+
+    return {"bot": bot_points, "bist100": bist100_points}
+
+
+def _compute_actor_bot_stats(db: Session, owner_user_id: int, is_bot_portfolio: bool, virtual_balance: float) -> Dict[str, Any]:
+    """Bir bot aktörünün (paylaşımlı demo bot ya da kişisel bot) işlem sayısı, win rate ve getirisini hesaplar."""
+    logs = db.query(models.BotLog).filter_by(user_id=owner_user_id).all()
+    total_trades = len(logs)
+
+    win_trades = 0
+    sell_trades = 0
+    for log in logs:
+        if log.action_type == "SAT":
+            sell_trades += 1
+            reason = log.reason_text or ""
+            if "Kâr/Zarar: %-" not in reason and "Kâr/Zarar: %0" not in reason:
+                win_trades += 1
+
+    win_rate = (win_trades / sell_trades * 100) if sell_trades > 0 else 0.0
+
+    # Total Value = virtual_balance + sum(quantity * stock_last_recorded_price_in_db)
+    portfolios = db.query(models.Portfolio).filter_by(user_id=owner_user_id, is_bot_portfolio=is_bot_portfolio).all()
+    total_stock_value = 0.0
+    for item in portfolios:
+        price = _get_latest_db_price(db, item.stock_id) or float(item.average_cost)
+        total_stock_value += float(item.quantity) * price
+
+    current_value = virtual_balance + total_stock_value
+    total_return_pct = ((current_value - 100000.0) / 100000.0) * 100
+
+    return {
+        "total_trades": total_trades,
+        "win_rate": round(win_rate, 2),
+        "total_return_pct": round(total_return_pct, 2),
+        "portfolio_value": round(current_value, 2),
+    }
+
+
+@app.get("/api/bot/performance", response_model=Dict[str, List[Any]])
+def get_bot_performance(db: Session = Depends(get_db)):
+    bot = db.query(models.User).filter_by(is_bot=True).first()
+    if not bot:
+        return {"bot": [], "bist100": []}
+    return _build_bot_performance_series(db, bot.id)
+
+@app.get("/api/bot/stats")
+def get_bot_stats(db: Session = Depends(get_db)):
+    bot = db.query(models.User).filter_by(is_bot=True).first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot bulunamadı.")
+
+    stats = _compute_actor_bot_stats(db, bot.id, False, float(bot.virtual_balance))
+    return {
+        "total_trades": stats["total_trades"],
+        "win_rate": stats["win_rate"],
+        "total_return_pct": stats["total_return_pct"],
+        "balance": round(float(bot.virtual_balance), 2),
+        "portfolio_value": stats["portfolio_value"],
+    }
+
+
+# --- KİŞİSEL AI BOT & BAKİYE YÖNETİMİ ---
+
+@app.post("/api/user/balance")
+@limiter.limit("3/minute")
+def update_user_balance(
+    request: Request,
+    req: BalanceUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Giriş yapan kullanıcının kendi manuel sanal bakiyesini ayarlar/sıfırlar (yalnızca JWT'den çözülen kullanıcı)."""
+    db.rollback()
+    db.execute(text("BEGIN IMMEDIATE"))
+    try:
+        user_row = db.query(models.User).filter_by(id=current_user.id).first()
+        user_row.virtual_balance = req.new_balance
+        _log_user_action(db, user_row.id, "BALANCE_UPDATE", f"Kullanıcı bakiyesi {req.new_balance} TL olarak güncellendi.")
+        db.commit()
+        return {"message": "Bakiyeniz güncellendi.", "virtual_balance": float(user_row.virtual_balance)}
+    except Exception:
+        db.rollback()
+        raise
+
+
+@app.post("/api/user/bot/balance")
+@limiter.limit("3/minute")
+def update_user_bot_balance(
+    request: Request,
+    req: BalanceUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Giriş yapan kullanıcının kişisel AI botunun sanal bakiyesini ayarlar/sıfırlar (yalnızca kendi botu)."""
+    db.rollback()
+    db.execute(text("BEGIN IMMEDIATE"))
+    try:
+        user_bot = db.query(models.UserBot).filter_by(user_id=current_user.id).first()
+        if not user_bot:
+            raise HTTPException(status_code=404, detail="Kişisel AI Bot bulunamadı.")
+
+        user_bot.virtual_balance = req.new_balance
+        _log_user_action(db, current_user.id, "BOT_BALANCE_UPDATE", f"Kişisel bot bakiyesi {req.new_balance} TL olarak güncellendi.")
+        db.commit()
+        return {"message": "Kişisel botunuzun bakiyesi güncellendi.", "virtual_balance": float(user_bot.virtual_balance)}
+    except Exception:
+        db.rollback()
+        raise
+
+
+@app.get("/api/user/bot", response_model=UserBotResponse)
+def get_user_bot_status(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Giriş yapan kullanıcının kişisel AI botunun durumunu (bakiye, win rate, getiri) döner."""
+    user_bot = db.query(models.UserBot).filter_by(user_id=current_user.id).first()
+    if not user_bot:
+        raise HTTPException(status_code=404, detail="Kişisel AI Bot bulunamadı.")
+
+    stats = _compute_actor_bot_stats(db, current_user.id, True, float(user_bot.virtual_balance))
+    time_frame = user_bot.time_frame or "1D"
+    config = get_strategy_config(time_frame)
+
+    remaining_seconds = None
+    if user_bot.ends_at:
+        remaining_seconds = max(0, int((user_bot.ends_at - datetime.utcnow()).total_seconds()))
+
+    return UserBotResponse(
+        bot_name=user_bot.bot_name,
+        virtual_balance=round(float(user_bot.virtual_balance), 2),
+        is_active=bool(user_bot.is_active),
+        risk_profile=user_bot.risk_profile,
+        time_frame=time_frame,
+        time_frame_label=config["label"],
+        started_at=user_bot.started_at,
+        ends_at=user_bot.ends_at,
+        remaining_seconds=remaining_seconds,
+        portfolio_value=stats["portfolio_value"],
+        total_return_pct=stats["total_return_pct"],
+        total_trades=stats["total_trades"],
+        win_rate=stats["win_rate"],
+    )
+
+
+@app.post("/api/user/bot/settings", response_model=UserBotResponse)
+def update_user_bot_settings(
+    req: UserBotSettingsRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Kişisel botun zaman dilimini (1D/1W/1M) ve aktiflik durumunu günceller.
+    Zaman dilimi değiştirildiğinde ya da bot yeniden aktif edildiğinde süre
+    (started_at/ends_at) sıfırdan başlatılır.
+    """
+    user_bot = db.query(models.UserBot).filter_by(user_id=current_user.id).first()
+    if not user_bot:
+        raise HTTPException(status_code=404, detail="Kişisel AI Bot bulunamadı.")
+
+    was_active = bool(user_bot.is_active)
+
+    if req.time_frame and req.time_frame != user_bot.time_frame:
+        user_bot.time_frame = req.time_frame
+        config = get_strategy_config(req.time_frame)
+        user_bot.started_at = datetime.utcnow()
+        user_bot.ends_at = datetime.utcnow() + config["duration"]
+
+    if req.is_active is not None:
+        user_bot.is_active = req.is_active
+        if req.is_active and not was_active:
+            # Bot yeniden başlatılıyorsa süresini de sıfırla
+            config = get_strategy_config(user_bot.time_frame or "1D")
+            user_bot.started_at = datetime.utcnow()
+            user_bot.ends_at = datetime.utcnow() + config["duration"]
+
+    db.commit()
+    db.refresh(user_bot)
+    return get_user_bot_status(current_user, db)
+
+
+@app.get("/api/user/bot/logs", response_model=List[BotLogResponse])
+def get_user_bot_logs(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Giriş yapan kullanıcının kişisel AI botunun işlem günlüğünü döner."""
+    logs = db.query(models.BotLog)\
+        .filter_by(user_id=current_user.id)\
+        .order_by(models.BotLog.created_at.desc())\
+        .limit(50)\
+        .all()
+    return [
+        BotLogResponse(
+            id=log.id, symbol=log.stock.symbol, action_type=log.action_type,
+            price=float(log.price), quantity=float(log.quantity),
+            reason_text=log.reason_text, created_at=log.created_at
+        ) for log in logs
+    ]
+
+
+@app.get("/api/user/bot/performance", response_model=Dict[str, List[Any]])
+def get_user_bot_performance(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Giriş yapan kullanıcının kişisel botunun performansını BİST100 ile karşılaştırır."""
+    return _build_bot_performance_series(db, current_user.id)
+
+
+# --- LEADERBOARD ---
+
+@app.get("/api/leaderboard", response_model=List[LeaderboardItem])
+def get_leaderboard(db: Session = Depends(get_db)):
+    users = db.query(models.User).all()
+
+    leaderboard = []
+    for user in users:
+        # Yalnızca kullanıcının kendi manuel pozisyonları (kişisel botunun pozisyonları hariç)
+        portfolios = db.query(models.Portfolio).filter_by(user_id=user.id, is_bot_portfolio=False).all()
+
+        # Total Value = virtual_balance + sum(quantity * stock_last_recorded_price_in_db)
+        total_stock_value = 0.0
+        for item in portfolios:
+            price = _get_latest_db_price(db, item.stock_id) or float(item.average_cost)
+            total_stock_value += float(item.quantity) * price
+
+        total_value = float(user.virtual_balance) + total_stock_value
+        profit_loss_pct = ((total_value - 100000.0) / 100000.0) * 100
+        
+        leaderboard.append(LeaderboardItem(
+            username=user.username,
+            total_portfolio_value=round(total_value, 2),
+            profit_loss_pct=round(profit_loss_pct, 2),
+            is_bot=user.is_bot
+        ))
+        
+    # Sort by total portfolio value descending
+    leaderboard.sort(key=lambda x: x.total_portfolio_value, reverse=True)
+    return leaderboard

@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+:root {
+  --background: #030712;
+  --foreground: #f3f4f6;
+  --primary: #10b981; /* Neon green */
+  --primary-hover: #059669;
+  --secondary: #1f2937;
+  --accent: #ef4444; /* Neon red */
+  --muted: #9ca3af;
+  --border: #374151;
+  --card-bg: rgba(17, 24, 39, 0.7);
+}
+
+@theme {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-card-bg: var(--card-bg);
+
+  /* Obsidian Dark — Midas Pro / Helal Finans modülü UI sistemi */
+  --color-obsidian: #0B0E14;
+  --color-obs-surface: #151921;
+  --color-obs-border: #242B35;
+  --color-obs-positive: #10B981;
+  --color-obs-negative: #F43F5E;
+  --color-obs-gold: #F59E0B;
+}
+
+/* Fiyat/rakam alanları için hizalı, kaymayan basamaklar */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Outfit', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom glowing effects */
+.glow-green {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+}
+
+.glow-red {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
+}
+
+.glow-text-green {
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+.glow-text-red {
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(17, 24, 39, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #030712;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* Simple animations */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.pulse-slow {
+  animation: pulse-slow 3s infinite;
+}

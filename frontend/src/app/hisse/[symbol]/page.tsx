@@ -1,0 +1,417 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import {
+  ArrowLeft, RefreshCw, Gauge, Users, Calculator, Newspaper, LineChart as LineChartIcon,
+} from "lucide-react";
+
+import KatilimBadge from "../../components/KatilimBadge";
+import DerinAnalizTab from "../../components/DerinAnalizTab";
+import InsiderTrackerBadge from "../../components/InsiderTrackerBadge";
+import DividendCalculatorWidget from "../../components/DividendCalculatorWidget";
+import DcaBacktestWidget from "../../components/DcaBacktestWidget";
+import CommunitySentimentGauge from "../../components/CommunitySentimentGauge";
+import { useAuth, API_BASE } from "../../context/AuthContext";
+
+const TradingViewChart = dynamic(() => import("../../components/TradingViewChart"), { ssr: false });
+
+type SectionKey = "genel" | "pro" | "hesaplayici" | "topluluk";
+
+const SECTIONS: { key: SectionKey; label: string; icon: any }[] = [
+  { key: "genel", label: "Genel Bakış", icon: LineChartIcon },
+  { key: "pro", label: "Derin Bilanço Analizi", icon: Gauge },
+  { key: "hesaplayici", label: "Hesaplayıcılar", icon: Calculator },
+  { key: "topluluk", label: "Topluluk", icon: Users },
+];
+
+export default function StockDetailPage() {
+  const params = useParams<{ symbol: string }>();
+  const router = useRouter();
+  const symbol = (params?.symbol || "").toString().toUpperCase();
+  const { token, refreshTrigger, bumpRefresh } = useAuth();
+
+  const [stockList, setStockList] = useState<any[]>([]);
+  const [stockDetail, setStockDetail] = useState<any>(null);
+  const [kapDisclosures, setKapDisclosures] = useState<any>(null);
+  const [kapLoading, setKapLoading] = useState(false);
+  const [section, setSection] = useState<SectionKey>("genel");
+
+  const [tradeQty, setTradeQty] = useState<number>(1);
+  const [tradeLoading, setTradeLoading] = useState(false);
+  const [tradeMessage, setTradeMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [commentLoading, setCommentLoading] = useState(false);
+
+  // Genel hisse özet bilgisi (fiyat değişim yüzdesi, katılım rozeti için)
+  useEffect(() => {
+    const fetchList = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/stocks`);
+        if (res.ok) setStockList(await res.json());
+      } catch (err) {
+        console.error("Hisse listesi alınamadı:", err);
+      }
+    };
+    fetchList();
+  }, [refreshTrigger]);
+
+  const summary = stockList.find((s) => s.symbol === symbol);
+
+  // Detay + KAP bildirimleri
+  useEffect(() => {
+    if (!symbol) return;
+
+    const fetchDetail = async () => {
+      try {
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${API_BASE}/stocks/${symbol}`, { headers });
+        if (res.ok) setStockDetail(await res.json());
+      } catch (err) {
+        console.error("Hisse detayı alınamadı:", err);
+      }
+    };
+
+    const fetchKap = async () => {
+      setKapLoading(true);
+      setKapDisclosures(null);
+      try {
+        const res = await fetch(`${API_BASE}/stocks/${symbol}/kap-disclosures`);
+        if (res.ok) setKapDisclosures(await res.json());
+      } catch (err) {
+        console.error("KAP bildirimleri alınamadı:", err);
+      } finally {
+        setKapLoading(false);
+      }
+    };
+
+    fetchDetail();
+    fetchKap();
+  }, [symbol, refreshTrigger, token]);
+
+  // Yorumlar
+  const fetchComments = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/stocks/${symbol}/comments`);
+      if (res.ok) setComments(await res.json());
+    } catch (err) {
+      console.error("Yorumlar alınamadı:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (symbol) fetchComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol]);
+
+  const handleTrade = async (action: "AL" | "SAT") => {
+    if (!token) {
+      setTradeMessage({ text: "İşlem yapmak için giriş yapmalısınız.", isError: true });
+      return;
+    }
+    setTradeLoading(true);
+    setTradeMessage(null);
+    try {
+      const res = await fetch(`${API_BASE}/trade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ symbol, action_type: action, quantity: tradeQty }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTradeMessage({ text: data.message, isError: false });
+        bumpRefresh();
+      } else {
+        setTradeMessage({ text: data.detail || "İşlem başarısız.", isError: true });
+      }
+    } catch {
+      setTradeMessage({ text: "İşlem sırasında hata oluştu.", isError: true });
+    } finally {
+      setTradeLoading(false);
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!token || commentText.trim().length < 2) return;
+    setCommentLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/stocks/${symbol}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ comment_text: commentText }),
+      });
+      if (res.ok) {
+        setCommentText("");
+        await fetchComments();
+        bumpRefresh();
+      }
+    } catch (err) {
+      console.error("Yorum gönderilemedi:", err);
+    } finally {
+      setCommentLoading(false);
+    }
+  };
+
+  if (!stockDetail) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <button onClick={() => router.push("/piyasalar")} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition mb-4">
+          <ArrowLeft className="w-3.5 h-3.5" /> Piyasalara Dön
+        </button>
+        <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+          {symbol} yükleniyor...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      <button onClick={() => router.push("/piyasalar")} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition">
+        <ArrowLeft className="w-3.5 h-3.5" /> Piyasalara Dön
+      </button>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-white">{stockDetail.symbol}</h1>
+            {summary && (
+              <span className={`text-xs px-1.5 py-0.5 rounded tabular-nums font-semibold ${
+                summary.price_change_pct >= 0 ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
+              }`}>
+                %{summary.price_change_pct >= 0 ? "+" : ""}{summary.price_change_pct}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">{stockDetail.company_name}</p>
+          {summary && (
+            <div className="mt-2">
+              <KatilimBadge
+                isCompliant={summary.is_katilim_compliant}
+                purificationRate={summary.purification_rate}
+              />
+            </div>
+          )}
+        </div>
+        <p className="text-2xl font-bold text-white tabular-nums">{stockDetail.current_price} TL</p>
+      </div>
+
+      <InsiderTrackerBadge symbol={symbol} />
+
+      {/* Section Tabs */}
+      <div className="bg-[#151921] p-1 rounded-xl flex flex-wrap gap-1 border border-[#242B35]">
+        {SECTIONS.map((s) => {
+          const Icon = s.icon;
+          return (
+            <button
+              key={s.key}
+              onClick={() => setSection(s.key)}
+              className={`flex-1 min-w-[110px] flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition ${
+                section === s.key ? "bg-[#10B981] text-[#0B0E14]" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span>{s.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {section === "genel" && (
+            <>
+              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+                <TradingViewChart data={stockDetail.prices} symbol={stockDetail.symbol} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs bg-[#151921] p-4 rounded-xl border border-[#242B35]">
+                <div>
+                  <p className="text-gray-500">RSI (14)</p>
+                  <p className={`font-semibold tabular-nums ${
+                    stockDetail.indicators.rsi < 30 ? "text-[#10B981]" : stockDetail.indicators.rsi > 70 ? "text-[#F43F5E]" : "text-white"
+                  }`}>
+                    {stockDetail.indicators.rsi}
+                    {stockDetail.indicators.rsi < 30 && " (Aşırı Satım)"}
+                    {stockDetail.indicators.rsi > 70 && " (Aşırı Alım)"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">MACD / Sinyal</p>
+                  <p className="font-semibold text-white tabular-nums">
+                    {stockDetail.indicators.macd} / {stockDetail.indicators.macd_signal}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">SMA (5 / 20)</p>
+                  <p className="font-semibold text-white tabular-nums">
+                    {stockDetail.indicators.sma_short} / {stockDetail.indicators.sma_long}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Bollinger Bantları</p>
+                  <p className="font-semibold text-white tabular-nums">
+                    {stockDetail.indicators.bb_low} - {stockDetail.indicators.bb_high}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest flex items-center gap-1.5">
+                    <Newspaper className="w-3.5 h-3.5" /> KAP Bildirimleri
+                  </span>
+                  {kapDisclosures?.kap_url && (
+                    <a href={kapDisclosures.kap_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#10B981] hover:text-[#34d399] transition font-medium">
+                      Tümünü Gör →
+                    </a>
+                  )}
+                </div>
+
+                {kapLoading ? (
+                  <div className="flex items-center gap-2 text-[11px] text-gray-500 py-3">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#10B981]" />
+                    KAP bildirimleri yükleniyor...
+                  </div>
+                ) : kapDisclosures?.disclosures?.length > 0 ? (
+                  <div className="space-y-2 max-h-[260px] overflow-y-auto pr-0.5">
+                    {kapDisclosures.disclosures.map((d: any, idx: number) => (
+                      <div key={idx} className="bg-[#0B0E14] border border-[#242B35] rounded-lg p-2.5 text-[11px]">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            {d.type && (
+                              <span className="text-[9px] bg-[#F59E0B]/10 text-[#F59E0B] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide mr-1">
+                                {d.type}
+                              </span>
+                            )}
+                            <p className="text-gray-300 font-medium mt-1 leading-snug">{d.title}</p>
+                          </div>
+                          <span className="text-[10px] text-gray-500 whitespace-nowrap shrink-0">{d.date}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500 text-center py-4">Son dönemde kayda değer bir KAP bildirimi bulunamadı.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {section === "pro" && (
+            <DerinAnalizTab symbol={symbol} currentPrice={stockDetail.current_price} />
+          )}
+
+          {section === "hesaplayici" && (
+            <div className="space-y-4">
+              <DividendCalculatorWidget symbol={symbol} />
+              <DcaBacktestWidget symbol={symbol} />
+            </div>
+          )}
+
+          {section === "topluluk" && (
+            <div className="space-y-4">
+              <CommunitySentimentGauge symbol={symbol} refreshTrigger={refreshTrigger} />
+
+              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4 space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wide">Yorumlar</h4>
+
+                {token ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder="Bu hisse hakkında ne düşünüyorsunuz?"
+                      className="flex-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3 py-2 text-white text-xs outline-none transition"
+                    />
+                    <button
+                      onClick={handlePostComment}
+                      disabled={commentLoading || commentText.trim().length < 2}
+                      className="bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50"
+                    >
+                      Gönder
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500">Yorum yapmak için giriş yapmalısınız.</p>
+                )}
+
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-0.5">
+                  {comments.length === 0 ? (
+                    <p className="text-[11px] text-gray-500 text-center py-4">Henüz yorum yok. İlk yorumu siz yapın.</p>
+                  ) : (
+                    comments.map((c) => (
+                      <div key={c.id} className="bg-[#0B0E14] border border-[#242B35] rounded-lg p-3 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-white">@{c.username}</span>
+                          <span className="text-[10px] text-gray-500">
+                            {new Date(c.created_at).toLocaleDateString("tr-TR")}
+                          </span>
+                        </div>
+                        <p className="text-gray-400 mt-1">{c.comment_text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Trade Panel */}
+        <div className="space-y-6">
+          <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-3">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wide">Sanal İşlem Paneli</h3>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400 font-medium">Hisse Adeti:</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1 text-white w-20 text-center outline-none focus:border-[#10B981] font-semibold tabular-nums"
+                value={tradeQty}
+                onChange={(e) => setTradeQty(Math.max(1, parseInt(e.target.value) || 1))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400 font-medium">Toplam Tutar:</span>
+              <span className="font-bold text-white tabular-nums">
+                {(tradeQty * stockDetail.current_price).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
+              </span>
+            </div>
+
+            {tradeMessage && (
+              <p className={`text-xs font-semibold text-center ${tradeMessage.isError ? "text-[#F43F5E]" : "text-[#10B981]"}`}>
+                {tradeMessage.text}
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => handleTrade("AL")}
+                disabled={tradeLoading}
+                className="bg-[#10B981] hover:bg-[#0da271] active:scale-95 text-[#0B0E14] font-bold py-2 rounded-lg text-xs transition duration-150 disabled:opacity-50"
+              >
+                SANAL AL
+              </button>
+              <button
+                onClick={() => handleTrade("SAT")}
+                disabled={tradeLoading}
+                className="bg-[#F43F5E] hover:bg-[#e11d48] active:scale-95 text-white font-bold py-2 rounded-lg text-xs transition duration-150 disabled:opacity-50"
+              >
+                SANAL SAT
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
