@@ -14,6 +14,7 @@ backend/__pycache__/
 # Databases (local SQLite data — never committed)
 *.db
 *.db-journal
+*.db.bak_*
 backend/bist_app.db
 
 # Node / Next.js

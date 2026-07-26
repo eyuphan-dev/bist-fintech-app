@@ -28,6 +28,7 @@ from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
 )
 from scheduler import start_scheduler
+from init_db import init_database
 from bot import calculate_technical_indicators, get_strategy_config, BOT_STRATEGY_CONFIG
 from kap_client import fetch_kap_disclosures, get_kap_search_url, fetch_kap_news
 from market_hours import get_market_status_dict, is_market_open
@@ -81,9 +82,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Start APScheduler on startup
+# Uygulama başlarken tablo/veri kontrolü + APScheduler
 @app.on_event("startup")
 def startup_event():
+    # Render gibi ortamlarda bist_app.db her deploy'da boş/yok olabilir (repo'da .gitignore
+    # ile tutulmuyor). init_database() idempotent'tir: create_all() var olan tabloları
+    # bozmaz, seed adımları zaten var olan kayıtları atlar — bu yüzden her başlangıçta
+    # güvenle çağrılabilir. Scheduler'ın cache doldurma adımı 'stocks' tablosunu
+    # sorguladığı için bu çağrı start_scheduler()'dan ÖNCE tamamlanmış olmalı.
+    init_database()
     start_scheduler()
 
 # --- AUTHENTICATION ---
