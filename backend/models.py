@@ -71,6 +71,10 @@ class Portfolio(Base):
     # Aynı user_id + stock_id çifti hem manuel hem bot pozisyonu olarak ayrı ayrı var olabilsin diye
     # UNIQUE kısıtı bu kolonu da kapsar.
     is_bot_portfolio = Column(Boolean, default=False, nullable=False)
+    # opened_at: pozisyon ilk açıldığındaki (ilk alım) zaman damgası, sonraki ek alımlarda DEĞİŞMEZ.
+    # updated_at: pozisyona en son dokunulduğu (herhangi bir alım/satım) an, her işlemde güncellenir.
+    opened_at = Column(DateTime, default=datetime.utcnow, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("user_id", "stock_id", "is_bot_portfolio", name="uq_user_stock_bot"),
@@ -305,3 +309,32 @@ class UserBot(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="personal_bot")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 10: Bekleyen Emirler (Limit / Zamanlı Alım-Satım)
+# ---------------------------------------------------------------------------
+class PendingOrder(Base):
+    """
+    Kullanıcının manuel portföyü için bıraktığı LIMIT (fiyat şartlı) veya SCHEDULED
+    (zaman şartlı) emirler. Yalnızca kullanıcının KENDİ manuel bakiyesi/portföyü
+    (is_bot_portfolio=False) üzerinde çalışır — AI bot'un bakiyesi/pozisyonları
+    (UserBot, is_bot_portfolio=True) tamamen ayrı olduğu için botla veri çakışması
+    yapısal olarak mümkün değildir.
+    """
+    __tablename__ = "pending_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
+    order_type = Column(String(20), nullable=False)  # 'LIMIT_BUY' | 'LIMIT_SELL' | 'SCHEDULED_BUY'
+    target_price = Column(Numeric(10, 2), nullable=True)   # LIMIT_BUY / LIMIT_SELL için zorunlu
+    execution_time = Column(DateTime, nullable=True)        # SCHEDULED_BUY için zorunlu (UTC)
+    quantity = Column(Numeric(12, 4), nullable=False)
+    status = Column(String(20), default="PENDING", nullable=False, index=True)  # PENDING | EXECUTED | CANCELLED | FAILED
+    fail_reason = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    executed_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+    stock = relationship("Stock")

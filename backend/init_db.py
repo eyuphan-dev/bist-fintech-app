@@ -87,6 +87,10 @@ MIGRATIONS = {
         "started_at": "TEXT",
         "ends_at": "TEXT",
     },
+    "portfolios": {
+        "opened_at": "TEXT",
+        "updated_at": "TEXT",
+    },
 }
 
 
@@ -172,6 +176,18 @@ def seed_user_bots(db):
         print(f"{created} kullanıcı için kişisel AI Bot kaydı oluşturuldu.")
 
 
+def backfill_portfolio_timestamps(db):
+    """Migration sonrası opened_at/updated_at boş kalan mevcut portfolios satırlarını doldurur."""
+    now = datetime.utcnow()
+    rows = db.query(models.Portfolio).filter(models.Portfolio.opened_at.is_(None)).all()
+    for row in rows:
+        row.opened_at = now
+        row.updated_at = now
+    if rows:
+        db.commit()
+        print(f"{len(rows)} portföy pozisyonu için tarih (opened_at/updated_at) bilgisi dolduruldu.")
+
+
 def backfill_user_bot_durations(db):
     """Migration sonrası started_at/ends_at boş kalan mevcut user_bots satırlarını doldurur."""
     now = datetime.utcnow()
@@ -240,6 +256,9 @@ def init_database():
 
         # 5. Migration sonrası eksik süre bilgilerini doldur
         backfill_user_bot_durations(db)
+
+        # 6. Migration sonrası eksik portföy tarih bilgilerini doldur
+        backfill_portfolio_timestamps(db)
 
         print("Veritabanı başarıyla ilklendirildi.")
     except Exception as e:

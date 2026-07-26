@@ -19,7 +19,14 @@ interface PortfolioItem {
   current_price: number;
   current_value: number;
   profit_loss_pct: number;
+  opened_at?: string | null;
+  updated_at?: string | null;
 }
+
+const formatDateTime = (iso?: string | null) => {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
 
 interface Portfolio {
   balance: number;
@@ -301,6 +308,8 @@ export default function Home() {
                           <th className="pb-3 font-semibold">Fiyat</th>
                           <th className="pb-3 font-semibold">Kâr/Zarar</th>
                           <th className="pb-3 font-semibold text-right">Değer</th>
+                          <th className="pb-3 font-semibold whitespace-nowrap">İlk Alım</th>
+                          <th className="pb-3 font-semibold whitespace-nowrap">Son İşlem</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#242B35]/60">
@@ -320,6 +329,12 @@ export default function Home() {
                             </td>
                             <td className="py-3 font-bold text-white text-right tabular-nums">
                               {item.current_value.toLocaleString("tr-TR")} TL
+                            </td>
+                            <td className="py-3 text-gray-400 tabular-nums whitespace-nowrap text-[11px]">
+                              {formatDateTime(item.opened_at)}
+                            </td>
+                            <td className="py-3 text-gray-400 tabular-nums whitespace-nowrap text-[11px]">
+                              {formatDateTime(item.updated_at)}
                             </td>
                           </tr>
                         ))}

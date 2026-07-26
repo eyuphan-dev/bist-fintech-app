@@ -103,7 +103,7 @@ export default function AIPerformanceChart({ botData, bist100Data }: AIPerforman
       fontSize: "12px",
       labels: { colors: "#d1d5db" },
       markers: {
-        radius: 12,
+        size: 6,
       },
     },
   };

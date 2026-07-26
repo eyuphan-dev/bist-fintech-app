@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime, date
+from pydantic import BaseModel, EmailStr, Field, model_validator
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
 class UserCreate(BaseModel):
@@ -97,6 +97,8 @@ class PortfolioItemResponse(BaseModel):
     current_price: float
     current_value: float
     profit_loss_pct: float
+    opened_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class PortfolioResponse(BaseModel):
     balance: float
@@ -230,3 +232,46 @@ class UserBotResponse(BaseModel):
     total_return_pct: float
     total_trades: int
     win_rate: float
+
+
+# --- BEKLEYEN EMİRLER (LİMİT / ZAMANLI ALIM-SATIM) ---
+
+ORDER_TYPES = ("LIMIT_BUY", "LIMIT_SELL", "SCHEDULED_BUY")
+
+class PendingOrderCreate(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=10)
+    order_type: str = Field(..., pattern="^(LIMIT_BUY|LIMIT_SELL|SCHEDULED_BUY)$")
+    quantity: float = Field(..., gt=0, le=10_000_000, allow_inf_nan=False)
+    target_price: Optional[float] = Field(None, gt=0, le=1_000_000, allow_inf_nan=False)
+    execution_time: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _validate_type_specific_fields(self):
+        if self.order_type in ("LIMIT_BUY", "LIMIT_SELL"):
+            if self.target_price is None:
+                raise ValueError("LIMIT_BUY / LIMIT_SELL emirleri için target_price zorunludur.")
+        elif self.order_type == "SCHEDULED_BUY":
+            if self.execution_time is None:
+                raise ValueError("SCHEDULED_BUY emirleri için execution_time zorunludur.")
+            exec_time = self.execution_time
+            now = datetime.now(exec_time.tzinfo) if exec_time.tzinfo else datetime.utcnow()
+            if exec_time <= now:
+                raise ValueError("execution_time gelecekte bir zaman olmalıdır.")
+            if exec_time > now + timedelta(days=90):
+                raise ValueError("execution_time en fazla 90 gün sonrasına ayarlanabilir.")
+        return self
+
+class PendingOrderResponse(BaseModel):
+    id: int
+    symbol: str
+    order_type: str
+    quantity: float
+    target_price: Optional[float]
+    execution_time: Optional[datetime]
+    status: str
+    fail_reason: Optional[str]
+    created_at: datetime
+    executed_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True

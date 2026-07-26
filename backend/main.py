@@ -22,7 +22,8 @@ from schemas import (
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
-    DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest
+    DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest,
+    PendingOrderCreate, PendingOrderResponse
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -596,7 +597,9 @@ def get_portfolio(current_user: models.User = Depends(get_current_user), db: Ses
             average_cost=round(avg_cost, 2),
             current_price=round(current_price, 2),
             current_value=round(current_value, 2),
-            profit_loss_pct=round(profit_loss_pct, 2)
+            profit_loss_pct=round(profit_loss_pct, 2),
+            opened_at=item.opened_at,
+            updated_at=item.updated_at,
         ))
         
     total_portfolio_value = float(current_user.virtual_balance) + total_stock_value
@@ -695,6 +698,114 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
         db.rollback()
         raise
     # ─────────────────────────────────────────────────────────────────────────
+
+
+# --- BEKLEYEN EMİRLER (LİMİT / ZAMANLI ALIM-SATIM) ---
+#
+# Bu emirler yalnızca kullanıcının kendi manuel bakiyesi/portföyü üzerinde çalışır
+# (is_bot_portfolio=False) — AI bot'un bakiyesi/pozisyonları tamamen ayrı olduğu
+# için botla veri çakışması yoktur. Gerçekleştirme, scheduler.py -> orders.py
+# üzerinden borsa açıkken otomatik yapılır (bkz. process_pending_orders).
+
+@app.post("/api/orders", response_model=PendingOrderResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
+def create_pending_order(
+    request: Request,
+    order: PendingOrderCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Yeni bir LIMIT_BUY / LIMIT_SELL / SCHEDULED_BUY emri oluşturur.
+    Borsa kapalıyken de emir bırakılabilir (emir borsa açıldığında değerlendirilir);
+    yalnızca GERÇEKLEŞTİRME borsa açık saatlerle sınırlıdır.
+    """
+    stock = db.query(models.Stock).filter_by(symbol=order.symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    new_order = models.PendingOrder(
+        user_id=current_user.id,
+        stock_id=stock.id,
+        order_type=order.order_type,
+        target_price=order.target_price,
+        execution_time=order.execution_time.replace(tzinfo=None) if order.execution_time else None,
+        quantity=order.quantity,
+        status="PENDING",
+    )
+    db.add(new_order)
+    db.commit()
+    db.refresh(new_order)
+
+    _log_user_action(
+        db, current_user.id, "ORDER_CREATE",
+        f"{order.order_type} emri oluşturuldu: {stock.symbol} x{order.quantity}"
+    )
+    db.commit()
+
+    return PendingOrderResponse(
+        id=new_order.id, symbol=stock.symbol, order_type=new_order.order_type,
+        quantity=float(new_order.quantity),
+        target_price=float(new_order.target_price) if new_order.target_price is not None else None,
+        execution_time=new_order.execution_time, status=new_order.status,
+        fail_reason=new_order.fail_reason, created_at=new_order.created_at,
+        executed_at=new_order.executed_at,
+    )
+
+
+@app.get("/api/orders", response_model=List[PendingOrderResponse])
+def list_pending_orders(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Giriş yapan kullanıcının tüm emirlerini (bekleyen + geçmiş) en yeniden eskiye döner."""
+    orders = (
+        db.query(models.PendingOrder)
+        .filter_by(user_id=current_user.id)
+        .order_by(models.PendingOrder.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [
+        PendingOrderResponse(
+            id=o.id, symbol=o.stock.symbol, order_type=o.order_type,
+            quantity=float(o.quantity),
+            target_price=float(o.target_price) if o.target_price is not None else None,
+            execution_time=o.execution_time, status=o.status,
+            fail_reason=o.fail_reason, created_at=o.created_at, executed_at=o.executed_at,
+        ) for o in orders
+    ]
+
+
+@app.delete("/api/orders/{order_id}")
+def cancel_pending_order(
+    order_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Yalnızca kendi PENDING durumundaki bir emri iptal edebilir (JWT'den çözülen kullanıcı)."""
+    db.rollback()
+    db.execute(text("BEGIN IMMEDIATE"))
+    try:
+        order = db.query(models.PendingOrder).filter_by(
+            id=order_id, user_id=current_user.id
+        ).first()
+        if not order:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Emir bulunamadı.")
+        if order.status != "PENDING":
+            db.rollback()
+            raise HTTPException(status_code=400, detail=f"Yalnızca bekleyen (PENDING) emirler iptal edilebilir. Bu emrin durumu: {order.status}")
+
+        order.status = "CANCELLED"
+        order.executed_at = datetime.utcnow()
+        db.commit()
+        return {"message": "Emir iptal edildi.", "order_id": order.id}
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 # --- AI BOT DATA ---

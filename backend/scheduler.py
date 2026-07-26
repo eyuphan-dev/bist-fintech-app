@@ -118,6 +118,13 @@ def update_bist_prices_job():
         db.commit()
         print(f"[Scheduler] Güncellenen hisseler: {', '.join(updated)}")
 
+        # Bekleyen (LIMIT/SCHEDULED) kullanıcı emirleri — botla AYNI thread'de, bot'tan
+        # ÖNCE işlenir (kullanıcının kendi bıraktığı emirler önceliklidir). Emirler
+        # botun bakiye/portföyünden tamamen ayrı verilere dokunduğu için aralarında
+        # herhangi bir çakışma söz konusu değildir.
+        from orders import process_pending_orders
+        process_pending_orders(db)
+
         # Çok kullanıcılı Quant AI Bot döngüsü (her kullanıcının kişisel botu + paylaşımlı demo bot)
         from bot import run_quant_bot
         run_quant_bot(db)

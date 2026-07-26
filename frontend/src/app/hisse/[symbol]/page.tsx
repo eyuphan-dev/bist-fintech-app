@@ -13,6 +13,7 @@ import InsiderTrackerBadge from "../../components/InsiderTrackerBadge";
 import DividendCalculatorWidget from "../../components/DividendCalculatorWidget";
 import DcaBacktestWidget from "../../components/DcaBacktestWidget";
 import CommunitySentimentGauge from "../../components/CommunitySentimentGauge";
+import PendingOrdersPanel from "../../components/PendingOrdersPanel";
 import { useAuth, API_BASE } from "../../context/AuthContext";
 
 const TradingViewChart = dynamic(() => import("../../components/TradingViewChart"), { ssr: false });
@@ -410,6 +411,8 @@ export default function StockDetailPage() {
               </button>
             </div>
           </div>
+
+          <PendingOrdersPanel symbol={symbol} currentPrice={stockDetail.current_price} />
         </div>
       </div>
     </div>
