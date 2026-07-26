@@ -28,7 +28,7 @@ export default function NavBar() {
           <span className="font-bold text-lg tracking-tight text-white hidden sm:inline">BIST Simülasyonu</span>
         </Link>
 
-        <nav className="flex items-center gap-1 overflow-x-auto">
+        <nav className="hidden md:flex items-center gap-1 overflow-x-auto">
           {NAV_LINKS.map((link) => {
             const Icon = link.icon;
             const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);

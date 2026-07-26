@@ -230,8 +230,8 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="md:col-span-2 lg:col-span-2 space-y-6">
           {dashLoading || !portfolio ? (
             <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
               <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />

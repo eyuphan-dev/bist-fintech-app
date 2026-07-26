@@ -35,6 +35,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Touch & Viewport Optimizasyonu: iOS Safari, odaklanan bir input'un font-size'ı
+   16px'in altındaysa sayfayı otomatik yakınlaştırır. Bu davranışı, userScalable'ı
+   devre dışı bırakmadan (erişilebilirlik için) engellemek üzere tüm form alanları
+   mobilde en az 16px olarak sabitlenir; md: ve üzeri ekranlarda tasarım boyutuna
+   (14px/text-sm) geri döner. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: inherit;
+  }
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
