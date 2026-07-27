@@ -81,6 +81,10 @@ MIGRATIONS = {
         "net_margin": "NUMERIC(6, 2)",
         "fx_exposure_text": "TEXT",
         "interest_sensitivity_text": "TEXT",
+        "altman_z_score": "NUMERIC(6, 2)",
+        "altman_zone": "TEXT",
+        "debt_to_equity": "NUMERIC(8, 2)",
+        "net_fx_position": "TEXT",
     },
     "user_bots": {
         "time_frame": "TEXT DEFAULT '1D'",

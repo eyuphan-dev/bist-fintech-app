@@ -104,9 +104,23 @@ CREATE TABLE IF NOT EXISTS company_analysis (
     net_margin REAL,                -- Net Kâr Marjı (%)
     fx_exposure_text TEXT,          -- Döviz kuru riski açıklaması
     interest_sensitivity_text TEXT, -- Faiz hassasiyeti açıklaması
+    altman_z_score REAL,            -- Altman Z-Skoru (iflas riski)
+    altman_zone TEXT,               -- 'SAFE' | 'GREY' | 'DISTRESS'
+    debt_to_equity REAL,            -- Borç/Özkaynak oranı
+    net_fx_position TEXT,           -- 'POZITIF' | 'NEGATIF' | 'NOTR' (heuristik)
     updated_at TEXT DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY(stock_id) REFERENCES stocks(id) ON DELETE CASCADE
 );
+
+-- 8.5 Yabancı/Kurumsal Sahiplik Oranı Anlık Görüntüleri (30/90 günlük trend için)
+CREATE TABLE IF NOT EXISTS foreign_holding_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_id INTEGER NOT NULL,
+    held_pct REAL NOT NULL,
+    recorded_at TEXT NOT NULL,
+    FOREIGN KEY(stock_id) REFERENCES stocks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_foreign_holding_stock ON foreign_holding_snapshots(stock_id, recorded_at DESC);
 
 -- 9. İçeriden Öğrenenlerin Ticareti (Patron/Yönetim Alım-Satımı)
 CREATE TABLE IF NOT EXISTS insider_trades (
