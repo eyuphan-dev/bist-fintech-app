@@ -12,7 +12,8 @@ interface UserBotStatus {
   bot_name: string;
   virtual_balance: number;
   is_active: boolean;
-  risk_profile: string;
+  risk_mode: "slow" | "normal" | "aggressive";
+  risk_mode_label: string;
   time_frame: "1D" | "1W" | "1M";
   time_frame_label: string;
   started_at: string | null;
@@ -35,9 +36,15 @@ interface BotLog {
 }
 
 const TIME_FRAME_OPTIONS: { value: "1D" | "1W" | "1M"; label: string; hint: string }[] = [
-  { value: "1D", label: "1 Günlük (Gün İçi / Scalp)", hint: "Dar Stop-Loss %1.5 / Take-Profit %3.0" },
-  { value: "1W", label: "1 Haftalık (Swing Trade)", hint: "Orta Stop-Loss %4.0 / Take-Profit %8.0" },
-  { value: "1M", label: "1 Aylık (Trend / Orta Vadeli)", hint: "Geniş Stop-Loss %7.0 / Take-Profit %15.0+" },
+  { value: "1D", label: "1 Günlük (Gün İçi / Scalp)", hint: "RSI(7) + EMA9/21 momentum" },
+  { value: "1W", label: "1 Haftalık (Swing Trade)", hint: "MACD kesişimi + kırılım" },
+  { value: "1M", label: "1 Aylık (Trend / Orta Vadeli)", hint: "SMA20/50 trend + Piotroski skoru" },
+];
+
+const RISK_MODE_OPTIONS: { value: "slow" | "normal" | "aggressive"; emoji: string; label: string; hint: string }[] = [
+  { value: "slow", emoji: "🐢", label: "Yavaş", hint: "Min. Güven %80 · SL %2.5 / TP %5" },
+  { value: "normal", emoji: "⚖️", label: "Normal", hint: "Min. Güven %65 · SL %4.5 / TP %9" },
+  { value: "aggressive", emoji: "🚀", label: "Agresif", hint: "Min. Güven %52 · SL %8 / TP %16" },
 ];
 
 function formatCountdown(seconds: number | null): string {
@@ -112,6 +119,29 @@ export default function PersonalBotPanel() {
       }
     } catch (err) {
       console.error("Süre/strateji güncelleme hatası:", err);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleRiskModeChange = async (riskMode: "slow" | "normal" | "aggressive") => {
+    if (!token || savingSettings) return;
+    setSavingSettings(true);
+    try {
+      const res = await fetch(`${API_BASE}/user/bot/settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ risk_mode: riskMode }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(data);
+        setRemaining(data.remaining_seconds);
+        setToast(`Risk modu "${data.risk_mode_label}" olarak güncellendi.`);
+        setTimeout(() => setToast(null), 4000);
+      }
+    } catch (err) {
+      console.error("Risk modu güncelleme hatası:", err);
     } finally {
       setSavingSettings(false);
     }
@@ -271,6 +301,35 @@ export default function PersonalBotPanel() {
         <p className="text-[10px] text-gray-600 mt-3">
           Strateji değiştirildiğinde bot süresi sıfırdan başlar ve seçilen zaman dilimine uygun
           Stop-Loss/Take-Profit eşikleri devreye girer.
+        </p>
+      </div>
+
+      {/* Risk Modu Seçici */}
+      <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+        <h4 className="text-xs font-bold text-white uppercase tracking-wide mb-3">Risk Modu</h4>
+        <div className="grid grid-cols-3 gap-2">
+          {RISK_MODE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => handleRiskModeChange(opt.value)}
+              disabled={savingSettings}
+              className={`flex flex-col items-center justify-center gap-1 text-center px-2 py-3 min-h-[44px] rounded-lg border transition disabled:opacity-50 ${
+                status.risk_mode === opt.value
+                  ? "bg-[#F59E0B]/10 border-[#F59E0B]/30"
+                  : "bg-[#0B0E14] border-[#242B35] hover:border-[#F59E0B]/20"
+              }`}
+            >
+              <span className="text-lg leading-none">{opt.emoji}</span>
+              <span className={`text-xs font-semibold ${status.risk_mode === opt.value ? "text-[#F59E0B]" : "text-gray-300"}`}>
+                {opt.label}
+              </span>
+              <span className="text-[9px] text-gray-500 leading-tight">{opt.hint}</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-gray-600 mt-3">
+          Risk modu, botun sinyallere ne kadar hızlı güvenip işlem açacağını (min. güven eşiği)
+          ve Stop-Loss/Take-Profit yüzdelerini belirler. Bot süresini etkilemez.
         </p>
       </div>
 

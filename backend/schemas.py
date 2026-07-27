@@ -224,13 +224,15 @@ class BalanceUpdateRequest(BaseModel):
 
 class UserBotSettingsRequest(BaseModel):
     time_frame: Optional[str] = Field(None, pattern="^(1D|1W|1M)$", description="'1D', '1W' veya '1M'")
+    risk_mode: Optional[str] = Field(None, pattern="^(slow|normal|aggressive)$", description="'slow', 'normal' veya 'aggressive'")
     is_active: Optional[bool] = None
 
 class UserBotResponse(BaseModel):
     bot_name: str
     virtual_balance: float
     is_active: bool
-    risk_profile: str
+    risk_mode: str
+    risk_mode_label: str
     time_frame: str
     time_frame_label: str
     started_at: Optional[datetime]

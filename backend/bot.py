@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, date, timedelta
+from typing import Optional
 from sqlalchemy.orm import Session
 from ta.momentum import RSIIndicator
 from ta.trend import MACD, SMAIndicator, EMAIndicator
@@ -61,6 +62,49 @@ DEFAULT_TIME_FRAME = "1D"
 
 def get_strategy_config(time_frame: str) -> dict:
     return BOT_STRATEGY_CONFIG.get(time_frame, BOT_STRATEGY_CONFIG[DEFAULT_TIME_FRAME])
+
+
+# ---------------------------------------------------------------------------
+# Risk Modu — Sinyal Güven Eşiği + Stop-Loss/Take-Profit Ölçeklendirme
+# ---------------------------------------------------------------------------
+# time_frame (1D/1W/1M) sinyalin YÖNÜNÜ (AL/SAT) ve veri çözünürlüğünü belirler;
+# risk_mode ise o sinyale ne kadar güvenildiğinde işleme girileceğini (min_confidence)
+# ve pozisyon risk büyüklüğünü (stop_loss_pct/take_profit_pct) belirler. İkisi
+# birbirinden bağımsız, birlikte çalışan iki eksendir.
+RISK_MODE_CONFIG = {
+    "slow": {
+        "label": "🐢 Yavaş (Muhafazakâr)",
+        "min_confidence": 0.80,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": 5.0,
+    },
+    "normal": {
+        "label": "⚖️ Normal (Dengeli)",
+        "min_confidence": 0.65,
+        "stop_loss_pct": 4.5,
+        "take_profit_pct": 9.0,
+    },
+    "aggressive": {
+        "label": "🚀 Agresif (Yüksek Risk)",
+        "min_confidence": 0.52,
+        "stop_loss_pct": 8.0,
+        "take_profit_pct": 16.0,
+    },
+}
+
+DEFAULT_RISK_MODE = "normal"
+
+# Eski (Türkçe) risk_profile değerleri ile geriye dönük uyumluluk
+_LEGACY_RISK_MODE_MAP = {"dusuk": "slow", "dengeli": "normal", "yuksek": "aggressive"}
+
+
+def get_risk_mode_config(risk_mode: Optional[str]) -> dict:
+    normalized = _LEGACY_RISK_MODE_MAP.get(risk_mode, risk_mode)
+    return RISK_MODE_CONFIG.get(normalized, RISK_MODE_CONFIG[DEFAULT_RISK_MODE])
+
+
+def _clip01(value: float) -> float:
+    return max(0.0, min(1.0, value))
 
 
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -170,27 +214,36 @@ def _resample_price_records(price_records, config: dict) -> pd.DataFrame:
     return df.tail(config["lookback"]).reset_index(drop=True)
 
 
-def _generate_scalp_signal(df: pd.DataFrame, config: dict) -> str:
+def _generate_scalp_signal(df: pd.DataFrame, config: dict) -> tuple:
     if len(df) < 5:
-        return "BEKLE"
+        return "BEKLE", 0.0
     rsi_period = min(config["rsi_period"], len(df) - 1)
     rsi = RSIIndicator(close=df["price"], window=rsi_period).rsi().fillna(50.0)
     ema_short = EMAIndicator(close=df["price"], window=min(config["ema_short"], len(df))).ema_indicator().fillna(df["price"])
     ema_long = EMAIndicator(close=df["price"], window=min(config["ema_long"], len(df))).ema_indicator().fillna(df["price"])
 
     last_rsi = float(rsi.iloc[-1])
-    ema_cross_up = float(ema_short.iloc[-1]) > float(ema_long.iloc[-1])
+    last_ema_short = float(ema_short.iloc[-1])
+    last_ema_long = float(ema_long.iloc[-1])
+    ema_cross_up = last_ema_short > last_ema_long
+
+    # Güven skoru: RSI'nin aşırı alım/satım eşiğinden ne kadar uzaklaştığı +
+    # EMA9/EMA21 arasındaki farkın fiyata oranı (momentumun gücü)
+    rsi_strength = _clip01(abs(50.0 - last_rsi) / 50.0)
+    ema_gap_ratio = abs(last_ema_short - last_ema_long) / last_ema_long if last_ema_long else 0.0
+    ema_strength = _clip01(ema_gap_ratio / 0.03)
+    confidence = 0.5 * rsi_strength + 0.5 * ema_strength
 
     if last_rsi < 30 and ema_cross_up:
-        return "AL"
+        return "AL", confidence
     if last_rsi > 70 and not ema_cross_up:
-        return "SAT"
-    return "BEKLE"
+        return "SAT", confidence
+    return "BEKLE", confidence
 
 
-def _generate_swing_signal(df: pd.DataFrame, config: dict) -> str:
+def _generate_swing_signal(df: pd.DataFrame, config: dict) -> tuple:
     if len(df) < 10:
-        return "BEKLE"
+        return "BEKLE", 0.0
     macd = MACD(close=df["price"])
     macd_line = macd.macd().fillna(0.0)
     macd_signal = macd.macd_signal().fillna(0.0)
@@ -200,66 +253,101 @@ def _generate_swing_signal(df: pd.DataFrame, config: dict) -> str:
     rolling_low = df["price"].rolling(window=window).min()
 
     last_price = float(df["price"].iloc[-1])
-    macd_cross_up = float(macd_line.iloc[-1]) > float(macd_signal.iloc[-1])
-    breakout_up = last_price >= float(rolling_high.iloc[-1]) * 0.995
-    breakdown = last_price <= float(rolling_low.iloc[-1]) * 1.005
+    last_macd = float(macd_line.iloc[-1])
+    last_macd_signal = float(macd_signal.iloc[-1])
+    macd_cross_up = last_macd > last_macd_signal
+    last_high = float(rolling_high.iloc[-1])
+    last_low = float(rolling_low.iloc[-1])
+    breakout_up = last_price >= last_high * 0.995
+    breakdown = last_price <= last_low * 1.005
+
+    # Güven skoru: MACD histogramının fiyata oranı (kesişimin gücü) +
+    # kırılımın destek/direnç seviyesini ne kadar aştığı
+    macd_strength = _clip01(abs(last_macd - last_macd_signal) / (last_price * 0.01)) if last_price else 0.0
+    if breakout_up and last_high:
+        breakout_strength = _clip01((last_price - last_high) / (last_high * 0.02) + 0.5)
+    elif breakdown and last_low:
+        breakout_strength = _clip01((last_low - last_price) / (last_low * 0.02) + 0.5)
+    else:
+        breakout_strength = 0.3
+    confidence = 0.5 * macd_strength + 0.5 * breakout_strength
 
     if macd_cross_up and breakout_up:
-        return "AL"
+        return "AL", confidence
     if not macd_cross_up and breakdown:
-        return "SAT"
-    return "BEKLE"
+        return "SAT", confidence
+    return "BEKLE", confidence
 
 
-def _generate_trend_signal(df: pd.DataFrame, config: dict, piotroski_score) -> str:
+def _generate_trend_signal(df: pd.DataFrame, config: dict, piotroski_score) -> tuple:
     if len(df) < 10:
-        return "BEKLE"
+        return "BEKLE", 0.0
     sma_short = SMAIndicator(close=df["price"], window=min(config["sma_short"], len(df))).sma_indicator().fillna(df["price"])
     sma_long = SMAIndicator(close=df["price"], window=min(config["sma_long"], len(df))).sma_indicator().fillna(df["price"])
 
-    trend_up = float(sma_short.iloc[-1]) > float(sma_long.iloc[-1])
-    trend_down = float(sma_short.iloc[-1]) < float(sma_long.iloc[-1])
+    last_sma_short = float(sma_short.iloc[-1])
+    last_sma_long = float(sma_long.iloc[-1])
+    trend_up = last_sma_short > last_sma_long
+    trend_down = last_sma_short < last_sma_long
 
     # Piotroski güvenlik barajı: skor biliniyorsa ve eşik altındaysa AL sinyali reddedilir
     piotroski_ok = piotroski_score is None or piotroski_score >= config["min_piotroski_score"]
 
+    # Güven skoru: SMA20/SMA50 arasındaki farkın gücü + Piotroski skorunun (varsa) katkısı
+    sma_gap_ratio = abs(last_sma_short - last_sma_long) / last_sma_long if last_sma_long else 0.0
+    sma_strength = _clip01(sma_gap_ratio / 0.05)
+    piotroski_strength = (piotroski_score / 9.0) if piotroski_score is not None else 0.5
+    confidence = 0.6 * sma_strength + 0.4 * _clip01(piotroski_strength)
+
     if trend_up and piotroski_ok:
-        return "AL"
+        return "AL", confidence
     if trend_down:
-        return "SAT"
-    return "BEKLE"
+        return "SAT", confidence
+    return "BEKLE", confidence
 
 
-def _generate_timeframe_signal(price_records, config: dict, piotroski_score=None):
-    """Zaman dilimine göre resample edilmiş veri üzerinden AL/SAT/BEKLE sinyali ve son fiyatı döner."""
+def _generate_timeframe_signal(price_records, config: dict, risk_config: dict, piotroski_score=None):
+    """
+    Zaman dilimine göre resample edilmiş veri üzerinden AL/SAT/BEKLE sinyali, son fiyat
+    ve sinyal güven skorunu (confidence) döner. Sinyalin YÖNÜ zaman dilimi stratejisinden
+    (scalp/swing/trend) gelir; ancak üretilen sinyal, risk_config'in min_confidence eşiğinin
+    ALTINDAYSA işleme dönüştürülmeden "BEKLE"ye düşürülür (risk modu güven filtresi).
+    """
     df = _resample_price_records(price_records, config)
     if df.empty:
-        return "BEKLE", None
+        return "BEKLE", None, 0.0
 
     last_price = float(df["price"].iloc[-1])
     mode = config["mode"]
 
     if mode == "scalp":
-        action = _generate_scalp_signal(df, config)
+        action, confidence = _generate_scalp_signal(df, config)
     elif mode == "swing":
-        action = _generate_swing_signal(df, config)
+        action, confidence = _generate_swing_signal(df, config)
     else:
-        action = _generate_trend_signal(df, config, piotroski_score)
+        action, confidence = _generate_trend_signal(df, config, piotroski_score)
 
-    return action, last_price
+    if action != "BEKLE" and confidence < risk_config["min_confidence"]:
+        action = "BEKLE"
+
+    return action, last_price, confidence
 
 
-def _check_stop_loss_take_profit(portfolio_entry, latest_price: float, config: dict):
-    """Pozisyon Stop-Loss/Take-Profit eşiklerini aştıysa zorunlu SAT kararı ve gerekçesini döner."""
+def _check_stop_loss_take_profit(portfolio_entry, latest_price: float, risk_config: dict):
+    """
+    Pozisyonun Stop-Loss/Take-Profit eşiklerini aştığı durumda zorunlu SAT kararı ve
+    gerekçesini döner. Eşikler risk_config'ten (risk moduna göre) gelir — zaman dilimi
+    stratejisinden bağımsız olarak kullanıcının seçtiği risk moduna göre ölçeklenir.
+    """
     avg_cost = float(portfolio_entry.average_cost)
     if avg_cost <= 0:
         return None
     change_pct = ((latest_price - avg_cost) / avg_cost) * 100
 
-    if change_pct <= -config["stop_loss_pct"]:
-        return f"Stop-Loss tetiklendi (%{config['stop_loss_pct']:.1f} zarar sınırı aşıldı, gerçekleşen: %{change_pct:.2f})."
-    if change_pct >= config["take_profit_pct"]:
-        return f"Take-Profit hedefine ulaşıldı (%{config['take_profit_pct']:.1f} kâr hedefi, gerçekleşen: %{change_pct:.2f})."
+    if change_pct <= -risk_config["stop_loss_pct"]:
+        return f"Stop-Loss tetiklendi (%{risk_config['stop_loss_pct']:.1f} zarar sınırı aşıldı, gerçekleşen: %{change_pct:.2f})."
+    if change_pct >= risk_config["take_profit_pct"]:
+        return f"Take-Profit hedefine ulaşıldı (%{risk_config['take_profit_pct']:.1f} kâr hedefi, gerçekleşen: %{change_pct:.2f})."
     return None
 
 
@@ -270,16 +358,19 @@ def _execute_bot_trading_cycle(
     is_bot_portfolio: bool,
     log_label: str,
     time_frame: str = DEFAULT_TIME_FRAME,
+    risk_mode: str = DEFAULT_RISK_MODE,
     force_liquidate: bool = False,
 ):
     """
     Tek bir "bot aktörü" (paylaşımlı demo bot ya da bir kullanıcının kişisel botu)
-    için, seçilen zaman dilimine (time_frame) uygun strateji motorunu çalıştırır.
+    için, seçilen zaman dilimine (time_frame) uygun strateji motorunu, seçilen risk
+    moduna (risk_mode) göre güven eşiği ve Stop-Loss/Take-Profit ile çalıştırır.
 
     force_liquidate=True verilirse (örn. bot süresi dolduğunda) sinyale bakılmaksızın
     tüm açık pozisyonlar piyasa fiyatından kapatılır.
     """
     config = get_strategy_config(time_frame)
+    risk_config = get_risk_mode_config(risk_mode)
     stocks = db.query(models.Stock).filter_by(is_active=True).all()
 
     portfolio_rows = (
@@ -306,7 +397,7 @@ def _execute_bot_trading_cycle(
             if analysis and analysis.piotroski_score is not None:
                 piotroski_score = int(analysis.piotroski_score)
 
-        action, latest_price = _generate_timeframe_signal(price_records, config, piotroski_score)
+        action, latest_price, confidence = _generate_timeframe_signal(price_records, config, risk_config, piotroski_score)
         if latest_price is None:
             continue
 
@@ -318,7 +409,7 @@ def _execute_bot_trading_cycle(
         if force_liquidate and portfolio_entry:
             forced_reason = f"Bot süresi ({config['label']}) doldu; açık pozisyon piyasa fiyatından kapatıldı."
         elif portfolio_entry:
-            forced_reason = _check_stop_loss_take_profit(portfolio_entry, latest_price, config)
+            forced_reason = _check_stop_loss_take_profit(portfolio_entry, latest_price, risk_config)
 
         if forced_reason:
             action = "SAT"
@@ -343,8 +434,9 @@ def _execute_bot_trading_cycle(
                         ))
 
                         reason = (
-                            f"[{config['label']}] Strateji AL sinyali verdi "
-                            f"(Stop-Loss: %{config['stop_loss_pct']}, Take-Profit: %{config['take_profit_pct']})."
+                            f"[{config['label']} / {risk_config['label']}] Strateji AL sinyali verdi "
+                            f"(Güven: %{confidence * 100:.0f}, Stop-Loss: %{risk_config['stop_loss_pct']}, "
+                            f"Take-Profit: %{risk_config['take_profit_pct']})."
                         )
                         db.add(models.BotLog(
                             user_id=owner_user_id, stock_id=stock.id, action_type="AL",
@@ -361,7 +453,8 @@ def _execute_bot_trading_cycle(
 
                 profit_loss = (latest_price - float(portfolio_entry.average_cost)) / float(portfolio_entry.average_cost) * 100
                 reason = forced_reason or (
-                    f"[{config['label']}] Strateji SAT sinyali verdi. Kâr/Zarar: %{profit_loss:.2f}. Pozisyon kapatıldı."
+                    f"[{config['label']} / {risk_config['label']}] Strateji SAT sinyali verdi "
+                    f"(Güven: %{confidence * 100:.0f}). Kâr/Zarar: %{profit_loss:.2f}. Pozisyon kapatıldı."
                 )
                 if forced_reason:
                     reason = f"{forced_reason} Kâr/Zarar: %{profit_loss:.2f}."
@@ -440,7 +533,8 @@ def _check_and_apply_expiry(db: Session, user_bot: "models.UserBot") -> bool:
     _execute_bot_trading_cycle(
         db, balance_holder=user_bot, owner_user_id=user_bot.user_id,
         is_bot_portfolio=True, log_label=f"[Kişisel Bot #{user_bot.user_id} - Süre Doldu]",
-        time_frame=user_bot.time_frame or DEFAULT_TIME_FRAME, force_liquidate=True,
+        time_frame=user_bot.time_frame or DEFAULT_TIME_FRAME,
+        risk_mode=user_bot.risk_profile or DEFAULT_RISK_MODE, force_liquidate=True,
     )
 
     user_bot.is_active = False
@@ -481,6 +575,7 @@ def run_quant_bot(db: Session):
                 db, balance_holder=user_bot, owner_user_id=user_bot.user_id,
                 is_bot_portfolio=True, log_label=f"[Kişisel Bot #{user_bot.user_id}]",
                 time_frame=user_bot.time_frame or DEFAULT_TIME_FRAME,
+                risk_mode=user_bot.risk_profile or DEFAULT_RISK_MODE,
             )
         except Exception as e:
             print(f"[Quant Bot] Kullanıcı #{user_bot.user_id} botu çalıştırılırken hata: {e}")

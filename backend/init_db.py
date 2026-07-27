@@ -165,7 +165,7 @@ def seed_user_bots(db):
                 bot_name=f"{user.username} — Kişisel AI Bot",
                 virtual_balance=100000.00,
                 is_active=True,
-                risk_profile="dengeli",
+                risk_profile="normal",
                 time_frame="1D",
                 started_at=now,
                 ends_at=now + BOT_TIME_FRAME_DURATIONS["1D"],

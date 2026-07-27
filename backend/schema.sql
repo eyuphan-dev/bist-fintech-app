@@ -135,6 +135,22 @@ CREATE TABLE IF NOT EXISTS kap_notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_kap_notifications_date ON kap_notifications(publish_date DESC);
 
+-- 10.5 Hisse Bazlı Haberler (Yahoo Finance) — 24 saatlik döngüyle günlük tazelenir
+CREATE TABLE IF NOT EXISTS stock_news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_id INTEGER NOT NULL,
+    symbol TEXT NOT NULL,
+    title TEXT NOT NULL,
+    summary TEXT,
+    source TEXT,
+    url TEXT,
+    thumbnail TEXT,
+    published_at TEXT,
+    fetched_at TEXT NOT NULL,
+    FOREIGN KEY(stock_id) REFERENCES stocks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_stock_news_stock ON stock_news(stock_id, fetched_at DESC);
+
 -- 11. TEFAS Yatırım Fonları
 CREATE TABLE IF NOT EXISTS funds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
