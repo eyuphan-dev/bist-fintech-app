@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from database import engine, Base, SessionLocal, IS_SQLITE
 import models
 
@@ -99,12 +99,20 @@ MIGRATIONS = {
 
 
 def run_migrations():
-    """Var olan tablolara eksik kolonları ekler. Tablo henüz yoksa create_all zaten doğru şemayla oluşturacaktır."""
+    """
+    Var olan tablolara eksik kolonları ekler. Tablo henüz yoksa create_all zaten doğru
+    şemayla oluşturacaktır. SQLAlchemy inspector kullanıldığı için hem SQLite hem
+    Postgres'te çalışır — Postgres'te (production) tablo daha önce create_all ile
+    oluşturulmuş olsa bile, sonradan models.py'a eklenen yeni kolonlar create_all
+    tarafından EKLENMEZ (create_all yalnızca eksik TABLOLARI oluşturur, var olan
+    tablolara kolon eklemez); bu yüzden bu fonksiyon her ortamda çalıştırılmalıdır.
+    """
+    inspector = inspect(engine)
     with engine.connect() as conn:
         for table_name, column_defs in MIGRATIONS.items():
-            existing_columns = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table_name})"))}
-            if not existing_columns:
+            if not inspector.has_table(table_name):
                 continue
+            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
             for column_name, ddl in column_defs.items():
                 if column_name not in existing_columns:
                     conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}"))
@@ -208,11 +216,14 @@ def backfill_user_bot_durations(db):
 def init_database():
     print("Veritabanı tabloları oluşturuluyor...")
     if IS_SQLITE:
-        # Bu ALTER TABLE / PRAGMA tabanlı migrasyonlar yalnızca eski SQLite dosyalarını
-        # (models.py şeması değiştikçe eksik kalan kolonları) yamamak için var. Taze bir
-        # Postgres veritabanında create_all() zaten güncel şemayı eksiksiz oluşturur.
+        # UNIQUE kısıtı değişikliği gerektiren bu tam tablo yeniden inşası (rebuild)
+        # yalnızca SQLite'a özgü bir sorunu (ALTER TABLE ile UNIQUE eklenememesi) çözer;
+        # Postgres'teki portfolios tablosu zaten doğru şemayla oluşturulmuştur.
         migrate_portfolios_table()
-        run_migrations()
+    # run_migrations() hem SQLite hem Postgres'te çalışır: create_all() yalnızca EKSİK
+    # TABLOLARI oluşturur, var olan bir tabloya sonradan eklenen kolonları eklemez —
+    # bu yüzden production'daki (Postgres) var olan tablolar için de gereklidir.
+    run_migrations()
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()

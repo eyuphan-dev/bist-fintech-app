@@ -618,10 +618,19 @@ def calculate_dca_backtest(db: Session, symbol: str, monthly_amount: float, mont
 
 # ---------------------------------------------------------------------------
 # TASK: cleanup_old_logs() — user_logs tablosunu 90 günden eski kayıtlardan arındırır
-# (scheduler.py içindeki log_cleanup_job ile aynı işi yapar; ham SQL örneği olarak sunulur)
+# (scheduler.py içindeki log_cleanup_job ile aynı işi yapar)
 # ---------------------------------------------------------------------------
 def cleanup_old_logs(engine) -> int:
+    """
+    Python tarafında hesaplanan mutlak kesme tarihiyle (SQLite'a özgü
+    datetime('now', '-90 days') fonksiyonu yerine) çalışır — bu yüzden hem
+    SQLite hem Postgres'te sorunsuz çalışır.
+    """
+    cutoff = datetime.utcnow() - timedelta(days=90)
     with engine.connect() as conn:
-        result = conn.execute(text("DELETE FROM user_logs WHERE created_at < datetime('now', '-90 days')"))
+        result = conn.execute(
+            text("DELETE FROM user_logs WHERE created_at < :cutoff"),
+            {"cutoff": cutoff},
+        )
         conn.commit()
         return result.rowcount
