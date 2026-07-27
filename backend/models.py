@@ -224,6 +224,28 @@ class KapNotification(Base):
 # ---------------------------------------------------------------------------
 # MODÜL 6: TEFAS Yatırım Fonları
 # ---------------------------------------------------------------------------
+class StockNews(Base):
+    """
+    Hisse bazlı haberler (Yahoo Finance/yfinance) — 24 saatlik döngüyle günlük olarak
+    tazelenir: scheduler her gün bir kez çalışıp bir hissenin eski haber kayıtlarını
+    silip günün yeni haberleriyle değiştirir (bkz. scheduler.py refresh_stock_news_job).
+    """
+    __tablename__ = "stock_news"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol = Column(String(10), nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    summary = Column(Text, nullable=True)
+    source = Column(String(120), nullable=True)
+    url = Column(String(500), nullable=True)
+    thumbnail = Column(String(500), nullable=True)
+    published_at = Column(String(50), nullable=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    stock = relationship("Stock")
+
+
 class Fund(Base):
     __tablename__ = "funds"
 
@@ -301,7 +323,7 @@ class UserBot(Base):
     bot_name = Column(String(50), nullable=False, default="Kişisel AI Bot")
     virtual_balance = Column(Numeric(15, 2), default=100000.00)
     is_active = Column(Boolean, default=True)
-    risk_profile = Column(String(20), default="dengeli")  # 'dusuk' | 'dengeli' | 'yuksek'
+    risk_profile = Column(String(20), default="normal")  # 'slow' | 'normal' | 'aggressive'
     # Süre & Zaman Dilimi Bazlı Strateji Motoru
     time_frame = Column(String(4), default="1D")  # '1D' Gün İçi/Scalp, '1W' Swing, '1M' Trend/Pozisyon
     started_at = Column(DateTime, nullable=True)

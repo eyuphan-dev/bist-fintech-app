@@ -14,7 +14,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import SessionLocal
 import models
-from yfinance_client import fetch_current_price
+from yfinance_client import fetch_current_price, fetch_stock_news
 from cache import set_latest_price
 from datetime import datetime, timedelta
 import pytz
@@ -171,6 +171,55 @@ def refresh_market_data_job():
 
 
 # ---------------------------------------------------------------------------
+# MODÜL 1.6: Hisse Haberleri (Yahoo Finance) — 24 Saatlik Döngü
+# ---------------------------------------------------------------------------
+def refresh_stock_news_job():
+    """
+    Her aktif hisse için Yahoo Finance'dan son haberleri çeker ve stock_news
+    tablosuna yazar. 24 saatlik döngü: bu görev günde bir kez çalışır, her
+    hissenin BİR ÖNCEKİ günden kalan haber kayıtlarını siler ve günün yeni
+    haberleriyle değiştirir — böylece "Haberler" sekmesi kalıcı, günlük olarak
+    loglanmış bir veri setinden okur (yalnızca kısa ömürlü RAM önbelleğinden değil).
+    """
+    db = SessionLocal()
+    try:
+        print("[Scheduler] Hisse haberleri (Yahoo Finance) günlük olarak tazeleniyor...")
+        stocks = db.query(models.Stock).filter_by(is_active=True).all()
+        total_saved = 0
+        for stock in stocks:
+            try:
+                items = fetch_stock_news(stock.symbol, limit=8)
+            except Exception as e:
+                print(f"[Scheduler] {stock.symbol} haberleri çekilemedi: {e}")
+                continue
+
+            # Önceki günün kayıtlarını sil (24 saatlik döngü: eskiler silinip yenilerle değiştirilir)
+            db.query(models.StockNews).filter_by(stock_id=stock.id).delete(synchronize_session=False)
+
+            for item in items:
+                if not item.get("title"):
+                    continue
+                db.add(models.StockNews(
+                    stock_id=stock.id,
+                    symbol=stock.symbol,
+                    title=item["title"][:500],
+                    summary=item.get("summary"),
+                    source=item.get("source"),
+                    url=item.get("url"),
+                    thumbnail=item.get("thumbnail"),
+                    published_at=item.get("published_at"),
+                ))
+                total_saved += 1
+            db.commit()
+        print(f"[Scheduler] Hisse haberleri tazelendi: {len(stocks)} hisse tarandı, {total_saved} haber kaydedildi.")
+    except Exception as e:
+        print(f"[Scheduler] Hisse haberleri tazeleme hatası: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # MODÜL 2: Log Temizleme Görevi (90 günden eski kayıtları sil)
 # ---------------------------------------------------------------------------
 def log_cleanup_job():
@@ -227,6 +276,7 @@ def start_scheduler():
     # 08:00 tetiklenmesini beklemek zorunda kalmasın diye, arka planda (uygulama
     # başlangıcını bloklamadan) bir kerelik ilk tazeleme başlatılır.
     threading.Thread(target=refresh_market_data_job, daemon=True).start()
+    threading.Thread(target=refresh_stock_news_job, daemon=True).start()
 
     scheduler = BackgroundScheduler()
 
@@ -258,6 +308,18 @@ def start_scheduler():
         max_instances=1,
     )
 
+    # ── Görev 1.6: Hisse Haberleri (Yahoo Finance) — 24 Saatlik Döngü ───
+    # Her gün 07:30 UTC (Türkiye'de 10:30) — önceki günün haberleri silinip
+    # günün yeni haberleriyle değiştirilir.
+    scheduler.add_job(
+        refresh_stock_news_job,
+        "cron",
+        hour=7,
+        minute=30,
+        id="stock_news_sync",
+        max_instances=1,
+    )
+
     # ── Görev 2: Log Temizleme ───────────────────────────────────────────
     # Her Pazar sabahı 03:00 UTC (Türkiye'de 06:00)
     scheduler.add_job(
@@ -274,5 +336,6 @@ def start_scheduler():
     print("APScheduler başlatıldı.")
     print("  • bist_updater     : Hafta içi 10:00–18:55, her 5 dakika")
     print("  • market_data_sync : Her gün 08:00 UTC (KAP bildirimleri + TEFAS fon fiyatları)")
+    print("  • stock_news_sync  : Her gün 07:30 UTC (Hisse haberleri, 24 saatlik döngü)")
     print("  • log_cleaner      : Her Pazar 03:00 UTC (90 günden eski logları siler)")
     return scheduler

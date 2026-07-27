@@ -31,7 +31,10 @@ from auth import (
 )
 from scheduler import start_scheduler
 from init_db import init_database
-from bot import calculate_technical_indicators, get_strategy_config, BOT_STRATEGY_CONFIG
+from bot import (
+    calculate_technical_indicators, get_strategy_config, BOT_STRATEGY_CONFIG,
+    get_risk_mode_config, RISK_MODE_CONFIG, DEFAULT_RISK_MODE,
+)
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from market_hours import get_market_status_dict, is_market_open
 from analysis_engine import calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError
@@ -136,7 +139,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         bot_name=f"{new_user.username} — Kişisel AI Bot",
         virtual_balance=100000.00,
         is_active=True,
-        risk_profile="dengeli",
+        risk_profile=DEFAULT_RISK_MODE,
         time_frame="1D",
         started_at=now,
         ends_at=now + default_config["duration"],
@@ -342,14 +345,36 @@ _news_executor = ThreadPoolExecutor(max_workers=4)
 @app.get("/api/stocks/{symbol}/news", response_model=List[StockNewsItem])
 def get_stock_news(symbol: str, db: Session = Depends(get_db)):
     """
-    Yahoo Finance üzerinden hisseyle ilgili son haberleri döner. Sonuçlar 20 dakika
-    önbelleklenir ve dış API çağrısı en fazla 5 saniye ile sınırlandırılır — tek bir
-    yavaş/askıda kalan istek bu uç noktayı bloklamaz.
+    Hisseyle ilgili son haberleri döner. Ana kaynak: scheduler'ın günde bir kez
+    (24 saatlik döngüyle, bkz. scheduler.py refresh_stock_news_job) doldurduğu
+    stock_news tablosu — bu sayede haberler kalıcı olarak loglanmış olur ve her
+    gün eski kayıtlar silinip yenileriyle değiştirilir. Tablo henüz boşsa (ör.
+    scheduler ilk çalışmasını yapmadan önce ya da yeni eklenen bir hisse için)
+    canlı yfinance çağrısına düşülür ve sonuç 20 dakika RAM önbelleğinde tutulur.
     """
     symbol = symbol.upper()
     stock = db.query(models.Stock).filter_by(symbol=symbol, is_active=True).first()
     if not stock:
         raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    stored = (
+        db.query(models.StockNews)
+        .filter_by(stock_id=stock.id)
+        .order_by(models.StockNews.fetched_at.desc())
+        .all()
+    )
+    if stored:
+        return [
+            StockNewsItem(
+                title=n.title,
+                summary=n.summary,
+                source=n.source,
+                url=n.url,
+                published_at=n.published_at,
+                thumbnail=n.thumbnail,
+            )
+            for n in stored
+        ]
 
     cached = get_cached_news(symbol)
     if cached is not None:
@@ -997,6 +1022,7 @@ def get_user_bot_status(
     stats = _compute_actor_bot_stats(db, current_user.id, True, float(user_bot.virtual_balance))
     time_frame = user_bot.time_frame or "1D"
     config = get_strategy_config(time_frame)
+    risk_config = get_risk_mode_config(user_bot.risk_profile)
 
     remaining_seconds = None
     if user_bot.ends_at:
@@ -1006,7 +1032,8 @@ def get_user_bot_status(
         bot_name=user_bot.bot_name,
         virtual_balance=round(float(user_bot.virtual_balance), 2),
         is_active=bool(user_bot.is_active),
-        risk_profile=user_bot.risk_profile,
+        risk_mode=user_bot.risk_profile if user_bot.risk_profile in RISK_MODE_CONFIG else DEFAULT_RISK_MODE,
+        risk_mode_label=risk_config["label"],
         time_frame=time_frame,
         time_frame_label=config["label"],
         started_at=user_bot.started_at,
@@ -1026,9 +1053,10 @@ def update_user_bot_settings(
     db: Session = Depends(get_db),
 ):
     """
-    Kişisel botun zaman dilimini (1D/1W/1M) ve aktiflik durumunu günceller.
-    Zaman dilimi değiştirildiğinde ya da bot yeniden aktif edildiğinde süre
-    (started_at/ends_at) sıfırdan başlatılır.
+    Kişisel botun zaman dilimini (1D/1W/1M), risk modunu (slow/normal/aggressive) ve
+    aktiflik durumunu günceller. Zaman dilimi değiştirildiğinde ya da bot yeniden aktif
+    edildiğinde süre (started_at/ends_at) sıfırdan başlatılır. Risk modu değişikliği
+    süreyi etkilemez — yalnızca bir sonraki işlem döngüsünden itibaren geçerli olur.
     """
     user_bot = db.query(models.UserBot).filter_by(user_id=current_user.id).first()
     if not user_bot:
@@ -1041,6 +1069,9 @@ def update_user_bot_settings(
         config = get_strategy_config(req.time_frame)
         user_bot.started_at = datetime.utcnow()
         user_bot.ends_at = datetime.utcnow() + config["duration"]
+
+    if req.risk_mode and req.risk_mode != user_bot.risk_profile:
+        user_bot.risk_profile = req.risk_mode
 
     if req.is_active is not None:
         user_bot.is_active = req.is_active
