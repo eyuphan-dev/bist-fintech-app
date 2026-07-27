@@ -7,14 +7,13 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import nh3
 
 import models
-from database import engine, get_db
+from database import engine, get_db, begin_write_transaction
 from schemas import (
     UserCreate, UserResponse, Token, LoginRequest,
     StockResponse, StockDetailResponse, StockPriceResponse,
@@ -746,7 +745,7 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
     # için eşzamanlı iki alım/satım isteği birbirinin üzerine yazamaz (race condition
     # önlenir). İşlem başarısız olursa ROLLBACK ile bakiye/portföy tutarlılığı korunur.
     db.rollback()  # varsa açık implicit transaction'ı temizle
-    db.execute(text("BEGIN IMMEDIATE"))
+    begin_write_transaction(db)
     try:
         # Kullanıcıyı IMMEDIATE yazma kilidi altında (aynı transaction içinde) tekrar oku —
         # eşzamanlı ikinci bir istek bu satıra erişemeden bu transaction'ın bitmesini bekler.
@@ -894,7 +893,7 @@ def cancel_pending_order(
 ):
     """Yalnızca kendi PENDING durumundaki bir emri iptal edebilir (JWT'den çözülen kullanıcı)."""
     db.rollback()
-    db.execute(text("BEGIN IMMEDIATE"))
+    begin_write_transaction(db)
     try:
         order = db.query(models.PendingOrder).filter_by(
             id=order_id, user_id=current_user.id
@@ -1016,7 +1015,7 @@ def update_user_balance(
 ):
     """Giriş yapan kullanıcının kendi manuel sanal bakiyesini ayarlar/sıfırlar (yalnızca JWT'den çözülen kullanıcı)."""
     db.rollback()
-    db.execute(text("BEGIN IMMEDIATE"))
+    begin_write_transaction(db)
     try:
         user_row = db.query(models.User).filter_by(id=current_user.id).first()
         user_row.virtual_balance = req.new_balance
@@ -1038,7 +1037,7 @@ def update_user_bot_balance(
 ):
     """Giriş yapan kullanıcının kişisel AI botunun sanal bakiyesini ayarlar/sıfırlar (yalnızca kendi botu)."""
     db.rollback()
-    db.execute(text("BEGIN IMMEDIATE"))
+    begin_write_transaction(db)
     try:
         user_bot = db.query(models.UserBot).filter_by(user_id=current_user.id).first()
         if not user_bot:

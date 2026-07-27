@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -50,3 +50,18 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def begin_write_transaction(db):
+    """
+    Atomik yazma transaction'ı başlatır (anti-double-spending: eşzamanlı iki
+    alım/satım/bakiye güncelleme isteğinin birbirinin üzerine yazmasını önler).
+
+    SQLite'ta "BEGIN IMMEDIATE" ile yazma kilidi hemen alınır. PostgreSQL bu
+    sözdizimini DESTEKLEMEZ ("IMMEDIATE" geçerli bir transaction_mode değildir,
+    syntax error fırlatır) — bu yüzden Postgres'te düz "BEGIN" kullanılır;
+    Postgres'in varsayılan READ COMMITTED izolasyon seviyesi + satır bazlı
+    kilitleme (UPDATE/SELECT...FOR UPDATE benzeri erişimlerde) SQLite'daki
+    IMMEDIATE kilidin sağladığı "yazma çakışmasını önleme" garantisinin dengini verir.
+    """
+    db.execute(text("BEGIN" if not IS_SQLITE else "BEGIN IMMEDIATE"))

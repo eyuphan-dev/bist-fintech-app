@@ -21,10 +21,10 @@ Tasarım notları:
 """
 
 from datetime import datetime
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import models
+from database import begin_write_transaction
 from market_hours import is_market_open
 
 
@@ -59,7 +59,7 @@ def _fail_order(db: Session, order: "models.PendingOrder", reason: str) -> None:
 def _execute_single_order(db: Session, order_id: int) -> None:
     """Tek bir emri kendi atomik transaction'ında işler; bir emrin başarısız olması diğerlerini etkilemez."""
     db.rollback()
-    db.execute(text("BEGIN IMMEDIATE"))
+    begin_write_transaction(db)
     try:
         order = db.query(models.PendingOrder).filter_by(id=order_id, status="PENDING").first()
         if not order:
