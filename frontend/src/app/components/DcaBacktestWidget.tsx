@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Calculator, Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { Calculator, Loader2, TrendingUp, TrendingDown, HelpCircle } from "lucide-react";
+import CalculatorHelpModal from "./CalculatorHelpModal";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
@@ -36,6 +37,7 @@ export default function DcaBacktestWidget({ symbol }: DcaBacktestWidgetProps) {
   const [months, setMonths] = useState<number>(12);
   const [result, setResult] = useState<DcaBacktestResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const handleRun = async () => {
     setLoading(true);
@@ -56,9 +58,26 @@ export default function DcaBacktestWidget({ symbol }: DcaBacktestWidgetProps) {
 
   return (
     <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4 space-y-3">
+      {showHelp && (
+        <CalculatorHelpModal
+          title="Ortalama Maliyet (DCA) Hesaplayıcı"
+          purpose="Düzenli aralıklarla (her ay) sabit bir tutar yatırdığınızda, geçmiş fiyat verisine göre elde etmiş olacağınız ortalama birim maliyeti ve toplam getiriyi geriye dönük olarak simüle eder."
+          howTo="Her ay yatıracağınız sabit tutarı (TL) ve simülasyon süresini (ay) girin, 'Simülasyonu Çalıştır'a basın. Sistem seçtiğiniz hissenin geçmiş fiyatlarını kullanarak toplam yatırım, güncel değer ve getiri yüzdesini hesaplar."
+          example="Her ay 1.000 TL'yi 12 ay boyunca THYAO'ya yatırdığınızı varsayalım. Hesaplayıcı, fiyatın zaman içindeki dalgalanmasına göre toplam 12.000 TL'nin bugün ne kadar değere ulaştığını gösterir."
+          onClose={() => setShowHelp(false)}
+        />
+      )}
+
       <div className="flex items-center gap-2">
         <Calculator className="w-4 h-4 text-[#F59E0B]" />
         <h4 className="text-xs font-bold text-white uppercase tracking-wide">Düzenli Yatırım (DCA) Simülasyonu</h4>
+        <button
+          onClick={() => setShowHelp(true)}
+          title="Nasıl Kullanılır?"
+          className="text-gray-500 hover:text-[#F59E0B] transition"
+        >
+          <HelpCircle className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { PiggyBank, Loader2 } from "lucide-react";
+import { PiggyBank, Loader2, HelpCircle } from "lucide-react";
+import CalculatorHelpModal from "./CalculatorHelpModal";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
@@ -26,6 +27,7 @@ export default function DividendCalculatorWidget({ symbol }: DividendCalculatorW
   const [targetIncome, setTargetIncome] = useState<number>(5000);
   const [result, setResult] = useState<DividendGoalResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const handleCalculate = async () => {
     setLoading(true);
@@ -46,9 +48,26 @@ export default function DividendCalculatorWidget({ symbol }: DividendCalculatorW
 
   return (
     <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4 space-y-3">
+      {showHelp && (
+        <CalculatorHelpModal
+          title="Temettü & Kâr Payı Hesaplayıcı"
+          purpose="Şirketlerin dağıttığı kâr payından hesabınıza geçecek net nakit tutarını ve mevcut temettü verimini baz alarak, hedeflediğiniz aylık pasif gelire ulaşmak için kaç lot ve ne kadar sermayeye ihtiyacınız olduğunu bulur."
+          howTo="Hedeflediğiniz aylık pasif geliri (TL) girin ve 'Hesapla'ya basın. Sistem hissenin güncel temettü verimini ve fiyatını kullanarak gerekli lot sayısı ile sermayeyi otomatik hesaplar."
+          example="Aylık 5.000 TL pasif gelir hedefliyorsunuz. Hissenin yıllık temettü verimi %8 ise, hesaplayıcı bu geliri sağlamak için kaç lota ve ne kadar sermayeye ihtiyacınız olduğunu gösterir."
+          onClose={() => setShowHelp(false)}
+        />
+      )}
+
       <div className="flex items-center gap-2">
         <PiggyBank className="w-4 h-4 text-[#F59E0B]" />
         <h4 className="text-xs font-bold text-white uppercase tracking-wide">Pasif Gelir Hedefi Hesaplayıcı</h4>
+        <button
+          onClick={() => setShowHelp(true)}
+          title="Nasıl Kullanılır?"
+          className="text-gray-500 hover:text-[#F59E0B] transition"
+        >
+          <HelpCircle className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       <div className="flex items-center gap-2">
