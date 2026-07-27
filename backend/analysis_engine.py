@@ -148,6 +148,104 @@ def _fx_exposure_text(info: Dict[str, Any]) -> str:
     return "Şirketin döviz kuru riskine duyarlılığı, mevcut halka açık verilerle sınırlı düzeyde değerlendirilmiştir; detay için faaliyet raporuna bakınız."
 
 
+def _net_fx_position(info: Dict[str, Any]) -> str:
+    """
+    Net döviz pozisyonu için kaba (heuristik) bir sınıflandırma: ihracat ağırlıklı
+    sektörler döviz gelirine sahip olduğundan "POZITIF" (kur artışından olumlu
+    etkilenme eğilimi), aksi halde "NOTR" varsayılır. Gerçek bilanço bazlı döviz
+    varlık/yükümlülük ayrımı yfinance'ta yoktur; bu nedenle _fx_exposure_text ile
+    aynı sektör/endüstri heuristiğini paylaşır.
+    """
+    sector = (info.get("sector") or "").lower()
+    industry = (info.get("industry") or "").lower()
+    export_heavy = any(k in industry or k in sector for k in ["textile", "auto", "steel", "chemical", "airlines", "tekstil", "otomotiv"])
+    if export_heavy:
+        return "POZITIF"
+    total_debt = _safe_float(info.get("totalDebt"))
+    total_cash = _safe_float(info.get("totalCash"))
+    if total_debt is not None and total_cash is not None and (total_debt - total_cash) > 0:
+        return "NEGATIF"
+    return "NOTR"
+
+
+def _calculate_debt_to_equity(info: Dict[str, Any], balance_sheet) -> Optional[float]:
+    """Borç/Özkaynak oranı: önce yfinance info.debtToEquity (yüzde), yoksa bilançodan hesaplanır."""
+    dte = _safe_float(info.get("debtToEquity"))
+    if dte is not None:
+        return round(dte / 100, 2) if dte > 10 else round(dte, 2)  # yfinance genelde yüzde olarak döner
+
+    try:
+        if balance_sheet is None or balance_sheet.empty:
+            return None
+        col = balance_sheet.columns[0]
+        total_debt = _safe_float(balance_sheet.loc["Total Debt", col]) if "Total Debt" in balance_sheet.index else None
+        equity = _safe_float(balance_sheet.loc["Stockholders Equity", col]) if "Stockholders Equity" in balance_sheet.index else None
+        return round(_safe_div(total_debt, equity), 2) if _safe_div(total_debt, equity) is not None else None
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Altman Z-Skoru: finansal sıkıntı / iflas riski göstergesi
+# Z = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E
+#   A = İşletme Sermayesi / Toplam Aktif
+#   B = Dağıtılmamış Kârlar / Toplam Aktif
+#   C = FVÖK (EBIT) / Toplam Aktif
+#   D = Piyasa Değeri / Toplam Yükümlülük
+#   E = Net Satışlar / Toplam Aktif
+# Z > 2.99 → Güvenli (Safe) | 1.81 ≤ Z ≤ 2.99 → Gri Bölge (Grey) | Z < 1.81 → Sıkıntılı (Distress)
+# ---------------------------------------------------------------------------
+def _calculate_altman_z_score(ticker: yf.Ticker, info: Dict[str, Any]):
+    try:
+        balance_sheet = ticker.balance_sheet
+        financials = ticker.financials
+        if balance_sheet.empty or financials.empty:
+            return None, None
+
+        bs_col = balance_sheet.columns[0]
+        fin_col = financials.columns[0]
+
+        total_assets = _safe_float(balance_sheet.loc["Total Assets", bs_col]) if "Total Assets" in balance_sheet.index else None
+        current_assets = _safe_float(balance_sheet.loc["Current Assets", bs_col]) if "Current Assets" in balance_sheet.index else None
+        current_liab = _safe_float(balance_sheet.loc["Current Liabilities", bs_col]) if "Current Liabilities" in balance_sheet.index else None
+        retained_earnings = _safe_float(balance_sheet.loc["Retained Earnings", bs_col]) if "Retained Earnings" in balance_sheet.index else None
+        total_liab = _safe_float(balance_sheet.loc["Total Liabilities Net Minority Interest", bs_col]) if "Total Liabilities Net Minority Interest" in balance_sheet.index else None
+        ebit = _safe_float(financials.loc["EBIT", fin_col]) if "EBIT" in financials.index else None
+        revenue = _safe_float(financials.loc["Total Revenue", fin_col]) if "Total Revenue" in financials.index else None
+        market_cap = _safe_float(info.get("marketCap"))
+
+        if total_assets is None or total_assets == 0:
+            return None, None
+
+        working_capital = (current_assets - current_liab) if (current_assets is not None and current_liab is not None) else None
+
+        a = _safe_div(working_capital, total_assets)
+        b = _safe_div(retained_earnings, total_assets)
+        c = _safe_div(ebit, total_assets)
+        d = _safe_div(market_cap, total_liab)
+        e = _safe_div(revenue, total_assets)
+
+        components = [a, b, c, d, e]
+        if all(v is None for v in components):
+            return None, None
+
+        # Eksik bileşen 0 kabul edilir (muhafazakâr yaklaşım — skor eksik veriyle şişirilmez)
+        a, b, c, d, e = (v if v is not None else 0.0 for v in components)
+        z = round(1.2 * a + 1.4 * b + 3.3 * c + 0.6 * d + 1.0 * e, 2)
+
+        if z > 2.99:
+            zone = "SAFE"
+        elif z >= 1.81:
+            zone = "GREY"
+        else:
+            zone = "DISTRESS"
+
+        return z, zone
+    except Exception as e:
+        print(f"[AnalysisEngine] Altman Z-Skoru hesaplama hatası: {e}")
+        return None, None
+
+
 def _interest_sensitivity_text(info: Dict[str, Any]) -> str:
     total_debt = _safe_float(info.get("totalDebt"))
     total_cash = _safe_float(info.get("totalCash"))
@@ -208,6 +306,10 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
     except Exception as e:
         print(f"[AnalysisEngine] Piotroski hesaplama başarısız ({symbol}): {e}")
 
+    altman_z, altman_zone = _calculate_altman_z_score(ticker, info)
+    debt_to_equity = _calculate_debt_to_equity(info, ticker.balance_sheet if hasattr(ticker, "balance_sheet") else None)
+    net_fx_position = _net_fx_position(info)
+
     analysis = db.query(models.CompanyAnalysis).filter_by(stock_id=stock.id).first()
     if not analysis:
         analysis = models.CompanyAnalysis(stock_id=stock.id)
@@ -225,12 +327,155 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
     analysis.net_margin = round(net_margin * 100, 2) if net_margin is not None else None
     analysis.fx_exposure_text = _fx_exposure_text(info)
     analysis.interest_sensitivity_text = _interest_sensitivity_text(info)
+    analysis.altman_z_score = altman_z
+    analysis.altman_zone = altman_zone
+    analysis.debt_to_equity = debt_to_equity
+    analysis.net_fx_position = net_fx_position
     analysis.updated_at = datetime.utcnow()
+
+    # Yabancı/kurumsal sahiplik oranı anlık görüntüsü (30/90 günlük trend için) —
+    # günde birden fazla tazelemede tekrar kayıt oluşturmamak için aynı gün kontrolü yapılır.
+    held_pct = _safe_float(info.get("heldPercentInstitutions"))
+    if held_pct is not None:
+        today = datetime.utcnow().date()
+        already_today = (
+            db.query(models.ForeignHoldingSnapshot)
+            .filter(
+                models.ForeignHoldingSnapshot.stock_id == stock.id,
+                models.ForeignHoldingSnapshot.recorded_at >= datetime(today.year, today.month, today.day),
+            )
+            .first()
+        )
+        if not already_today:
+            db.add(models.ForeignHoldingSnapshot(
+                stock_id=stock.id,
+                held_pct=round(held_pct * 100, 2),
+                recorded_at=datetime.utcnow(),
+            ))
 
     db.commit()
     db.refresh(analysis)
-    print(f"[AnalysisEngine] {symbol}: Piotroski={piotroski}, F/K={pe_ratio}, Makul Değer={fair_value}")
+    print(f"[AnalysisEngine] {symbol}: Piotroski={piotroski}, F/K={pe_ratio}, Makul Değer={fair_value}, Altman Z={altman_z}")
     return analysis
+
+
+# ---------------------------------------------------------------------------
+# TASK: calculate_pivot_levels(symbol) — Klasik Pivot Noktaları + Fibonacci Seviyeleri
+# ---------------------------------------------------------------------------
+def calculate_pivot_levels(symbol: str) -> Dict[str, Any]:
+    """
+    Bir önceki tam işlem gününün Yüksek/Düşük/Kapanış (High/Low/Close) verisinden
+    klasik pivot noktalarını (P, R1-R3, S1-S3) ve son 20 günlük yüksek/düşük
+    aralığına göre Fibonacci geri çekilme seviyelerini (%23.6/%38.2/%50/%61.8) hesaplar.
+    """
+    yahoo_symbol = f"{symbol.upper()}.IS"
+    try:
+        history = yf.Ticker(yahoo_symbol).history(period="1mo", interval="1d")
+    except Exception as e:
+        print(f"[AnalysisEngine] Pivot seviyeleri için geçmiş veri hatası ({symbol}): {e}")
+        history = None
+
+    if history is None or history.empty or len(history) < 2:
+        return {
+            "symbol": symbol.upper(),
+            "available": False,
+            "message": "Pivot/Fibonacci seviyeleri için yeterli geçmiş fiyat verisi bulunamadı.",
+        }
+
+    last_row = history.iloc[-1]
+    prev_high = _safe_float(last_row["High"])
+    prev_low = _safe_float(last_row["Low"])
+    prev_close = _safe_float(last_row["Close"])
+
+    if prev_high is None or prev_low is None or prev_close is None:
+        return {
+            "symbol": symbol.upper(),
+            "available": False,
+            "message": "Pivot seviyeleri için geçerli Yüksek/Düşük/Kapanış verisi bulunamadı.",
+        }
+
+    pivot = round((prev_high + prev_low + prev_close) / 3, 2)
+    r1 = round((2 * pivot) - prev_low, 2)
+    s1 = round((2 * pivot) - prev_high, 2)
+    r2 = round(pivot + (prev_high - prev_low), 2)
+    s2 = round(pivot - (prev_high - prev_low), 2)
+    r3 = round(prev_high + 2 * (pivot - prev_low), 2)
+    s3 = round(prev_low - 2 * (prev_high - pivot), 2)
+
+    # Fibonacci geri çekilme: son 20 günlük (mevcut) yüksek/düşük aralığı baz alınır
+    range_window = history.tail(20)
+    swing_high = _safe_float(range_window["High"].max())
+    swing_low = _safe_float(range_window["Low"].min())
+
+    fib_236 = fib_382 = fib_500 = fib_618 = None
+    if swing_high is not None and swing_low is not None and swing_high > swing_low:
+        diff = swing_high - swing_low
+        fib_236 = round(swing_high - diff * 0.236, 2)
+        fib_382 = round(swing_high - diff * 0.382, 2)
+        fib_500 = round(swing_high - diff * 0.5, 2)
+        fib_618 = round(swing_high - diff * 0.618, 2)
+
+    return {
+        "symbol": symbol.upper(),
+        "as_of_date": history.index[-1].strftime("%Y-%m-%d"),
+        "previous_close": prev_close,
+        "pivot": pivot,
+        "r1": r1, "r2": r2, "r3": r3,
+        "s1": s1, "s2": s2, "s3": s3,
+        "fib_236": fib_236, "fib_382": fib_382, "fib_500": fib_500, "fib_618": fib_618,
+        "available": True,
+        "message": None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# TASK: get_foreign_holding_trend(db, stock_id) — 30/90 günlük yabancı/kurumsal
+# sahiplik oranı değişimi (en yakın kayıtlı anlık görüntülere göre)
+# ---------------------------------------------------------------------------
+def get_foreign_holding_trend(db: Session, symbol: str) -> Dict[str, Any]:
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper()).first()
+    if not stock:
+        return {"symbol": symbol.upper(), "available": False, "message": "Hisse bulunamadı."}
+
+    snapshots = (
+        db.query(models.ForeignHoldingSnapshot)
+        .filter_by(stock_id=stock.id)
+        .order_by(models.ForeignHoldingSnapshot.recorded_at.asc())
+        .all()
+    )
+    if not snapshots:
+        return {
+            "symbol": symbol.upper(),
+            "available": False,
+            "message": "Yabancı/kurumsal sahiplik oranı için henüz veri toplanmadı. Analiz her tazelendiğinde bir anlık görüntü kaydedilir; trend için birkaç günlük veri birikmesi gerekir.",
+        }
+
+    current = snapshots[-1]
+    now = current.recorded_at
+
+    def _closest_before(days: int):
+        target = now - timedelta(days=days)
+        candidates = [s for s in snapshots if s.recorded_at <= target]
+        return candidates[-1] if candidates else None
+
+    ref_30 = _closest_before(30)
+    ref_90 = _closest_before(90)
+
+    change_30d = round(float(current.held_pct) - float(ref_30.held_pct), 2) if ref_30 else None
+    change_90d = round(float(current.held_pct) - float(ref_90.held_pct), 2) if ref_90 else None
+
+    message = None
+    if change_30d is None and change_90d is None:
+        message = "30/90 günlük trend için henüz yeterli geçmiş veri birikmedi (yalnızca güncel oran mevcut)."
+
+    return {
+        "symbol": symbol.upper(),
+        "current_pct": float(current.held_pct),
+        "change_30d": change_30d,
+        "change_90d": change_90d,
+        "available": True,
+        "message": message,
+    }
 
 
 def calculate_sector_pe_averages(db: Session) -> Dict[int, float]:

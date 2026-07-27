@@ -180,10 +180,35 @@ class CompanyAnalysis(Base):
     net_margin = Column(Numeric(6, 2), nullable=True)       # Net Kâr Marjı %
     fx_exposure_text = Column(String, nullable=True)        # Döviz kuru riski açıklaması
     interest_sensitivity_text = Column(String, nullable=True)  # Faiz hassasiyeti açıklaması
+    altman_z_score = Column(Numeric(6, 2), nullable=True)      # Altman Z-Skoru (iflas riski)
+    altman_zone = Column(String(20), nullable=True)            # 'SAFE' | 'GREY' | 'DISTRESS'
+    debt_to_equity = Column(Numeric(8, 2), nullable=True)      # Borç/Özkaynak oranı
+    net_fx_position = Column(String(20), nullable=True)        # 'POZITIF' | 'NEGATIF' | 'NOTR' (heuristik)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     stock = relationship("Stock", back_populates="analysis")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 3.5: Yabancı Takas Oranı Anlık Görüntüleri (Foreign Holding Trend)
+# ---------------------------------------------------------------------------
+class ForeignHoldingSnapshot(Base):
+    """
+    Her derin analiz tazelemesinde yfinance'tan alınan kurumsal/yabancı sahiplik
+    oranının (heldPercentInstitutions, en yakın halka açık proxy) günlük anlık
+    görüntüsü. 30/90 günlük değişim trendi bu tablodan hesaplanır — BİST için
+    gerçek Takasbank yabancı oranı verisi halka açık/ücretsiz bir API üzerinden
+    sağlanmadığından, bu alan en iyi çaba (best-effort) proxy'dir.
+    """
+    __tablename__ = "foreign_holding_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
+    held_pct = Column(Numeric(6, 2), nullable=False)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    stock = relationship("Stock")
 
 
 # ---------------------------------------------------------------------------

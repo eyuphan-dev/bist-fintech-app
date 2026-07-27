@@ -24,7 +24,8 @@ from schemas import (
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
     DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest,
-    PendingOrderCreate, PendingOrderResponse, StockNewsItem
+    PendingOrderCreate, PendingOrderResponse, StockNewsItem,
+    PivotLevelsResponse, ForeignHoldingTrendResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -37,7 +38,10 @@ from bot import (
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from market_hours import get_market_status_dict, is_market_open
-from analysis_engine import calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError
+from analysis_engine import (
+    calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError,
+    calculate_pivot_levels, get_foreign_holding_trend,
+)
 from insider_client import fetch_insider_trades, get_recent_insider_buys
 from sentiment import score_sentiment
 from yfinance_client import fetch_stock_news
@@ -454,6 +458,46 @@ def refresh_analysis(request: Request, symbol: str, db: Session = Depends(get_db
 def refresh_stock_analysis(request: Request, symbol: str, db: Session = Depends(get_db)):
     """Geriye dönük uyumluluk için korunan eski uç nokta; /api/analysis/{symbol}/refresh ile aynı mantığı kullanır."""
     return _run_analysis_refresh(symbol, db)
+
+
+_pivot_cache: Dict[str, Dict[str, Any]] = {}
+_PIVOT_CACHE_TTL_SECONDS = 15 * 60  # 15 dakika — günde bir kez değişen bir veri için yeterli
+
+
+@app.get("/api/stocks/{symbol}/pivot-levels", response_model=PivotLevelsResponse)
+def get_pivot_levels(symbol: str, db: Session = Depends(get_db)):
+    """
+    Klasik Pivot Noktaları (P, R1-R3, S1-S3) ve Fibonacci geri çekilme seviyelerini
+    (%23.6/%38.2/%50/%61.8) döner. Bir önceki tam işlem gününün Yüksek/Düşük/Kapanış
+    verisinden hesaplanır; sonuçlar 15 dakika önbelleklenir.
+    """
+    symbol = symbol.upper()
+    stock = db.query(models.Stock).filter_by(symbol=symbol, is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    cached = _pivot_cache.get(symbol)
+    if cached and (datetime.utcnow() - cached["cached_at"]).total_seconds() < _PIVOT_CACHE_TTL_SECONDS:
+        return cached["data"]
+
+    data = calculate_pivot_levels(symbol)
+    _pivot_cache[symbol] = {"data": data, "cached_at": datetime.utcnow()}
+    return data
+
+
+@app.get("/api/stocks/{symbol}/foreign-holding-trend", response_model=ForeignHoldingTrendResponse)
+def get_foreign_holding_trend_endpoint(symbol: str, db: Session = Depends(get_db)):
+    """
+    Yabancı/kurumsal sahiplik oranının 30 ve 90 günlük değişimini döner. Veri, her
+    "Analizi Tazele" çağrısında kaydedilen günlük anlık görüntülerden (bkz.
+    ForeignHoldingSnapshot) hesaplanır; yeterli geçmiş birikmediyse available=false
+    ve açıklayıcı bir mesajla döner.
+    """
+    symbol = symbol.upper()
+    stock = db.query(models.Stock).filter_by(symbol=symbol, is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+    return get_foreign_holding_trend(db, symbol)
 
 
 @app.get("/api/stocks/{symbol}/insider-trades", response_model=List[InsiderTradeResponse])

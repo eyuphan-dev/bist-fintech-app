@@ -51,10 +51,40 @@ class CompanyAnalysisResponse(BaseModel):
     net_margin: Optional[float]
     fx_exposure_text: Optional[str]
     interest_sensitivity_text: Optional[str]
+    altman_z_score: Optional[float] = None
+    altman_zone: Optional[str] = None
+    debt_to_equity: Optional[float] = None
+    net_fx_position: Optional[str] = None
     updated_at: Optional[datetime]
 
     class Config:
         from_attributes = True
+
+class PivotLevelsResponse(BaseModel):
+    symbol: str
+    as_of_date: Optional[str] = None
+    previous_close: Optional[float] = None
+    pivot: Optional[float] = None
+    r1: Optional[float] = None
+    r2: Optional[float] = None
+    r3: Optional[float] = None
+    s1: Optional[float] = None
+    s2: Optional[float] = None
+    s3: Optional[float] = None
+    fib_236: Optional[float] = None
+    fib_382: Optional[float] = None
+    fib_500: Optional[float] = None
+    fib_618: Optional[float] = None
+    available: bool = True
+    message: Optional[str] = None
+
+class ForeignHoldingTrendResponse(BaseModel):
+    symbol: str
+    current_pct: Optional[float] = None
+    change_30d: Optional[float] = None
+    change_90d: Optional[float] = None
+    available: bool = False
+    message: Optional[str] = None
 
 class KatilimInfoResponse(BaseModel):
     is_katilim_compliant: bool
