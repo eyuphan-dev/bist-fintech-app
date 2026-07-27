@@ -35,8 +35,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr">
-      <body className={`${outfit.variable} antialiased bg-[#0B0E14]`}>
+    <html lang="tr" suppressHydrationWarning>
+      <body className={`${outfit.variable} antialiased bg-[#0B0E14]`} suppressHydrationWarning>
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
             <NavBar />

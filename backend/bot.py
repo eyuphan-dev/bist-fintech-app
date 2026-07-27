@@ -461,7 +461,7 @@ def run_quant_bot(db: Session):
       1. Süresi dolmuş mu kontrol edilir (dolmuşsa pozisyonlar kapatılır, bot pasife alınır).
       2. Süresi devam ediyorsa, kendi time_frame'ine uygun strateji (scalp/swing/trend)
          BAĞIMSIZ olarak, kendi sanal bakiyesiyle çalıştırılır.
-    Ardından geriye dönük uyumluluk için paylaşımlı demo bot da tetiklenir.
+    Paylaşımlı topluluk demo botu artık çalıştırılmaz — yalnızca kişisel botlar aktiftir.
     """
     open_flag, reason = is_market_open()
     if not open_flag:
@@ -485,5 +485,3 @@ def run_quant_bot(db: Session):
         except Exception as e:
             print(f"[Quant Bot] Kullanıcı #{user_bot.user_id} botu çalıştırılırken hata: {e}")
             db.rollback()
-
-    run_ai_bot_simulation(db)

@@ -29,6 +29,7 @@ packaging==24.2
 pandas==2.3.3
 passlib==1.7.4
 peewee==4.2.6
+psycopg2-binary==2.9.10
 platformdirs==4.4.0
 protobuf==6.33.6
 pycparser==2.23

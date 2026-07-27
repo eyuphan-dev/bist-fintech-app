@@ -30,6 +30,63 @@ def fetch_current_price(symbol: str) -> Optional[Tuple[float, int]]:
         print(f"Error fetching current price for {symbol}: {str(e)}")
     return None
 
+def fetch_stock_news(symbol: str, limit: int = 8) -> List[Dict]:
+    """
+    Fetches recent news headlines for a BIST stock from Yahoo Finance (yfinance).
+    Returns: List of dicts with title, summary, source, url, published_at, thumbnail.
+    """
+    yahoo_symbol = f"{symbol}.IS"
+    items: List[Dict] = []
+    try:
+        ticker = yf.Ticker(yahoo_symbol)
+        raw_news = ticker.news or []
+        for entry in raw_news[:limit]:
+            # yfinance sürümüne göre haber öğesi ya doğrudan ya da "content" altında gelir.
+            content = entry.get("content", entry) if isinstance(entry, dict) else {}
+            title = content.get("title")
+            if not title:
+                continue
+
+            provider = (
+                (content.get("provider") or {}).get("displayName")
+                or content.get("publisher")
+                or ""
+            )
+            url = (
+                (content.get("canonicalUrl") or {}).get("url")
+                or (content.get("clickThroughUrl") or {}).get("url")
+                or content.get("link")
+                or ""
+            )
+
+            thumbnail = None
+            thumb = content.get("thumbnail")
+            if isinstance(thumb, dict):
+                resolutions = thumb.get("resolutions") or []
+                if resolutions:
+                    thumbnail = resolutions[0].get("url")
+
+            published_at = content.get("pubDate") or content.get("displayTime")
+            epoch_time = content.get("providerPublishTime")
+            if not published_at and epoch_time:
+                try:
+                    published_at = datetime.utcfromtimestamp(int(epoch_time)).isoformat() + "Z"
+                except Exception:
+                    published_at = None
+
+            items.append({
+                "title": title,
+                "summary": content.get("summary") or content.get("description") or "",
+                "source": provider,
+                "url": url,
+                "published_at": published_at,
+                "thumbnail": thumbnail,
+            })
+    except Exception as e:
+        print(f"Error fetching news for {symbol}: {str(e)}")
+    return items
+
+
 def fetch_historical_prices(symbol: str, period: str = "1mo", interval: str = "1d") -> List[Dict]:
     """
     Fetches historical price data for a BIST stock.

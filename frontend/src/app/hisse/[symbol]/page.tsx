@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   ArrowLeft, RefreshCw, Gauge, Users, Calculator, Newspaper, LineChart as LineChartIcon,
+  ChevronDown, ExternalLink,
 } from "lucide-react";
 
 import KatilimBadge from "../../components/KatilimBadge";
@@ -37,6 +38,9 @@ export default function StockDetailPage() {
   const [stockDetail, setStockDetail] = useState<any>(null);
   const [kapDisclosures, setKapDisclosures] = useState<any>(null);
   const [kapLoading, setKapLoading] = useState(false);
+  const [news, setNews] = useState<any[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [openNewsIdx, setOpenNewsIdx] = useState<number | null>(null);
   const [section, setSection] = useState<SectionKey>("genel");
 
   const [tradeQty, setTradeQty] = useState<number>(1);
@@ -89,8 +93,22 @@ export default function StockDetailPage() {
       }
     };
 
+    const fetchNews = async () => {
+      setNewsLoading(true);
+      setNews([]);
+      try {
+        const res = await fetch(`${API_BASE}/stocks/${symbol}/news`);
+        if (res.ok) setNews(await res.json());
+      } catch (err) {
+        console.error("Haberler alınamadı:", err);
+      } finally {
+        setNewsLoading(false);
+      }
+    };
+
     fetchDetail();
     fetchKap();
+    fetchNews();
   }, [symbol, refreshTrigger, token]);
 
   // Yorumlar
@@ -298,6 +316,73 @@ export default function StockDetailPage() {
                   </div>
                 ) : (
                   <p className="text-[11px] text-gray-500 text-center py-4">Son dönemde kayda değer bir KAP bildirimi bulunamadı.</p>
+                )}
+              </div>
+
+              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest flex items-center gap-1.5">
+                    <Newspaper className="w-3.5 h-3.5" /> Hisse Haberleri
+                  </span>
+                </div>
+
+                {newsLoading ? (
+                  <div className="flex items-center gap-2 text-[11px] text-gray-500 py-3">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#10B981]" />
+                    Haberler yükleniyor...
+                  </div>
+                ) : news.length > 0 ? (
+                  <div className="space-y-2 max-h-[420px] overflow-y-auto pr-0.5">
+                    {news.map((n: any, idx: number) => {
+                      const isOpen = openNewsIdx === idx;
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-[#0B0E14] border border-[#242B35] rounded-lg text-[11px] overflow-hidden"
+                        >
+                          <button
+                            onClick={() => setOpenNewsIdx(isOpen ? null : idx)}
+                            className="w-full flex items-start justify-between gap-2 p-2.5 text-left"
+                          >
+                            <p className="text-gray-300 font-medium leading-snug flex-1">{n.title}</p>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {n.published_at && (
+                                <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                  {new Date(n.published_at).toLocaleDateString("tr-TR")}
+                                </span>
+                              )}
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                              />
+                            </div>
+                          </button>
+
+                          {isOpen && (
+                            <div className="px-2.5 pb-2.5 space-y-2 border-t border-[#242B35] pt-2">
+                              {n.source && (
+                                <span className="text-[10px] text-gray-500">{n.source}</span>
+                              )}
+                              <p className="text-gray-400 leading-relaxed">
+                                {n.summary || "Bu haber için özet bilgi bulunamadı."}
+                              </p>
+                              {n.url && (
+                                <a
+                                  href={n.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#10B981] hover:text-[#34d399] transition"
+                                >
+                                  Devamını Oku <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500 text-center py-4">Bu hisse için güncel bir haber bulunamadı.</p>
                 )}
               </div>
             </>

@@ -6,6 +6,7 @@ APScheduler arka plan gorev yoneticisi.
 
 import sys
 import io
+import threading
 # Windows konsolunda Turkce karakter sorununun onlenmesi
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -18,6 +19,8 @@ from cache import set_latest_price
 from datetime import datetime, timedelta
 import pytz
 from market_hours import is_market_open, TR_TZ
+from kap_client import fetch_kap_news
+from tefas_client import update_tefas_funds
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +140,37 @@ def update_bist_prices_job():
 
 
 # ---------------------------------------------------------------------------
+# MODÜL 1.5: KAP Bildirimleri + TEFAS Fon Fiyatları (Günlük Tazeleme)
+# ---------------------------------------------------------------------------
+def refresh_market_data_job():
+    """
+    KAP bildirimlerini ve TEFAS fon fiyatlarını arka planda tazeler.
+    Bu iş bilerek API request-response döngüsünün DIŞINDA tutulur: KAP taraması
+    tek başına ~40 hisse × dış API çağrısı gerektirdiği için dakikalarca
+    sürebilir; kullanıcı isteğini bloklamamak için yalnızca scheduler üzerinden
+    çalışır. /api/kap/news ve /api/funds uçları her zaman veritabanından
+    (bu iş tarafından doldurulan) anlık okuma yapar.
+    """
+    db = SessionLocal()
+    try:
+        print("[Scheduler] KAP bildirimleri tazeleniyor...")
+        try:
+            fetch_kap_news(db)
+        except Exception as e:
+            print(f"[Scheduler] KAP tazeleme hatası: {e}")
+            db.rollback()
+
+        print("[Scheduler] TEFAS fon fiyatları tazeleniyor...")
+        try:
+            update_tefas_funds(db)
+        except Exception as e:
+            print(f"[Scheduler] TEFAS tazeleme hatası: {e}")
+            db.rollback()
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # MODÜL 2: Log Temizleme Görevi (90 günden eski kayıtları sil)
 # ---------------------------------------------------------------------------
 def log_cleanup_job():
@@ -182,11 +216,17 @@ def start_scheduler():
     APScheduler'ı başlatır ve tüm cron görevlerini kaydeder.
 
     Görev Listesi:
-      bist_updater  → Hafta içi 10:00–18:55, her 5 dakika
-                      (market_guard içeride kontrol eder)
-      log_cleaner   → Her Pazar 03:00 (UTC+0)
+      bist_updater      → Hafta içi 10:00–18:55, her 5 dakika
+                          (market_guard içeride kontrol eder)
+      market_data_sync  → Her gün 08:00 UTC (KAP bildirimleri + TEFAS fon fiyatları)
+      log_cleaner       → Her Pazar 03:00 (UTC+0)
     """
     init_cache_from_db()
+
+    # Uygulama ilk ayağa kalktığında KAP/TEFAS verisi boşsa kullanıcı bir sonraki
+    # 08:00 tetiklenmesini beklemek zorunda kalmasın diye, arka planda (uygulama
+    # başlangıcını bloklamadan) bir kerelik ilk tazeleme başlatılır.
+    threading.Thread(target=refresh_market_data_job, daemon=True).start()
 
     scheduler = BackgroundScheduler()
 
@@ -206,6 +246,18 @@ def start_scheduler():
         coalesce=True,           # Missed fires'ı birleştirir
     )
 
+    # ── Görev 1.5: KAP + TEFAS Tazeleme ─────────────────────────────────
+    # Her gün 08:00 UTC (Türkiye'de 11:00) — borsa açılışından sonra, gün içinde
+    # bir kez. Ağır dış API taraması içerdiği için sık çalıştırılmaz.
+    scheduler.add_job(
+        refresh_market_data_job,
+        "cron",
+        hour=8,
+        minute=0,
+        id="market_data_sync",
+        max_instances=1,
+    )
+
     # ── Görev 2: Log Temizleme ───────────────────────────────────────────
     # Her Pazar sabahı 03:00 UTC (Türkiye'de 06:00)
     scheduler.add_job(
@@ -220,6 +272,7 @@ def start_scheduler():
 
     scheduler.start()
     print("APScheduler başlatıldı.")
-    print("  • bist_updater : Hafta içi 10:00–18:55, her 5 dakika")
-    print("  • log_cleaner  : Her Pazar 03:00 UTC (90 günden eski logları siler)")
+    print("  • bist_updater     : Hafta içi 10:00–18:55, her 5 dakika")
+    print("  • market_data_sync : Her gün 08:00 UTC (KAP bildirimleri + TEFAS fon fiyatları)")
+    print("  • log_cleaner      : Her Pazar 03:00 UTC (90 günden eski logları siler)")
     return scheduler
