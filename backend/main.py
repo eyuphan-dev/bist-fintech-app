@@ -23,7 +23,7 @@ from schemas import (
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
     DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest,
-    PendingOrderCreate, PendingOrderResponse, StockNewsItem,
+    PendingOrderCreate, PendingOrderUpdate, PendingOrderResponse, StockNewsItem,
     PivotLevelsResponse, ForeignHoldingTrendResponse,
 )
 from auth import (
@@ -883,6 +883,62 @@ def list_pending_orders(
             fail_reason=o.fail_reason, created_at=o.created_at, executed_at=o.executed_at,
         ) for o in orders
     ]
+
+
+@app.put("/api/orders/{order_id}", response_model=PendingOrderResponse)
+@limiter.limit("15/minute")
+def update_pending_order(
+    request: Request,
+    order_id: int,
+    req: PendingOrderUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Yalnızca kendi PENDING durumundaki bir emrin adet/hedef fiyat/zamanlamasını
+    günceller. Yalnızca gönderilen (None olmayan) alanlar değiştirilir; emir
+    türüne uygun olmayan bir alan (ör. LIMIT emrine execution_time) sessizce
+    yok sayılır.
+    """
+    db.rollback()
+    begin_write_transaction(db)
+    try:
+        order = db.query(models.PendingOrder).filter_by(
+            id=order_id, user_id=current_user.id
+        ).first()
+        if not order:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Emir bulunamadı.")
+        if order.status != "PENDING":
+            db.rollback()
+            raise HTTPException(status_code=400, detail=f"Yalnızca bekleyen (PENDING) emirler güncellenebilir. Bu emrin durumu: {order.status}")
+
+        if req.quantity is not None:
+            order.quantity = req.quantity
+        if req.target_price is not None and order.order_type in ("LIMIT_BUY", "LIMIT_SELL"):
+            order.target_price = req.target_price
+        if req.execution_time is not None and order.order_type == "SCHEDULED_BUY":
+            order.execution_time = req.execution_time.replace(tzinfo=None)
+
+        db.commit()
+        db.refresh(order)
+
+        _log_user_action(db, current_user.id, "ORDER_UPDATE", f"Emir #{order.id} güncellendi.")
+        db.commit()
+
+        return PendingOrderResponse(
+            id=order.id, symbol=order.stock.symbol, order_type=order.order_type,
+            quantity=float(order.quantity),
+            target_price=float(order.target_price) if order.target_price is not None else None,
+            execution_time=order.execution_time, status=order.status,
+            fail_reason=order.fail_reason, created_at=order.created_at,
+            executed_at=order.executed_at,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 @app.delete("/api/orders/{order_id}")

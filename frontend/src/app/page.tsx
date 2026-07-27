@@ -9,6 +9,7 @@ import {
 
 import LegalDisclaimerModal from "./components/LegalDisclaimerModal";
 import BalanceUpdateModal from "./components/BalanceUpdateModal";
+import PendingOrdersSection from "./components/PendingOrdersSection";
 import { useAuth, API_BASE } from "./context/AuthContext";
 
 interface PortfolioItem {
@@ -343,6 +344,8 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              <PendingOrdersSection />
             </>
           )}
         </div>
