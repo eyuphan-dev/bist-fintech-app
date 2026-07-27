@@ -354,6 +354,22 @@ class PendingOrderCreate(BaseModel):
                 raise ValueError("execution_time en fazla 90 gün sonrasına ayarlanabilir.")
         return self
 
+class PendingOrderUpdate(BaseModel):
+    """PENDING durumundaki bir emrin adet/hedef fiyat/zamanlamasını günceller — yalnızca gönderilen alanlar değiştirilir."""
+    quantity: Optional[float] = Field(None, gt=0, le=10_000_000, allow_inf_nan=False)
+    target_price: Optional[float] = Field(None, gt=0, le=1_000_000, allow_inf_nan=False)
+    execution_time: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _validate_execution_time(self):
+        if self.execution_time is not None:
+            now = datetime.now(self.execution_time.tzinfo) if self.execution_time.tzinfo else datetime.utcnow()
+            if self.execution_time <= now:
+                raise ValueError("execution_time gelecekte bir zaman olmalıdır.")
+            if self.execution_time > now + timedelta(days=90):
+                raise ValueError("execution_time en fazla 90 gün sonrasına ayarlanabilir.")
+        return self
+
 class PendingOrderResponse(BaseModel):
     id: int
     symbol: str
