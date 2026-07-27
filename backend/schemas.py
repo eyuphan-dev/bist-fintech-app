@@ -1,6 +1,23 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator, field_serializer
 from datetime import datetime, date, timedelta, timezone
 from typing import List, Dict, Any, Optional
+
+
+def _utc_iso(value: Optional[datetime]) -> Optional[str]:
+    """
+    DB'deki datetime değerleri "naive" ama semantik olarak UTC'dir (datetime.utcnow()
+    konvansiyonu). tzinfo eklenmeden JSON'a çıkarsa (ör. "2026-07-29T07:00:00")
+    tarayıcı bunu YEREL saat sanıp new Date(...) ile yanlış yorumluyordu — örneğin
+    İstanbul saatiyle 10:00 olarak girilen bir zamanlı emir, arayüzde 07:00 olarak
+    görünüyordu. Burada tzinfo=UTC eklenip ISO 8601 + offset ile dönülür ki frontend
+    new Date(...)/Intl.DateTimeFormat ile doğru yerel saati hesaplayabilsin.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
 
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
@@ -16,6 +33,10 @@ class UserResponse(BaseModel):
     is_bot: bool
     terms_accepted: bool
     created_at: datetime
+
+    @field_serializer("created_at")
+    def _serialize_created_at(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
 
     class Config:
         from_attributes = True
@@ -59,6 +80,10 @@ class CompanyAnalysisResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer("updated_at")
+    def _serialize_updated_at(self, value: Optional[datetime]) -> Optional[str]:
+        return _utc_iso(value)
 
 class PivotLevelsResponse(BaseModel):
     symbol: str
@@ -105,6 +130,10 @@ class StockPriceResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @field_serializer("recorded_at")
+    def _serialize_recorded_at(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
+
 class StockDetailResponse(BaseModel):
     id: int
     symbol: str
@@ -130,6 +159,10 @@ class PortfolioItemResponse(BaseModel):
     opened_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+    @field_serializer("opened_at", "updated_at")
+    def _serialize_dates(self, value: Optional[datetime]) -> Optional[str]:
+        return _utc_iso(value)
+
 class PortfolioResponse(BaseModel):
     balance: float
     total_portfolio_value: float
@@ -146,6 +179,10 @@ class BotLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer("created_at")
+    def _serialize_created_at(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
 
 class BotPerformancePoint(BaseModel):
     date: date
@@ -172,6 +209,10 @@ class InsiderTradeResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @field_serializer("trade_date")
+    def _serialize_trade_date(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
+
 class KapNotificationResponse(BaseModel):
     id: int
     symbol: str
@@ -182,6 +223,10 @@ class KapNotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer("publish_date")
+    def _serialize_publish_date(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
 
 class StockNewsItem(BaseModel):
     title: str
@@ -231,6 +276,10 @@ class StockCommentResponse(BaseModel):
     sentiment_score: Optional[float]
     created_at: datetime
 
+    @field_serializer("created_at")
+    def _serialize_created_at(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
+
 class CommunitySentimentResponse(BaseModel):
     symbol: str
     total_comments: int
@@ -272,6 +321,10 @@ class UserBotResponse(BaseModel):
     total_return_pct: float
     total_trades: int
     win_rate: float
+
+    @field_serializer("started_at", "ends_at")
+    def _serialize_dates(self, value: Optional[datetime]) -> Optional[str]:
+        return _utc_iso(value)
 
 
 # --- BEKLEYEN EMİRLER (LİMİT / ZAMANLI ALIM-SATIM) ---
@@ -315,3 +368,7 @@ class PendingOrderResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer("execution_time", "created_at", "executed_at")
+    def _serialize_as_utc(self, value: Optional[datetime]) -> Optional[str]:
+        return _utc_iso(value)
