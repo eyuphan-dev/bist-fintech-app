@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,7 +24,7 @@ from schemas import (
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
     DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest,
-    PendingOrderCreate, PendingOrderResponse
+    PendingOrderCreate, PendingOrderResponse, StockNewsItem
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -31,11 +32,13 @@ from auth import (
 from scheduler import start_scheduler
 from init_db import init_database
 from bot import calculate_technical_indicators, get_strategy_config, BOT_STRATEGY_CONFIG
-from kap_client import fetch_kap_disclosures, get_kap_search_url, fetch_kap_news
+from kap_client import fetch_kap_disclosures, get_kap_search_url
 from market_hours import get_market_status_dict, is_market_open
 from analysis_engine import calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError
 from insider_client import fetch_insider_trades, get_recent_insider_buys
 from sentiment import score_sentiment
+from yfinance_client import fetch_stock_news
+from cache import get_cached_news, set_cached_news
 
 def _rate_limit_key(request: Request) -> str:
     """
@@ -331,6 +334,39 @@ def get_kap_disclosures(symbol: str, db: Session = Depends(get_db)):
     }
 
 
+# --- HİSSE HABERLERİ (Yahoo Finance / yfinance) ---
+
+_news_executor = ThreadPoolExecutor(max_workers=4)
+
+
+@app.get("/api/stocks/{symbol}/news", response_model=List[StockNewsItem])
+def get_stock_news(symbol: str, db: Session = Depends(get_db)):
+    """
+    Yahoo Finance üzerinden hisseyle ilgili son haberleri döner. Sonuçlar 20 dakika
+    önbelleklenir ve dış API çağrısı en fazla 5 saniye ile sınırlandırılır — tek bir
+    yavaş/askıda kalan istek bu uç noktayı bloklamaz.
+    """
+    symbol = symbol.upper()
+    stock = db.query(models.Stock).filter_by(symbol=symbol, is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    cached = get_cached_news(symbol)
+    if cached is not None:
+        return cached
+
+    try:
+        future = _news_executor.submit(fetch_stock_news, symbol, 8)
+        news_items = future.result(timeout=5)
+    except FutureTimeoutError:
+        news_items = []
+    except Exception:
+        news_items = []
+
+    set_cached_news(symbol, news_items)
+    return news_items
+
+
 # --- DERİN BİLANÇO ANALİZİ / HELAL FİNANS ANALİZİ ---
 
 @app.get("/api/stocks/{symbol}/analysis", response_model=StockProResponse)
@@ -521,8 +557,12 @@ def get_community_sentiment(symbol: str, db: Session = Depends(get_db)):
 
 @app.get("/api/kap/news", response_model=List[KapNotificationResponse])
 def get_kap_news(db: Session = Depends(get_db)):
-    """Takip edilen tüm hisseler için genel KAP bildirim akışını döner (en yeni 30)."""
-    fetch_kap_news(db)  # best-effort tazeleme
+    """
+    Takip edilen tüm hisseler için genel KAP bildirim akışını döner (en yeni 30).
+    Canlı KAP taraması burada YAPILMAZ — ~40 hisse için art arda dış API çağrısı
+    isteği dakikalarca bloklayıp zaman aşımına uğratıyordu. Tazeleme artık
+    scheduler.py üzerinden arka planda periyodik olarak yapılır.
+    """
     notifications = (
         db.query(models.KapNotification)
         .order_by(models.KapNotification.publish_date.desc())
@@ -810,31 +850,6 @@ def cancel_pending_order(
 
 # --- AI BOT DATA ---
 
-@app.get("/api/bot/logs", response_model=List[BotLogResponse])
-def get_bot_logs(db: Session = Depends(get_db)):
-    bot = db.query(models.User).filter_by(is_bot=True).first()
-    if not bot:
-        return []
-        
-    logs = db.query(models.BotLog)\
-        .filter_by(user_id=bot.id)\
-        .order_by(models.BotLog.created_at.desc())\
-        .limit(50)\
-        .all()
-        
-    response = []
-    for log in logs:
-        response.append(BotLogResponse(
-            id=log.id,
-            symbol=log.stock.symbol,
-            action_type=log.action_type,
-            price=float(log.price),
-            quantity=float(log.quantity),
-            reason_text=log.reason_text,
-            created_at=log.created_at
-        ))
-    return response
-
 def _build_bot_performance_series(db: Session, owner_user_id: int) -> Dict[str, List[Any]]:
     """Bot (paylaşımlı demo ya da kişisel) vs BİST100 (basit ortalama) karşılaştırma serisini üretir."""
     perf = db.query(models.BotPerformanceHistory)\
@@ -917,29 +932,6 @@ def _compute_actor_bot_stats(db: Session, owner_user_id: int, is_bot_portfolio: 
         "win_rate": round(win_rate, 2),
         "total_return_pct": round(total_return_pct, 2),
         "portfolio_value": round(current_value, 2),
-    }
-
-
-@app.get("/api/bot/performance", response_model=Dict[str, List[Any]])
-def get_bot_performance(db: Session = Depends(get_db)):
-    bot = db.query(models.User).filter_by(is_bot=True).first()
-    if not bot:
-        return {"bot": [], "bist100": []}
-    return _build_bot_performance_series(db, bot.id)
-
-@app.get("/api/bot/stats")
-def get_bot_stats(db: Session = Depends(get_db)):
-    bot = db.query(models.User).filter_by(is_bot=True).first()
-    if not bot:
-        raise HTTPException(status_code=404, detail="Bot bulunamadı.")
-
-    stats = _compute_actor_bot_stats(db, bot.id, False, float(bot.virtual_balance))
-    return {
-        "total_trades": stats["total_trades"],
-        "win_rate": stats["win_rate"],
-        "total_return_pct": stats["total_return_pct"],
-        "balance": round(float(bot.virtual_balance), 2),
-        "portfolio_value": stats["portfolio_value"],
     }
 
 
@@ -1094,31 +1086,45 @@ def get_user_bot_performance(
 
 # --- LEADERBOARD ---
 
+def _portfolio_value(db: Session, owner_user_id: int, is_bot_portfolio: bool, cash: float) -> float:
+    positions = db.query(models.Portfolio).filter_by(user_id=owner_user_id, is_bot_portfolio=is_bot_portfolio).all()
+    stock_value = 0.0
+    for item in positions:
+        price = _get_latest_db_price(db, item.stock_id) or float(item.average_cost)
+        stock_value += float(item.quantity) * price
+    return cash + stock_value
+
+
 @app.get("/api/leaderboard", response_model=List[LeaderboardItem])
 def get_leaderboard(db: Session = Depends(get_db)):
-    users = db.query(models.User).all()
+    """
+    Liderlik tablosu: topluluk demo botu artık gösterilmez — yalnızca gerçek kullanıcılar
+    ve her kullanıcının kendi kişisel AI botu (ayrı bir satır olarak) listelenir.
+    """
+    users = db.query(models.User).filter_by(is_bot=False).all()
 
     leaderboard = []
     for user in users:
-        # Yalnızca kullanıcının kendi manuel pozisyonları (kişisel botunun pozisyonları hariç)
-        portfolios = db.query(models.Portfolio).filter_by(user_id=user.id, is_bot_portfolio=False).all()
-
-        # Total Value = virtual_balance + sum(quantity * stock_last_recorded_price_in_db)
-        total_stock_value = 0.0
-        for item in portfolios:
-            price = _get_latest_db_price(db, item.stock_id) or float(item.average_cost)
-            total_stock_value += float(item.quantity) * price
-
-        total_value = float(user.virtual_balance) + total_stock_value
+        total_value = _portfolio_value(db, user.id, False, float(user.virtual_balance))
         profit_loss_pct = ((total_value - 100000.0) / 100000.0) * 100
-        
         leaderboard.append(LeaderboardItem(
             username=user.username,
             total_portfolio_value=round(total_value, 2),
             profit_loss_pct=round(profit_loss_pct, 2),
-            is_bot=user.is_bot
+            is_bot=False,
         ))
-        
+
+        user_bot = db.query(models.UserBot).filter_by(user_id=user.id).first()
+        if user_bot:
+            bot_total_value = _portfolio_value(db, user.id, True, float(user_bot.virtual_balance))
+            bot_profit_loss_pct = ((bot_total_value - 100000.0) / 100000.0) * 100
+            leaderboard.append(LeaderboardItem(
+                username=f"{user.username} — Kişisel Bot",
+                total_portfolio_value=round(bot_total_value, 2),
+                profit_loss_pct=round(bot_profit_loss_pct, 2),
+                is_bot=True,
+            ))
+
     # Sort by total portfolio value descending
     leaderboard.sort(key=lambda x: x.total_portfolio_value, reverse=True)
     return leaderboard

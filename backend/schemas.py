@@ -153,6 +153,14 @@ class KapNotificationResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class StockNewsItem(BaseModel):
+    title: str
+    summary: Optional[str] = None
+    source: Optional[str] = None
+    url: Optional[str] = None
+    published_at: Optional[str] = None
+    thumbnail: Optional[str] = None
+
 class FundPriceResponse(BaseModel):
     price: float
     daily_return: Optional[float]

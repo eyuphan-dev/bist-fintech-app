@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from sqlalchemy import text
-from database import engine, Base, SessionLocal
+from database import engine, Base, SessionLocal, IS_SQLITE
 import models
 
 # ---------------------------------------------------------------------------
@@ -203,8 +203,12 @@ def backfill_user_bot_durations(db):
 
 def init_database():
     print("Veritabanı tabloları oluşturuluyor...")
-    migrate_portfolios_table()
-    run_migrations()
+    if IS_SQLITE:
+        # Bu ALTER TABLE / PRAGMA tabanlı migrasyonlar yalnızca eski SQLite dosyalarını
+        # (models.py şeması değiştikçe eksik kalan kolonları) yamamak için var. Taze bir
+        # Postgres veritabanında create_all() zaten güncel şemayı eksiksiz oluşturur.
+        migrate_portfolios_table()
+        run_migrations()
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()

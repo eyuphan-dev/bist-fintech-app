@@ -35,7 +35,7 @@ def fetch_kap_disclosures(symbol: str, limit: int = 8) -> List[Dict[str, Any]]:
             KAP_DISCLOSURE_URL,
             params=params,
             headers=HEADERS,
-            timeout=8
+            timeout=4
         )
         
         if resp.status_code == 200:
@@ -60,7 +60,7 @@ def fetch_kap_disclosures(symbol: str, limit: int = 8) -> List[Dict[str, Any]]:
         resp2 = requests.get(
             f"{KAP_MEMBER_DISCLOSURES_URL}/{symbol}",
             headers=HEADERS,
-            timeout=8
+            timeout=4
         )
         
         if resp2.status_code == 200:

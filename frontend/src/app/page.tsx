@@ -359,7 +359,7 @@ export default function Home() {
                 <div
                   key={player.username}
                   className={`flex items-center justify-between text-xs p-2.5 rounded-lg border ${
-                    player.username === user?.username
+                    user && (player.username === user.username || player.username === `${user.username} — Kişisel Bot`)
                       ? "bg-[#10B981]/10 border-[#10B981]/30 font-semibold"
                       : "bg-[#0B0E14] border-[#242B35]"
                   }`}
@@ -372,7 +372,7 @@ export default function Home() {
                     </span>
                     <div>
                       <span className="text-white flex items-center">
-                        @{player.username}
+                        {player.is_bot ? player.username : `@${player.username}`}
                         {player.is_bot && (
                           <span className="ml-1 bg-[#F59E0B]/10 text-[#F59E0B] text-[8px] uppercase tracking-wider px-1 rounded font-bold">
                             BOT
