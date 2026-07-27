@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -16,9 +16,15 @@ const NAV_LINKS = [
 /** Sayfalar arası ana gezinme çubuğu. Route değişse de token/user AuthContext'ten okunur. */
 export default function NavBar() {
   const pathname = usePathname() || "/";
+  const router = useRouter();
   const { token, user, logout } = useAuth();
 
   if (!token) return null; // Giriş ekranında navbar gösterilmez
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
 
   return (
     <header className="border-b border-[#242B35] bg-[#0B0E14]/90 sticky top-0 z-30 backdrop-blur">
@@ -55,7 +61,7 @@ export default function NavBar() {
             <p className="text-xs font-semibold text-white">@{user?.username}</p>
           </div>
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="bg-[#151921] border border-[#242B35] hover:bg-[#242B35] hover:text-[#F43F5E] p-2 rounded-lg text-gray-400 transition"
             title="Güvenli Çıkış"
           >
