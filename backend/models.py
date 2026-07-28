@@ -33,6 +33,7 @@ class Stock(Base):
     symbol = Column(String(10), unique=True, nullable=False, index=True)
     company_name = Column(String(150), nullable=False)
     is_active = Column(Boolean, default=True)
+    sector = Column(String(50), nullable=True, index=True)
 
     # Katılım Endeksi (Helal Finans) Uygunluk Bilgileri
     is_katilim_compliant = Column(Boolean, default=False)
@@ -184,6 +185,21 @@ class CompanyAnalysis(Base):
     altman_zone = Column(String(20), nullable=True)            # 'SAFE' | 'GREY' | 'DISTRESS'
     debt_to_equity = Column(Numeric(8, 2), nullable=True)      # Borç/Özkaynak oranı
     net_fx_position = Column(String(20), nullable=True)        # 'POZITIF' | 'NEGATIF' | 'NOTR' (heuristik)
+
+    # Aracı Kurum Hedef Fiyatları & Konsensüs (yfinance analist verisi)
+    target_mean_price = Column(Numeric(10, 2), nullable=True)
+    target_high_price = Column(Numeric(10, 2), nullable=True)
+    target_low_price = Column(Numeric(10, 2), nullable=True)
+    target_upside_pct = Column(Numeric(6, 2), nullable=True)   # (hedef ort. - güncel fiyat) / güncel fiyat
+    number_of_analysts = Column(Integer, nullable=True)
+    recommendation_key = Column(String(20), nullable=True)     # 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell'
+    analyst_buy_count = Column(Integer, nullable=True)
+    analyst_hold_count = Column(Integer, nullable=True)
+    analyst_sell_count = Column(Integer, nullable=True)
+
+    # Bilanço Takvimi: bir sonraki çeyreklik bilanço açıklama tarihi (yfinance tahmini)
+    next_earnings_date = Column(Date, nullable=True)
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
@@ -382,6 +398,52 @@ class PendingOrder(Base):
     fail_reason = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     executed_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+    stock = relationship("Stock")
+
+
+# ---------------------------------------------------------------------------
+# MODÜL 11: Kişiye Özel Bildirim & Alarm Sistemi
+# ---------------------------------------------------------------------------
+class StockNotificationPreference(Base):
+    """
+    Bir kullanıcının belirli bir hisse için bıraktığı alarm tercihleri. Fiyat
+    üstü/altı alarmları tek seferliktir (tetiklenince alan None'a döner); %
+    değişim ve AI sinyal alarmları günde en fazla bir kez tetiklenir (last_*_date
+    ile takip edilir). Kullanıcı başına hisse başına tek satır tutulur.
+    """
+    __tablename__ = "stock_notification_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "stock_id", name="uq_notification_pref_user_stock"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    price_above = Column(Numeric(10, 2), nullable=True)
+    price_below = Column(Numeric(10, 2), nullable=True)
+    pct_change_trigger = Column(Numeric(6, 2), nullable=True)  # örn. 5.0 -> günlük ±%5 hareket
+    notify_kap = Column(Boolean, default=False, nullable=False)
+    notify_ai_signal = Column(Boolean, default=False, nullable=False)
+    last_pct_trigger_date = Column(Date, nullable=True)
+    last_ai_signal_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    stock = relationship("Stock")
+
+
+class Notification(Base):
+    """Kullanıcıya özel, sistem içi bildirim geçmişi (fiyat/KAP/AI sinyal alarmlarının çıktısı)."""
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="SET NULL"), nullable=True)
+    notif_type = Column(String(20), nullable=False)  # 'PRICE_ABOVE' | 'PRICE_BELOW' | 'PCT_CHANGE' | 'KAP' | 'AI_SIGNAL'
+    title = Column(String(200), nullable=False)
+    message = Column(String(500), nullable=False)
+    is_read = Column(Boolean, default=False, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     user = relationship("User")
     stock = relationship("Stock")

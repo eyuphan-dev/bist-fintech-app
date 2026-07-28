@@ -21,6 +21,7 @@ import pytz
 from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
 from tefas_client import update_tefas_funds
+from analysis_engine import refresh_earnings_calendar
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +133,10 @@ def update_bist_prices_job():
         from bot import run_quant_bot
         run_quant_bot(db)
 
+        # Kullanıcı bazlı fiyat üstü/altı ve günlük % değişim alarmları
+        from notifications import check_price_and_pct_triggers
+        check_price_and_pct_triggers(db)
+
     except Exception as e:
         print(f"[Scheduler] Fiyat güncelleme hatası: {e}")
         db.rollback()
@@ -165,6 +170,22 @@ def refresh_market_data_job():
             update_tefas_funds(db)
         except Exception as e:
             print(f"[Scheduler] TEFAS tazeleme hatası: {e}")
+            db.rollback()
+
+        print("[Scheduler] Bilanço takvimi (yaklaşan bilanço tarihleri) tazeleniyor...")
+        try:
+            updated = refresh_earnings_calendar(db)
+            print(f"[Scheduler] Bilanço takvimi tazelendi: {updated} hisse güncellendi.")
+        except Exception as e:
+            print(f"[Scheduler] Bilanço takvimi tazeleme hatası: {e}")
+            db.rollback()
+
+        print("[Scheduler] AI sinyal alarmları kontrol ediliyor...")
+        try:
+            from notifications import check_ai_signal_triggers
+            check_ai_signal_triggers(db)
+        except Exception as e:
+            print(f"[Scheduler] AI sinyal alarmı kontrol hatası: {e}")
             db.rollback()
     finally:
         db.close()

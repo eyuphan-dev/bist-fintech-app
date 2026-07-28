@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { TrendingUp, TrendingDown, Gauge, DollarSign, Percent, RefreshCw, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Scale, Globe2, Crosshair, Users, HelpCircle } from "lucide-react";
+import { TrendingUp, TrendingDown, Gauge, DollarSign, Percent, RefreshCw, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Scale, Globe2, Crosshair, Users, HelpCircle, Target } from "lucide-react";
 import KatilimBadge from "./KatilimBadge";
 import AnalysisGuideModal from "./AnalysisGuideModal";
 
@@ -24,6 +24,15 @@ interface CompanyAnalysis {
   altman_zone: "SAFE" | "GREY" | "DISTRESS" | null;
   debt_to_equity: number | null;
   net_fx_position: "POZITIF" | "NEGATIF" | "NOTR" | null;
+  target_mean_price: number | null;
+  target_high_price: number | null;
+  target_low_price: number | null;
+  target_upside_pct: number | null;
+  number_of_analysts: number | null;
+  recommendation_key: string | null;
+  analyst_buy_count: number | null;
+  analyst_hold_count: number | null;
+  analyst_sell_count: number | null;
   updated_at: string | null;
 }
 
@@ -191,6 +200,20 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
   const fairValue = analysis?.fair_value ?? null;
   const potentialPct = fairValue && currentPrice ? ((fairValue - currentPrice) / currentPrice) * 100 : null;
 
+  const recommendationMeta: Record<string, { label: string; color: string }> = {
+    strong_buy: { label: "Güçlü Al", color: "text-[#0D9488]" },
+    buy: { label: "Al", color: "text-[#0D9488]" },
+    hold: { label: "Tut", color: "text-[#F59E0B]" },
+    sell: { label: "Sat", color: "text-[#F43F5E]" },
+    strong_sell: { label: "Güçlü Sat", color: "text-[#F43F5E]" },
+  };
+  const recMeta = analysis?.recommendation_key ? recommendationMeta[analysis.recommendation_key] : null;
+
+  const buyCount = analysis?.analyst_buy_count ?? 0;
+  const holdCount = analysis?.analyst_hold_count ?? 0;
+  const sellCount = analysis?.analyst_sell_count ?? 0;
+  const totalAnalystVotes = buyCount + holdCount + sellCount;
+
   const peVsSector =
     analysis?.pe_ratio && analysis?.sector_pe_avg
       ? analysis.pe_ratio < analysis.sector_pe_avg
@@ -332,6 +355,69 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
                 </span>
               )}
             </div>
+          </div>
+
+          {/* Aracı Kurum Hedef Fiyatları & Konsensüsü */}
+          <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
+            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest flex items-center gap-1">
+              <Target className="w-3.5 h-3.5" /> Aracı Kurum Konsensüsü
+            </span>
+            {!analysis.number_of_analysts || totalAnalystVotes === 0 ? (
+              <p className="text-[11px] text-gray-500 mt-2">
+                Bu hisse için aracı kurum hedef fiyat/tavsiye verisi bulunamadı.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-end justify-between mt-2">
+                  <div>
+                    <p className="text-xl font-bold text-white tabular-nums">
+                      {analysis.target_mean_price !== null ? `${analysis.target_mean_price.toFixed(2)} TL` : "N/A"}
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      Ortalama Hedef Fiyat · {analysis.number_of_analysts} analist
+                    </p>
+                  </div>
+                  {analysis.target_upside_pct !== null && (
+                    <span
+                      className={`flex items-center gap-1 text-sm font-bold tabular-nums ${
+                        analysis.target_upside_pct >= 0 ? "text-[#0D9488]" : "text-[#F43F5E]"
+                      }`}
+                    >
+                      {analysis.target_upside_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                      {analysis.target_upside_pct >= 0 ? "+" : ""}
+                      {analysis.target_upside_pct.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+
+                {(analysis.target_low_price !== null || analysis.target_high_price !== null) && (
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Aralık: {analysis.target_low_price?.toFixed(2) ?? "—"} TL – {analysis.target_high_price?.toFixed(2) ?? "—"} TL
+                  </p>
+                )}
+
+                {recMeta && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded mt-2 inline-block bg-white/5 ${recMeta.color}`}>
+                    {recMeta.label}
+                  </span>
+                )}
+
+                {totalAnalystVotes > 0 && (
+                  <div className="mt-3">
+                    <div className="w-full h-2 rounded-full overflow-hidden flex bg-[#0B0E14]">
+                      <div className="h-full bg-[#0D9488]" style={{ width: `${(buyCount / totalAnalystVotes) * 100}%` }} />
+                      <div className="h-full bg-[#F59E0B]" style={{ width: `${(holdCount / totalAnalystVotes) * 100}%` }} />
+                      <div className="h-full bg-[#F43F5E]" style={{ width: `${(sellCount / totalAnalystVotes) * 100}%` }} />
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5 text-[9px] text-gray-500">
+                      <span className="text-[#0D9488] font-semibold">Al {buyCount}</span>
+                      <span className="text-[#F59E0B] font-semibold">Tut {holdCount}</span>
+                      <span className="text-[#F43F5E] font-semibold">Sat {sellCount}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Kârlılık Oranları */}
