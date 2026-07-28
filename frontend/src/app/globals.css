@@ -104,6 +104,16 @@ body {
   background: #374151;
 }
 
+/* Scroll gerektiren yatay şeritlerde (ör. NavBar) çubuğu tamamen gizler */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Simple animations */
 @keyframes pulse-slow {
   0%, 100% {

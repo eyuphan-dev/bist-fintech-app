@@ -37,7 +37,7 @@ export default function NavBar() {
           <span className="font-bold text-lg tracking-tight text-white hidden sm:inline">BIST Simülasyonu</span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-1 overflow-x-auto">
+        <nav className="hidden md:flex flex-1 min-w-0 items-center gap-0.5 lg:gap-1 overflow-x-auto scrollbar-hide">
           {NAV_LINKS.map((link) => {
             const Icon = link.icon;
             const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
@@ -45,14 +45,15 @@ export default function NavBar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition whitespace-nowrap ${
+                title={link.label}
+                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition whitespace-nowrap shrink-0 ${
                   isActive
                     ? "bg-[#10B981] text-[#0B0E14]"
                     : "text-gray-400 hover:text-white hover:bg-[#151921]"
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">{link.label}</span>
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden lg:inline">{link.label}</span>
               </Link>
             );
           })}
