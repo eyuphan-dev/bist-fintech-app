@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Activity, ArrowLeftRight, TrendingUp, TrendingDown, Wallet,
-  Clock, Power, RefreshCw, CheckCircle2,
+  Clock, Power, RefreshCw, CheckCircle2, AlertTriangle, X,
 } from "lucide-react";
 import BalanceUpdateModal from "./BalanceUpdateModal";
 import { useAuth, API_BASE } from "../context/AuthContext";
@@ -66,6 +66,7 @@ export default function PersonalBotPanel() {
   const [remaining, setRemaining] = useState<number | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
@@ -147,24 +148,39 @@ export default function PersonalBotPanel() {
     }
   };
 
-  const handleToggleActive = async () => {
-    if (!token || !status || savingSettings) return;
+  const performToggle = async (nextActive: boolean) => {
+    if (!token || savingSettings) return;
     setSavingSettings(true);
     try {
       const res = await fetch(`${API_BASE}/user/bot/settings`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ is_active: !status.is_active }),
+        body: JSON.stringify({ is_active: nextActive }),
       });
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
         setRemaining(data.remaining_seconds);
+        if (!nextActive) {
+          setToast("Bot durduruldu: açık pozisyonlar kapatıldı, performans 100.000 TL'ye sıfırlandı.");
+          setTimeout(() => setToast(null), 5000);
+        }
       }
     } catch (err) {
       console.error("Bot durumu güncellenemedi:", err);
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  // Botu açmak zararsız (onaya gerek yok); botu KAPATMAK bakiyeyi/pozisyonları/performansı
+  // sıfırladığı için önce uyarı gösterip kullanıcı onayı bekliyoruz.
+  const handleToggleActive = () => {
+    if (!status || savingSettings) return;
+    if (status.is_active) {
+      setShowStopConfirm(true);
+    } else {
+      performToggle(true);
     }
   };
 
@@ -193,6 +209,52 @@ export default function PersonalBotPanel() {
           onClose={() => setShowBalanceModal(false)}
           onSuccess={(newBalance) => setStatus((s) => (s ? { ...s, virtual_balance: newBalance } : s))}
         />
+      )}
+
+      {showStopConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setShowStopConfirm(false)}
+        >
+          <div
+            className="relative w-full max-w-sm bg-[#151921] border border-[#242B35] rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-[#F43F5E]/10 border-b border-[#F43F5E]/20 px-5 py-4 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-[#F43F5E]" /> Botu Durdur
+              </h2>
+              <button onClick={() => setShowStopConfirm(false)} className="text-gray-500 hover:text-white transition" title="Kapat">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Botu durdurursanız <span className="font-semibold text-white">açık pozisyonlar güncel piyasa fiyatından kapatılır</span> ve
+                bakiyeniz, getiri yüzdeniz ile işlem geçmişi istatistikleri <span className="font-semibold text-white">100.000 TL'ye sıfırlanır</span>.
+                Botu tekrar başlattığınızda temiz bir sayfadan başlar.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowStopConfirm(false)}
+                  className="flex-1 bg-[#0B0E14] border border-[#242B35] hover:border-[#242B35] text-gray-300 font-bold text-xs py-2.5 rounded-lg transition"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  onClick={() => {
+                    setShowStopConfirm(false);
+                    performToggle(false);
+                  }}
+                  disabled={savingSettings}
+                  className="flex-1 bg-[#F43F5E] hover:bg-[#e11d48] text-white font-bold text-xs py-2.5 rounded-lg transition disabled:opacity-50"
+                >
+                  Onayla ve Sıfırla
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {toast && (

@@ -101,6 +101,8 @@ MIGRATIONS = {
         "time_frame": "TEXT DEFAULT '1D'",
         "started_at": "TEXT",
         "ends_at": "TEXT",
+        "baseline_value": "NUMERIC(15, 2) DEFAULT 100000.00",
+        "performance_reset_at": "TEXT",
     },
     "portfolios": {
         "opened_at": "TEXT",
