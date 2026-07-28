@@ -3,12 +3,15 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut } from "lucide-react";
+import { LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import NotificationBell from "./NotificationBell";
 
 const NAV_LINKS = [
   { href: "/", label: "Portföyüm", icon: Wallet },
   { href: "/piyasalar", label: "Piyasalar", icon: TrendingUp },
+  { href: "/heatmap", label: "Isı Haritası", icon: Flame },
+  { href: "/takvim", label: "Bilanço & KAP Takvimi", icon: CalendarDays },
   { href: "/bot", label: "Yapay Zeka Trader", icon: Bot },
   { href: "/fonlar", label: "Fonlar & Halka Arz", icon: PiggyBank },
 ];
@@ -60,6 +63,7 @@ export default function NavBar() {
             <p className="text-[10px] text-gray-500">Hoş Geldiniz,</p>
             <p className="text-xs font-semibold text-white">@{user?.username}</p>
           </div>
+          <NotificationBell />
           <button
             onClick={handleLogout}
             className="bg-[#151921] border border-[#242B35] hover:bg-[#242B35] hover:text-[#F43F5E] p-2 rounded-lg text-gray-400 transition"

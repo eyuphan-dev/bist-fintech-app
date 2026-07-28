@@ -54,6 +54,7 @@ class StockResponse(BaseModel):
     symbol: str
     company_name: str
     is_active: bool
+    sector: Optional[str] = None
     current_price: float
     price_change_pct: float
     is_katilim_compliant: bool
@@ -76,6 +77,15 @@ class CompanyAnalysisResponse(BaseModel):
     altman_zone: Optional[str] = None
     debt_to_equity: Optional[float] = None
     net_fx_position: Optional[str] = None
+    target_mean_price: Optional[float] = None
+    target_high_price: Optional[float] = None
+    target_low_price: Optional[float] = None
+    target_upside_pct: Optional[float] = None
+    number_of_analysts: Optional[int] = None
+    recommendation_key: Optional[str] = None
+    analyst_buy_count: Optional[int] = None
+    analyst_hold_count: Optional[int] = None
+    analyst_sell_count: Optional[int] = None
     updated_at: Optional[datetime]
 
     class Config:
@@ -84,6 +94,11 @@ class CompanyAnalysisResponse(BaseModel):
     @field_serializer("updated_at")
     def _serialize_updated_at(self, value: Optional[datetime]) -> Optional[str]:
         return _utc_iso(value)
+
+class EarningsCalendarItem(BaseModel):
+    symbol: str
+    company_name: str
+    next_earnings_date: date
 
 class PivotLevelsResponse(BaseModel):
     symbol: str
@@ -388,3 +403,41 @@ class PendingOrderResponse(BaseModel):
     @field_serializer("execution_time", "created_at", "executed_at")
     def _serialize_as_utc(self, value: Optional[datetime]) -> Optional[str]:
         return _utc_iso(value)
+
+
+class NotificationPreferenceRequest(BaseModel):
+    price_above: Optional[float] = None
+    price_below: Optional[float] = None
+    pct_change_trigger: Optional[float] = None
+    notify_kap: bool = False
+    notify_ai_signal: bool = False
+
+class NotificationPreferenceResponse(BaseModel):
+    stock_symbol: str
+    price_above: Optional[float] = None
+    price_below: Optional[float] = None
+    pct_change_trigger: Optional[float] = None
+    notify_kap: bool
+    notify_ai_signal: bool
+
+    class Config:
+        from_attributes = True
+
+class NotificationResponse(BaseModel):
+    id: int
+    stock_symbol: Optional[str] = None
+    notif_type: str
+    title: str
+    message: str
+    is_read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+    @field_serializer("created_at")
+    def _serialize_created_at(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
+
+class UnreadCountResponse(BaseModel):
+    count: int

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   ArrowLeft, RefreshCw, Gauge, Users, Calculator, Newspaper, LineChart as LineChartIcon,
-  ChevronDown, ExternalLink,
+  ChevronDown, ExternalLink, Bell,
 } from "lucide-react";
 
 import KatilimBadge from "../../components/KatilimBadge";
@@ -15,6 +15,7 @@ import DividendCalculatorWidget from "../../components/DividendCalculatorWidget"
 import DcaBacktestWidget from "../../components/DcaBacktestWidget";
 import CommunitySentimentGauge from "../../components/CommunitySentimentGauge";
 import PendingOrdersPanel from "../../components/PendingOrdersPanel";
+import NotificationPreferenceModal from "../../components/NotificationPreferenceModal";
 import { useAuth, API_BASE } from "../../context/AuthContext";
 
 const TradingViewChart = dynamic(() => import("../../components/TradingViewChart"), { ssr: false });
@@ -42,6 +43,7 @@ export default function StockDetailPage() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [openNewsIdx, setOpenNewsIdx] = useState<number | null>(null);
   const [section, setSection] = useState<SectionKey>("genel");
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
 
   const [tradeQty, setTradeQty] = useState<number>(1);
   const [tradeLoading, setTradeLoading] = useState(false);
@@ -216,8 +218,27 @@ export default function StockDetailPage() {
             </div>
           )}
         </div>
-        <p className="text-2xl font-bold text-white tabular-nums">{stockDetail.current_price} TL</p>
+        <div className="flex items-center gap-2">
+          <p className="text-2xl font-bold text-white tabular-nums">{stockDetail.current_price} TL</p>
+          {token && (
+            <button
+              onClick={() => setShowNotificationModal(true)}
+              title="Bildirim Oluştur"
+              className="bg-[#151921] border border-[#242B35] hover:border-[#F59E0B]/40 hover:text-[#F59E0B] text-gray-400 p-2 rounded-lg transition"
+            >
+              <Bell className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {showNotificationModal && (
+        <NotificationPreferenceModal
+          symbol={symbol}
+          currentPrice={stockDetail.current_price}
+          onClose={() => setShowNotificationModal(false)}
+        />
+      )}
 
       <InsiderTrackerBadge symbol={symbol} />
 

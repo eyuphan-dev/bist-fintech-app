@@ -3,12 +3,13 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Wallet, TrendingUp, Bot, PiggyBank } from "lucide-react";
+import { Wallet, TrendingUp, Bot, PiggyBank, Flame } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const NAV_LINKS = [
   { href: "/", label: "Portföy", icon: Wallet },
   { href: "/piyasalar", label: "BİST", icon: TrendingUp },
+  { href: "/heatmap", label: "Isı Har.", icon: Flame },
   { href: "/bot", label: "Bot", icon: Bot },
   { href: "/fonlar", label: "Fonlar", icon: PiggyBank },
 ];
@@ -29,7 +30,7 @@ export default function MobileBottomNav() {
       className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0B0E14]/95 backdrop-blur border-t border-[#242B35]"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="grid grid-cols-4">
+      <div className="grid grid-cols-5">
         {NAV_LINKS.map((link) => {
           const Icon = link.icon;
           const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);

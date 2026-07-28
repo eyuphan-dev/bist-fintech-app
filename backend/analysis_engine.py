@@ -246,6 +246,50 @@ def _calculate_altman_z_score(ticker: yf.Ticker, info: Dict[str, Any]):
         return None, None
 
 
+def _analyst_consensus(ticker: yf.Ticker, info: Dict[str, Any], current_price: Optional[float]) -> Dict[str, Any]:
+    """
+    Aracı kurum hedef fiyat konsensüsü: yfinance'in info sözlüğündeki hedef fiyat
+    alanları (targetMeanPrice/High/Low, numberOfAnalystOpinions, recommendationKey)
+    ve ticker.recommendations tablosundaki en güncel ('0m') Al/Tut/Sat dağılımı
+    kullanılır. BİST hisselerinin bir kısmında analist takibi olmadığından alanlar
+    None kalabilir — bu durumda ilgili kart frontend'de "veri yok" gösterir.
+    """
+    target_mean = _safe_float(info.get("targetMeanPrice"))
+    target_high = _safe_float(info.get("targetHighPrice"))
+    target_low = _safe_float(info.get("targetLowPrice"))
+    number_of_analysts = info.get("numberOfAnalystOpinions")
+    recommendation_key = info.get("recommendationKey")
+
+    upside_pct = None
+    if target_mean is not None and current_price and current_price > 0:
+        upside_pct = round(((target_mean - current_price) / current_price) * 100, 2)
+
+    buy_count = hold_count = sell_count = None
+    try:
+        rec = ticker.recommendations
+        if rec is not None and not rec.empty and "period" in rec.columns:
+            row = rec[rec["period"] == "0m"]
+            if not row.empty:
+                r = row.iloc[0]
+                buy_count = int(r.get("strongBuy", 0) or 0) + int(r.get("buy", 0) or 0)
+                hold_count = int(r.get("hold", 0) or 0)
+                sell_count = int(r.get("sell", 0) or 0) + int(r.get("strongSell", 0) or 0)
+    except Exception as e:
+        print(f"[AnalysisEngine] Analist tavsiye dağılımı çekme hatası: {e}")
+
+    return {
+        "target_mean_price": target_mean,
+        "target_high_price": target_high,
+        "target_low_price": target_low,
+        "target_upside_pct": upside_pct,
+        "number_of_analysts": int(number_of_analysts) if number_of_analysts is not None else None,
+        "recommendation_key": recommendation_key,
+        "analyst_buy_count": buy_count,
+        "analyst_hold_count": hold_count,
+        "analyst_sell_count": sell_count,
+    }
+
+
 def _interest_sensitivity_text(info: Dict[str, Any]) -> str:
     total_debt = _safe_float(info.get("totalDebt"))
     total_cash = _safe_float(info.get("totalCash"))
@@ -309,6 +353,7 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
     altman_z, altman_zone = _calculate_altman_z_score(ticker, info)
     debt_to_equity = _calculate_debt_to_equity(info, ticker.balance_sheet if hasattr(ticker, "balance_sheet") else None)
     net_fx_position = _net_fx_position(info)
+    analyst_consensus = _analyst_consensus(ticker, info, current_price)
 
     analysis = db.query(models.CompanyAnalysis).filter_by(stock_id=stock.id).first()
     if not analysis:
@@ -331,6 +376,15 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
     analysis.altman_zone = altman_zone
     analysis.debt_to_equity = debt_to_equity
     analysis.net_fx_position = net_fx_position
+    analysis.target_mean_price = analyst_consensus["target_mean_price"]
+    analysis.target_high_price = analyst_consensus["target_high_price"]
+    analysis.target_low_price = analyst_consensus["target_low_price"]
+    analysis.target_upside_pct = analyst_consensus["target_upside_pct"]
+    analysis.number_of_analysts = analyst_consensus["number_of_analysts"]
+    analysis.recommendation_key = analyst_consensus["recommendation_key"]
+    analysis.analyst_buy_count = analyst_consensus["analyst_buy_count"]
+    analysis.analyst_hold_count = analyst_consensus["analyst_hold_count"]
+    analysis.analyst_sell_count = analyst_consensus["analyst_sell_count"]
     analysis.updated_at = datetime.utcnow()
 
     # Yabancı/kurumsal sahiplik oranı anlık görüntüsü (30/90 günlük trend için) —
@@ -476,6 +530,55 @@ def get_foreign_holding_trend(db: Session, symbol: str) -> Dict[str, Any]:
         "available": True,
         "message": message,
     }
+
+
+def _next_earnings_date(ticker: yf.Ticker) -> Optional[Any]:
+    """
+    yfinance ticker.calendar()'daki 'Earnings Date' listesinden bugünden sonraki en
+    yakın tarihi döner. ticker.calendar hafif bir çağrıdır (financials/balance_sheet
+    çekmez), bu yüzden tüm hisseler için günlük toplu taramada kullanılabilir.
+    """
+    try:
+        calendar = ticker.calendar
+        if not calendar:
+            return None
+        earnings_dates = calendar.get("Earnings Date")
+        if not earnings_dates:
+            return None
+        today = datetime.utcnow().date()
+        future_dates = [d for d in earnings_dates if d and d >= today]
+        return min(future_dates) if future_dates else None
+    except Exception:
+        return None
+
+
+def refresh_earnings_calendar(db: Session) -> int:
+    """
+    Aktif hisselerin bir sonraki bilanço açıklama tarihini (varsa) yfinance'tan
+    hafif bir çağrıyla çekip company_analysis.next_earnings_date alanına yazar.
+    Diğer derin analiz alanlarına (Piotroski, F/K vb.) dokunmaz — CompanyAnalysis
+    kaydı yoksa yalnızca bu alan için oluşturulur. Scheduler tarafından günlük
+    çağrılır; kaç hissenin güncellendiğini döner.
+    """
+    stocks = db.query(models.Stock).filter_by(is_active=True).all()
+    updated = 0
+    for stock in stocks:
+        try:
+            ticker = yf.Ticker(f"{stock.symbol}.IS")
+            next_date = _next_earnings_date(ticker)
+        except Exception as e:
+            print(f"[AnalysisEngine] Bilanço takvimi çekme hatası ({stock.symbol}): {e}")
+            continue
+
+        analysis = db.query(models.CompanyAnalysis).filter_by(stock_id=stock.id).first()
+        if not analysis:
+            analysis = models.CompanyAnalysis(stock_id=stock.id)
+            db.add(analysis)
+        analysis.next_earnings_date = next_date
+        updated += 1
+
+    db.commit()
+    return updated
 
 
 def calculate_sector_pe_averages(db: Session) -> Dict[int, float]:

@@ -205,6 +205,7 @@ def fetch_kap_news(db, limit: int = 20) -> list:
     import models
 
     notifications = []
+    newly_created = []
     stocks = db.query(models.Stock).filter_by(is_active=True).all()
 
     for stock in stocks:
@@ -227,8 +228,17 @@ def fetch_kap_news(db, limit: int = 20) -> list:
                 )
                 db.add(notif)
                 notifications.append(d)
+                newly_created.append(notif)
 
     db.commit()
+
+    # Bu hisseleri izleyen (notify_kap=True) kullanıcılar için bildirim oluştur
+    try:
+        from notifications import check_kap_triggers
+        check_kap_triggers(db, newly_created)
+    except Exception as e:
+        print(f"[KAP] İzleyici bildirimi oluşturma hatası: {e}")
+
     return notifications[:limit]
 
 

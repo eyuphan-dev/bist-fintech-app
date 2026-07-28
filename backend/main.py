@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from datetime import datetime, date, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
@@ -24,7 +24,8 @@ from schemas import (
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
     DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest,
     PendingOrderCreate, PendingOrderUpdate, PendingOrderResponse, StockNewsItem,
-    PivotLevelsResponse, ForeignHoldingTrendResponse,
+    PivotLevelsResponse, ForeignHoldingTrendResponse, EarningsCalendarItem,
+    NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -255,6 +256,7 @@ def get_stocks(db: Session = Depends(get_db)):
             "symbol": stock.symbol,
             "company_name": stock.company_name,
             "is_active": stock.is_active,
+            "sector": stock.sector,
             "current_price": round(current_price, 2),
             "price_change_pct": round(price_change_pct, 2),
             "is_katilim_compliant": bool(stock.is_katilim_compliant),
@@ -623,6 +625,31 @@ def get_community_sentiment(symbol: str, db: Session = Depends(get_db)):
 
 # --- KAP GENEL HABER AKIŞI ---
 
+@app.get("/api/earnings-calendar", response_model=List[EarningsCalendarItem])
+def get_earnings_calendar(db: Session = Depends(get_db)):
+    """
+    Yaklaşan (bugün dahil, gelecekteki) çeyreklik bilanço açıklama tarihi bilinen
+    aktif hisseleri, tarihe göre artan sırada döner. Tarih bilgisi scheduler
+    tarafından günlük olarak (refresh_earnings_calendar) yfinance'tan tazelenir.
+    """
+    today = date.today()
+    rows = (
+        db.query(models.Stock, models.CompanyAnalysis)
+        .join(models.CompanyAnalysis, models.CompanyAnalysis.stock_id == models.Stock.id)
+        .filter(models.Stock.is_active == True, models.CompanyAnalysis.next_earnings_date >= today)
+        .order_by(models.CompanyAnalysis.next_earnings_date.asc())
+        .all()
+    )
+    return [
+        EarningsCalendarItem(
+            symbol=stock.symbol,
+            company_name=stock.company_name,
+            next_earnings_date=analysis.next_earnings_date,
+        )
+        for stock, analysis in rows
+    ]
+
+
 @app.get("/api/kap/news", response_model=List[KapNotificationResponse])
 def get_kap_news(db: Session = Depends(get_db)):
     """
@@ -638,6 +665,35 @@ def get_kap_news(db: Session = Depends(get_db)):
         .all()
     )
     return notifications
+
+
+# Büyük yatırımcı/pay sahipliği değişikliği bildirimlerini tespit etmek için kullanılan
+# başlık anahtar kelimeleri. KAP'ın genel bildirim akışı yalnızca başlık/özet metnini
+# içerdiğinden (bildirimin detay sayfasındaki yatırımcı adı/pay oranı tablosu ayrıca
+# çekilmiyor), bu basit anahtar kelime eşleşmesiyle "hangi hissede önemli bir pay
+# sahipliği değişikliği oldu" bilgisini yakalıyoruz — kullanıcı detay için KAP linkine yönlendirilir.
+_MAJOR_HOLDER_KEYWORDS = [
+    "pay sahip", "oy hak", "sermaye piyasası araçlarının sahip", "hakim ortak", "hakimiyet",
+]
+
+
+@app.get("/api/kap/major-holder-news", response_model=List[KapNotificationResponse])
+def get_major_holder_news(db: Session = Depends(get_db)):
+    """
+    Genel KAP akışından, başlığında pay sahipliği/oy hakları değişikliğine işaret eden
+    anahtar kelimeler geçen bildirimleri (büyük yatırımcı hareketleri) filtreler.
+    """
+    notifications = (
+        db.query(models.KapNotification)
+        .order_by(models.KapNotification.publish_date.desc())
+        .limit(300)
+        .all()
+    )
+    filtered = [
+        n for n in notifications
+        if any(kw in n.title.lower() for kw in _MAJOR_HOLDER_KEYWORDS)
+    ]
+    return filtered[:30]
 
 
 # --- TEFAS FONLARI ---
@@ -970,6 +1026,163 @@ def cancel_pending_order(
     except Exception:
         db.rollback()
         raise
+
+
+# --- KİŞİYE ÖZEL BİLDİRİM & ALARM SİSTEMİ ---
+
+@app.get("/api/stocks/{symbol}/notification-preference", response_model=Optional[NotificationPreferenceResponse])
+def get_notification_preference(
+    symbol: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Giriş yapan kullanıcının bu hisse için bıraktığı alarm tercihini döner (yoksa null)."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    pref = db.query(models.StockNotificationPreference).filter_by(user_id=current_user.id, stock_id=stock.id).first()
+    if not pref:
+        return None
+
+    return NotificationPreferenceResponse(
+        stock_symbol=stock.symbol,
+        price_above=float(pref.price_above) if pref.price_above is not None else None,
+        price_below=float(pref.price_below) if pref.price_below is not None else None,
+        pct_change_trigger=float(pref.pct_change_trigger) if pref.pct_change_trigger is not None else None,
+        notify_kap=bool(pref.notify_kap),
+        notify_ai_signal=bool(pref.notify_ai_signal),
+    )
+
+
+@app.post("/api/stocks/{symbol}/notification-preference", response_model=NotificationPreferenceResponse)
+def upsert_notification_preference(
+    symbol: str,
+    req: NotificationPreferenceRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının bu hisse için alarm tercihini oluşturur/günceller. Fiyat üstü/altı
+    alanları tetiklenince otomatik sıfırlanır (bkz. notifications.py); burada
+    gönderilen değer her zaman yeni bir aktif alarm olarak kaydedilir.
+    """
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    pref = db.query(models.StockNotificationPreference).filter_by(user_id=current_user.id, stock_id=stock.id).first()
+    if not pref:
+        pref = models.StockNotificationPreference(user_id=current_user.id, stock_id=stock.id)
+        db.add(pref)
+
+    pref.price_above = req.price_above
+    pref.price_below = req.price_below
+    pref.pct_change_trigger = req.pct_change_trigger
+    pref.notify_kap = req.notify_kap
+    pref.notify_ai_signal = req.notify_ai_signal
+    db.commit()
+    db.refresh(pref)
+
+    _log_user_action(db, current_user.id, "NOTIFICATION_PREF_UPDATE", f"{stock.symbol} için alarm tercihi güncellendi.")
+    db.commit()
+
+    return NotificationPreferenceResponse(
+        stock_symbol=stock.symbol,
+        price_above=float(pref.price_above) if pref.price_above is not None else None,
+        price_below=float(pref.price_below) if pref.price_below is not None else None,
+        pct_change_trigger=float(pref.pct_change_trigger) if pref.pct_change_trigger is not None else None,
+        notify_kap=bool(pref.notify_kap),
+        notify_ai_signal=bool(pref.notify_ai_signal),
+    )
+
+
+@app.delete("/api/stocks/{symbol}/notification-preference")
+def delete_notification_preference(
+    symbol: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Kullanıcının bu hisse için tüm alarm tercihini kaldırır."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    pref = db.query(models.StockNotificationPreference).filter_by(user_id=current_user.id, stock_id=stock.id).first()
+    if pref:
+        db.delete(pref)
+        db.commit()
+    return {"message": f"{stock.symbol} için alarm tercihi kaldırıldı."}
+
+
+@app.get("/api/notifications", response_model=List[NotificationResponse])
+def list_notifications(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Giriş yapan kullanıcının son 50 bildirimini en yeniden eskiye döner."""
+    notifications = (
+        db.query(models.Notification)
+        .filter_by(user_id=current_user.id)
+        .order_by(models.Notification.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return [
+        NotificationResponse(
+            id=n.id,
+            stock_symbol=n.stock.symbol if n.stock else None,
+            notif_type=n.notif_type,
+            title=n.title,
+            message=n.message,
+            is_read=bool(n.is_read),
+            created_at=n.created_at,
+        ) for n in notifications
+    ]
+
+
+@app.get("/api/notifications/unread-count", response_model=UnreadCountResponse)
+def get_unread_notification_count(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Navbar'daki bildirim ziline kırmızı badge sayısı için okunmamış bildirim sayısını döner."""
+    count = (
+        db.query(models.Notification)
+        .filter_by(user_id=current_user.id, is_read=False)
+        .count()
+    )
+    return UnreadCountResponse(count=count)
+
+
+@app.post("/api/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Tek bir bildirimi okundu olarak işaretler."""
+    notif = db.query(models.Notification).filter_by(id=notification_id, user_id=current_user.id).first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Bildirim bulunamadı.")
+    notif.is_read = True
+    db.commit()
+    return {"message": "Bildirim okundu olarak işaretlendi."}
+
+
+@app.post("/api/notifications/read-all")
+def mark_all_notifications_read(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Kullanıcının tüm okunmamış bildirimlerini okundu olarak işaretler."""
+    (
+        db.query(models.Notification)
+        .filter_by(user_id=current_user.id, is_read=False)
+        .update({"is_read": True})
+    )
+    db.commit()
+    return {"message": "Tüm bildirimler okundu olarak işaretlendi."}
 
 
 # --- AI BOT DATA ---
