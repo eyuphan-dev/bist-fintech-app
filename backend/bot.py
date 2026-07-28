@@ -68,27 +68,43 @@ def get_strategy_config(time_frame: str) -> dict:
 # Risk Modu — Sinyal Güven Eşiği + Stop-Loss/Take-Profit Ölçeklendirme
 # ---------------------------------------------------------------------------
 # time_frame (1D/1W/1M) sinyalin YÖNÜNÜ (AL/SAT) ve veri çözünürlüğünü belirler;
-# risk_mode ise o sinyale ne kadar güvenildiğinde işleme girileceğini (min_confidence)
-# ve pozisyon risk büyüklüğünü (stop_loss_pct/take_profit_pct) belirler. İkisi
-# birbirinden bağımsız, birlikte çalışan iki eksendir.
+# risk_mode ise o sinyale ne kadar KOLAY tetikleneceğini (rsi_oversold/rsi_overbought,
+# breakout_margin, trend_margin), ne kadar güvenildiğinde işleme girileceğini
+# (min_confidence) ve pozisyon risk büyüklüğünü (stop_loss_pct/take_profit_pct) belirler.
+# Zaman dilimi stratejisinin YÖNÜ/mantığı (scalp/swing/trend) risk moduna göre değişmez —
+# yalnızca o mantığın ne kadar "hassas/gevşek" tetikleneceği risk moduna göre ölçeklenir:
+# slow modda sinyal daha zor tetiklenir (daha az ama daha güvenilir işlem), aggressive
+# modda sinyal daha kolay tetiklenir (daha sık ama daha riskli işlem).
 RISK_MODE_CONFIG = {
     "slow": {
         "label": "🐢 Yavaş (Muhafazakâr)",
-        "min_confidence": 0.80,
+        "min_confidence": 0.85,
         "stop_loss_pct": 2.5,
         "take_profit_pct": 5.0,
+        "rsi_oversold": 25.0,
+        "rsi_overbought": 75.0,
+        "breakout_margin": 0.002,
+        "trend_margin": 0.005,
     },
     "normal": {
         "label": "⚖️ Normal (Dengeli)",
         "min_confidence": 0.65,
         "stop_loss_pct": 4.5,
         "take_profit_pct": 9.0,
+        "rsi_oversold": 30.0,
+        "rsi_overbought": 70.0,
+        "breakout_margin": 0.005,
+        "trend_margin": 0.0,
     },
     "aggressive": {
         "label": "🚀 Agresif (Yüksek Risk)",
-        "min_confidence": 0.52,
+        "min_confidence": 0.20,
         "stop_loss_pct": 8.0,
         "take_profit_pct": 16.0,
+        "rsi_oversold": 38.0,
+        "rsi_overbought": 62.0,
+        "breakout_margin": 0.012,
+        "trend_margin": -0.01,
     },
 }
 
@@ -214,7 +230,7 @@ def _resample_price_records(price_records, config: dict) -> pd.DataFrame:
     return df.tail(config["lookback"]).reset_index(drop=True)
 
 
-def _generate_scalp_signal(df: pd.DataFrame, config: dict) -> tuple:
+def _generate_scalp_signal(df: pd.DataFrame, config: dict, risk_config: dict) -> tuple:
     if len(df) < 5:
         return "BEKLE", 0.0
     rsi_period = min(config["rsi_period"], len(df) - 1)
@@ -234,14 +250,16 @@ def _generate_scalp_signal(df: pd.DataFrame, config: dict) -> tuple:
     ema_strength = _clip01(ema_gap_ratio / 0.03)
     confidence = 0.5 * rsi_strength + 0.5 * ema_strength
 
-    if last_rsi < 30 and ema_cross_up:
+    # RSI aşırı-satım/aşırı-alım eşikleri risk moduna göre gevşer/sıkılaşır:
+    # slow'da 25/75 (zor tetiklenir), aggressive'de 38/62 (kolay tetiklenir).
+    if last_rsi < risk_config["rsi_oversold"] and ema_cross_up:
         return "AL", confidence
-    if last_rsi > 70 and not ema_cross_up:
+    if last_rsi > risk_config["rsi_overbought"] and not ema_cross_up:
         return "SAT", confidence
     return "BEKLE", confidence
 
 
-def _generate_swing_signal(df: pd.DataFrame, config: dict) -> tuple:
+def _generate_swing_signal(df: pd.DataFrame, config: dict, risk_config: dict) -> tuple:
     if len(df) < 10:
         return "BEKLE", 0.0
     macd = MACD(close=df["price"])
@@ -258,8 +276,11 @@ def _generate_swing_signal(df: pd.DataFrame, config: dict) -> tuple:
     macd_cross_up = last_macd > last_macd_signal
     last_high = float(rolling_high.iloc[-1])
     last_low = float(rolling_low.iloc[-1])
-    breakout_up = last_price >= last_high * 0.995
-    breakdown = last_price <= last_low * 1.005
+    # Kırılım payı risk moduna göre gevşer/sıkılaşır: slow'da fiyatın zirveye/dibe
+    # çok yakın olması gerekir (%0.2), aggressive'de daha erken tetiklenir (%1.2).
+    margin = risk_config["breakout_margin"]
+    breakout_up = last_price >= last_high * (1 - margin)
+    breakdown = last_price <= last_low * (1 + margin)
 
     # Güven skoru: MACD histogramının fiyata oranı (kesişimin gücü) +
     # kırılımın destek/direnç seviyesini ne kadar aştığı
@@ -279,7 +300,7 @@ def _generate_swing_signal(df: pd.DataFrame, config: dict) -> tuple:
     return "BEKLE", confidence
 
 
-def _generate_trend_signal(df: pd.DataFrame, config: dict, piotroski_score) -> tuple:
+def _generate_trend_signal(df: pd.DataFrame, config: dict, risk_config: dict, piotroski_score) -> tuple:
     if len(df) < 10:
         return "BEKLE", 0.0
     sma_short = SMAIndicator(close=df["price"], window=min(config["sma_short"], len(df))).sma_indicator().fillna(df["price"])
@@ -287,8 +308,12 @@ def _generate_trend_signal(df: pd.DataFrame, config: dict, piotroski_score) -> t
 
     last_sma_short = float(sma_short.iloc[-1])
     last_sma_long = float(sma_long.iloc[-1])
-    trend_up = last_sma_short > last_sma_long
-    trend_down = last_sma_short < last_sma_long
+    # Trend eşiği risk moduna göre gevşer/sıkılaşır: slow'da SMA20'nin SMA50'yi en az
+    # %0.5 aşması gerekir (net trend), aggressive'de SMA50'nin biraz altındayken bile
+    # (henüz netleşmemiş ama başlayan bir trend) tetiklenebilir (trend_margin negatif).
+    margin = risk_config["trend_margin"]
+    trend_up = last_sma_short > last_sma_long * (1 + margin)
+    trend_down = last_sma_short < last_sma_long * (1 - margin)
 
     # Piotroski güvenlik barajı: skor biliniyorsa ve eşik altındaysa AL sinyali reddedilir
     piotroski_ok = piotroski_score is None or piotroski_score >= config["min_piotroski_score"]
@@ -321,11 +346,11 @@ def _generate_timeframe_signal(price_records, config: dict, risk_config: dict, p
     mode = config["mode"]
 
     if mode == "scalp":
-        action, confidence = _generate_scalp_signal(df, config)
+        action, confidence = _generate_scalp_signal(df, config, risk_config)
     elif mode == "swing":
-        action, confidence = _generate_swing_signal(df, config)
+        action, confidence = _generate_swing_signal(df, config, risk_config)
     else:
-        action, confidence = _generate_trend_signal(df, config, piotroski_score)
+        action, confidence = _generate_trend_signal(df, config, risk_config, piotroski_score)
 
     if action != "BEKLE" and confidence < risk_config["min_confidence"]:
         action = "BEKLE"
