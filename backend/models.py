@@ -371,6 +371,14 @@ class UserBot(Base):
     ends_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Getiri (%) hesabının referans sermayesi. Bakiye manuel değiştirildiğinde (para
+    # ekleme/çıkarma) aynı miktarda ayarlanır ki yatırılan/çekilen nakit "kâr" gibi
+    # görünmesin — yalnızca piyasa hareketinden gelen kâr/zarar % olarak yansır.
+    baseline_value = Column(Numeric(15, 2), default=100000.00)
+    # Bot pasif hale getirildiğinde (performans sıfırlama onayıyla) bu an'a güncellenir;
+    # istatistikler (işlem sayısı, win rate) yalnızca bu tarihten sonraki BotLog kayıtlarını sayar.
+    performance_reset_at = Column(DateTime, nullable=True)
+
     user = relationship("User", back_populates="personal_bot")
 
 

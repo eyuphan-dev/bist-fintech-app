@@ -1238,9 +1238,20 @@ def _build_bot_performance_series(db: Session, owner_user_id: int) -> Dict[str, 
     return {"bot": bot_points, "bist100": bist100_points}
 
 
-def _compute_actor_bot_stats(db: Session, owner_user_id: int, is_bot_portfolio: bool, virtual_balance: float) -> Dict[str, Any]:
-    """Bir bot aktörünün (paylaşımlı demo bot ya da kişisel bot) işlem sayısı, win rate ve getirisini hesaplar."""
-    logs = db.query(models.BotLog).filter_by(user_id=owner_user_id).all()
+def _compute_actor_bot_stats(
+    db: Session, owner_user_id: int, is_bot_portfolio: bool, virtual_balance: float,
+    baseline_value: float = 100000.0, since: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """
+    Bir bot aktörünün (paylaşımlı demo bot ya da kişisel bot) işlem sayısı, win rate ve
+    getirisini hesaplar. baseline_value, getiri (%) hesabının referans sermayesidir —
+    sabit 100.000 TL yerine kullanılır ki manuel bakiye eklemeleri getiriyi şişirmesin.
+    since verilirse yalnızca o tarihten sonraki işlemler sayılır (performans sıfırlama sonrası).
+    """
+    log_query = db.query(models.BotLog).filter_by(user_id=owner_user_id)
+    if since is not None:
+        log_query = log_query.filter(models.BotLog.created_at >= since)
+    logs = log_query.all()
     total_trades = len(logs)
 
     win_trades = 0
@@ -1262,7 +1273,7 @@ def _compute_actor_bot_stats(db: Session, owner_user_id: int, is_bot_portfolio: 
         total_stock_value += float(item.quantity) * price
 
     current_value = virtual_balance + total_stock_value
-    total_return_pct = ((current_value - 100000.0) / 100000.0) * 100
+    total_return_pct = ((current_value - baseline_value) / baseline_value) * 100 if baseline_value else 0.0
 
     return {
         "total_trades": total_trades,
@@ -1312,6 +1323,11 @@ def update_user_bot_balance(
         if not user_bot:
             raise HTTPException(status_code=404, detail="Kişisel AI Bot bulunamadı.")
 
+        # Bakiyedeki değişim kadar referans sermayeyi (baseline_value) de kaydır ki eklenen/
+        # çekilen nakit "Toplam Getiri" yüzdesine kâr/zarar gibi yansımasın — yalnızca
+        # piyasa hareketinden gelen kâr/zarar % olarak görünmeye devam eder.
+        delta = float(req.new_balance) - float(user_bot.virtual_balance)
+        user_bot.baseline_value = float(user_bot.baseline_value or 100000.0) + delta
         user_bot.virtual_balance = req.new_balance
         _log_user_action(db, current_user.id, "BOT_BALANCE_UPDATE", f"Kişisel bot bakiyesi {req.new_balance} TL olarak güncellendi.")
         db.commit()
@@ -1331,7 +1347,11 @@ def get_user_bot_status(
     if not user_bot:
         raise HTTPException(status_code=404, detail="Kişisel AI Bot bulunamadı.")
 
-    stats = _compute_actor_bot_stats(db, current_user.id, True, float(user_bot.virtual_balance))
+    stats = _compute_actor_bot_stats(
+        db, current_user.id, True, float(user_bot.virtual_balance),
+        baseline_value=float(user_bot.baseline_value or 100000.0),
+        since=user_bot.performance_reset_at,
+    )
     time_frame = user_bot.time_frame or "1D"
     config = get_strategy_config(time_frame)
     risk_config = get_risk_mode_config(user_bot.risk_profile)
@@ -1369,6 +1389,11 @@ def update_user_bot_settings(
     aktiflik durumunu günceller. Zaman dilimi değiştirildiğinde ya da bot yeniden aktif
     edildiğinde süre (started_at/ends_at) sıfırdan başlatılır. Risk modu değişikliği
     süreyi etkilemez — yalnızca bir sonraki işlem döngüsünden itibaren geçerli olur.
+
+    Bot AKTİF'ten PASİF'e alındığında (kullanıcı onayından sonra çağrılır — onay
+    frontend'de gösterilir): açık pozisyonlar piyasa fiyatından kapatılır ve performans
+    (bakiye, referans sermaye, işlem geçmişi istatistikleri) 100.000 TL'ye sıfırlanır;
+    böylece botu tekrar başlattığında temiz bir sayfadan başlar.
     """
     user_bot = db.query(models.UserBot).filter_by(user_id=current_user.id).first()
     if not user_bot:
@@ -1386,6 +1411,36 @@ def update_user_bot_settings(
         user_bot.risk_profile = req.risk_mode
 
     if req.is_active is not None:
+        if was_active and not req.is_active:
+            # Bot durduruluyor: açık pozisyonları piyasa fiyatından kapat, performansı sıfırla
+            open_positions = db.query(models.Portfolio).filter_by(
+                user_id=current_user.id, is_bot_portfolio=True
+            ).all()
+            liquidation_time = datetime.utcnow()
+            for pos in open_positions:
+                price = _get_latest_db_price(db, pos.stock_id)
+                if price:
+                    revenue = float(pos.quantity) * price
+                    user_bot.virtual_balance = float(user_bot.virtual_balance) + revenue
+                    db.add(models.BotLog(
+                        user_id=current_user.id, stock_id=pos.stock_id,
+                        action_type="SAT", price=price, quantity=pos.quantity,
+                        reason_text="Bot durduruldu; açık pozisyon piyasa fiyatından kapatıldı.",
+                        created_at=liquidation_time,
+                    ))
+                db.delete(pos)
+
+            user_bot.virtual_balance = 100000.00
+            user_bot.baseline_value = 100000.00
+            # performance_reset_at, kapanış (liquidation_time) loglarından SONRAKİ bir an olmalı
+            # ki bu kapanış işlemleri "sıfırlama sonrası" istatistiklere (işlem sayısı/win rate)
+            # dahil edilmesin — sıfırlama sonrası bot tamamen 0 işlemle başlamalıdır.
+            user_bot.performance_reset_at = liquidation_time + timedelta(microseconds=1)
+            _log_user_action(
+                db, current_user.id, "BOT_DEACTIVATE_RESET",
+                "Kişisel bot durduruldu: açık pozisyonlar kapatıldı, performans 100.000 TL'ye sıfırlandı."
+            )
+
         user_bot.is_active = req.is_active
         if req.is_active and not was_active:
             # Bot yeniden başlatılıyorsa süresini de sıfırla
@@ -1460,7 +1515,8 @@ def get_leaderboard(db: Session = Depends(get_db)):
         user_bot = db.query(models.UserBot).filter_by(user_id=user.id).first()
         if user_bot:
             bot_total_value = _portfolio_value(db, user.id, True, float(user_bot.virtual_balance))
-            bot_profit_loss_pct = ((bot_total_value - 100000.0) / 100000.0) * 100
+            bot_baseline = float(user_bot.baseline_value or 100000.0)
+            bot_profit_loss_pct = ((bot_total_value - bot_baseline) / bot_baseline) * 100 if bot_baseline else 0.0
             leaderboard.append(LeaderboardItem(
                 username=f"{user.username} — Kişisel Bot",
                 total_portfolio_value=round(bot_total_value, 2),
