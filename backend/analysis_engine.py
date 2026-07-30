@@ -12,6 +12,7 @@ yükseltilir ki çağıran taraf (main.py) sessizce "başarılı" dönmesin.
 """
 
 import math
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -20,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import models
+from yf_retry import call_with_retry
 
 
 class AnalysisFetchError(Exception):
@@ -53,9 +55,9 @@ def _safe_div(a: Optional[float], b: Optional[float]) -> Optional[float]:
 # ---------------------------------------------------------------------------
 def _calculate_piotroski_score(ticker: yf.Ticker) -> Optional[int]:
     try:
-        financials = ticker.financials
-        balance_sheet = ticker.balance_sheet
-        cashflow = ticker.cashflow
+        financials = call_with_retry(lambda: ticker.financials, attempts=2, label="financials")
+        balance_sheet = call_with_retry(lambda: ticker.balance_sheet, attempts=2, label="balance_sheet")
+        cashflow = call_with_retry(lambda: ticker.cashflow, attempts=2, label="cashflow")
 
         if financials.empty or balance_sheet.empty or len(financials.columns) < 2:
             return None
@@ -266,7 +268,7 @@ def _analyst_consensus(ticker: yf.Ticker, info: Dict[str, Any], current_price: O
 
     buy_count = hold_count = sell_count = None
     try:
-        rec = ticker.recommendations
+        rec = call_with_retry(lambda: ticker.recommendations, attempts=2, label="recommendations")
         if rec is not None and not rec.empty and "period" in rec.columns:
             row = rec[rec["period"] == "0m"]
             if not row.empty:
@@ -317,7 +319,7 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
     yahoo_symbol = f"{symbol.upper()}.IS"
     try:
         ticker = yf.Ticker(yahoo_symbol)
-        info = ticker.info or {}
+        info = call_with_retry(lambda: ticker.info or {}, label=f"{symbol}.info")
     except Exception as e:
         print(f"[AnalysisEngine] yfinance bilgi çekme hatası ({symbol}): {e}")
         raise AnalysisFetchError(
@@ -424,7 +426,10 @@ def calculate_pivot_levels(symbol: str) -> Dict[str, Any]:
     """
     yahoo_symbol = f"{symbol.upper()}.IS"
     try:
-        history = yf.Ticker(yahoo_symbol).history(period="1mo", interval="1d")
+        history = call_with_retry(
+            lambda: yf.Ticker(yahoo_symbol).history(period="1mo", interval="1d"),
+            attempts=2, label=f"{symbol}.pivot_history",
+        )
     except Exception as e:
         print(f"[AnalysisEngine] Pivot seviyeleri için geçmiş veri hatası ({symbol}): {e}")
         history = None
@@ -562,7 +567,9 @@ def refresh_earnings_calendar(db: Session) -> int:
     """
     stocks = db.query(models.Stock).filter_by(is_active=True).all()
     updated = 0
-    for stock in stocks:
+    for i, stock in enumerate(stocks):
+        if i > 0:
+            time.sleep(0.4)
         try:
             ticker = yf.Ticker(f"{stock.symbol}.IS")
             next_date = _next_earnings_date(ticker)
@@ -585,7 +592,9 @@ def calculate_sector_pe_averages(db: Session) -> Dict[int, float]:
     """Aktif hisseler için F/K oranlarını çekip basit ortalama (piyasa geneli) döner."""
     stocks = db.query(models.Stock).filter_by(is_active=True).all()
     pe_values: List[float] = []
-    for stock in stocks:
+    for i, stock in enumerate(stocks):
+        if i > 0:
+            time.sleep(0.4)
         try:
             info = yf.Ticker(f"{stock.symbol}.IS").info or {}
             pe = _safe_float(info.get("trailingPE"))
@@ -610,7 +619,10 @@ def calculate_dividend_goal(db: Session, symbol: str, target_monthly_income: flo
         return None
 
     try:
-        info = yf.Ticker(f"{symbol.upper()}.IS").info or {}
+        info = call_with_retry(
+            lambda: yf.Ticker(f"{symbol.upper()}.IS").info or {},
+            attempts=2, label=f"{symbol}.dividend_info",
+        )
     except Exception as e:
         print(f"[AnalysisEngine] Temettü verisi çekme hatası ({symbol}): {e}")
         info = {}
@@ -665,7 +677,10 @@ def calculate_dca_backtest(db: Session, symbol: str, monthly_amount: float, mont
         return None
 
     try:
-        history = yf.Ticker(f"{symbol.upper()}.IS").history(period=f"{months + 1}mo", interval="1mo")
+        history = call_with_retry(
+            lambda: yf.Ticker(f"{symbol.upper()}.IS").history(period=f"{months + 1}mo", interval="1mo"),
+            attempts=2, label=f"{symbol}.dca_history",
+        )
     except Exception as e:
         print(f"[AnalysisEngine] DCA geçmiş veri hatası ({symbol}): {e}")
         history = None

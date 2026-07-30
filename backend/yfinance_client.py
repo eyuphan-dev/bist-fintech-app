@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 from typing import Dict, List, Optional, Tuple
 
+from yf_retry import call_with_retry
+
 def fetch_current_price(symbol: str) -> Optional[Tuple[float, int]]:
     """
     Fetches the current price and volume for a BIST stock from Yahoo Finance.
@@ -12,20 +14,23 @@ def fetch_current_price(symbol: str) -> Optional[Tuple[float, int]]:
     try:
         ticker = yf.Ticker(yahoo_symbol)
         # Fetch the last 1 day at 5-minute intervals to get the latest close
-        history = ticker.history(period="1d", interval="5m")
+        history = call_with_retry(
+            lambda: ticker.history(period="1d", interval="5m"),
+            attempts=2, label=f"{symbol}.price_history",
+        )
         if not history.empty:
             last_row = history.iloc[-1]
             price = round(float(last_row["Close"]), 2)
             volume = int(last_row["Volume"])
             return price, volume
-        
+
         # Fallback to info if history is empty (e.g. pre-market or post-market)
-        info = ticker.info
+        info = call_with_retry(lambda: ticker.info, attempts=2, label=f"{symbol}.price_info")
         price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
         volume = info.get("regularMarketVolume") or info.get("volume") or 0
         if price:
             return round(float(price), 2), int(volume)
-            
+
     except Exception as e:
         print(f"Error fetching current price for {symbol}: {str(e)}")
     return None
@@ -39,7 +44,7 @@ def fetch_stock_news(symbol: str, limit: int = 8) -> List[Dict]:
     items: List[Dict] = []
     try:
         ticker = yf.Ticker(yahoo_symbol)
-        raw_news = ticker.news or []
+        raw_news = call_with_retry(lambda: ticker.news, attempts=2, label=f"{symbol}.news") or []
         for entry in raw_news[:limit]:
             # yfinance sürümüne göre haber öğesi ya doğrudan ya da "content" altında gelir.
             content = entry.get("content", entry) if isinstance(entry, dict) else {}
@@ -96,7 +101,10 @@ def fetch_historical_prices(symbol: str, period: str = "1mo", interval: str = "1
     prices = []
     try:
         ticker = yf.Ticker(yahoo_symbol)
-        history = ticker.history(period=period, interval=interval)
+        history = call_with_retry(
+            lambda: ticker.history(period=period, interval=interval),
+            attempts=2, label=f"{symbol}.hist_prices",
+        )
         for index, row in history.iterrows():
             # index is Timestamp
             recorded_at = index.to_pydatetime()
