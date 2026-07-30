@@ -7,6 +7,7 @@ APScheduler arka plan gorev yoneticisi.
 import sys
 import io
 import threading
+import time
 # Windows konsolunda Turkce karakter sorununun onlenmesi
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -104,7 +105,12 @@ def update_bist_prices_job():
         now_utc = datetime.utcnow()
 
         updated = []
-        for stock in stocks:
+        for i, stock in enumerate(stocks):
+            # Hisseler arası kısa bekleme: Yahoo'ya art arda patlama (burst) istek
+            # göndermeyi önler — sunucu tek egress IP kullandığından, hızlı ardışık
+            # istekler Yahoo tarafında geçici "Too Many Requests" bloğuna yol açabiliyor.
+            if i > 0:
+                time.sleep(0.4)
             res = fetch_current_price(stock.symbol)
             if res:
                 price, volume = res
@@ -207,7 +213,9 @@ def refresh_stock_news_job():
         print("[Scheduler] Hisse haberleri (Yahoo Finance) günlük olarak tazeleniyor...")
         stocks = db.query(models.Stock).filter_by(is_active=True).all()
         total_saved = 0
-        for stock in stocks:
+        for i, stock in enumerate(stocks):
+            if i > 0:
+                time.sleep(0.4)
             try:
                 items = fetch_stock_news(stock.symbol, limit=8)
             except Exception as e:
