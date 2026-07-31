@@ -316,17 +316,29 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
         print(f"[AnalysisEngine] Hisse bulunamadı: {symbol}")
         return None
 
+    existing_analysis = db.query(models.CompanyAnalysis).filter_by(stock_id=stock.id).first()
+
     yahoo_symbol = f"{symbol.upper()}.IS"
     try:
         ticker = yf.Ticker(yahoo_symbol)
         info = call_with_retry(lambda: ticker.info or {}, label=f"{symbol}.info")
     except Exception as e:
         print(f"[AnalysisEngine] yfinance bilgi çekme hatası ({symbol}): {e}")
+        # Yahoo Finance sunucu IP'sini geçici/kalıcı olarak engellemiş olabilir
+        # (retry ile de düzelmeyen bir durum). Elde daha önce hesaplanmış bir
+        # analiz varsa kullanıcıya hata yerine son bilinen veriyi göster —
+        # boş ekran/kırmızı hata banner'ı yerine "eski ama var olan" veri.
+        if existing_analysis:
+            print(f"[AnalysisEngine] {symbol}: canlı veri alınamadı, son bilinen analiz döndürülüyor (updated_at={existing_analysis.updated_at}).")
+            return existing_analysis
         raise AnalysisFetchError(
             f"{symbol.upper()} için yfinance'tan veri alınamadı. Ağ bağlantısını veya sembolü kontrol edin. Detay: {e}"
         ) from e
 
     if not info or (info.get("regularMarketPrice") is None and info.get("currentPrice") is None and info.get("previousClose") is None):
+        if existing_analysis:
+            print(f"[AnalysisEngine] {symbol}: yfinance boş yanıt döndürdü, son bilinen analiz döndürülüyor (updated_at={existing_analysis.updated_at}).")
+            return existing_analysis
         raise AnalysisFetchError(
             f"{symbol.upper()} için yfinance geçerli bir veri döndürmedi (boş yanıt). Sembol BİST'te işlem görmüyor olabilir ya da veri sağlayıcı geçici olarak erişilemez durumda."
         )
