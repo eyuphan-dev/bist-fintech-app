@@ -101,6 +101,8 @@ def startup_event():
     # bozmaz, seed adımları zaten var olan kayıtları atlar — bu yüzden her başlangıçta
     # güvenle çağrılabilir. Scheduler'ın cache doldurma adımı 'stocks' tablosunu
     # sorguladığı için bu çağrı start_scheduler()'dan ÖNCE tamamlanmış olmalı.
+    from yf_retry import configure_yfinance
+    configure_yfinance()
     init_database()
     start_scheduler()
 

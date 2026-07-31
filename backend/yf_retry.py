@@ -12,13 +12,36 @@ gittiği için 429 alıyor. Çözüm: üstel bekleme ile birkaç kez yeniden den
 Yahoo'nun rate limit penceresi genelde saniyeler mertebesinde kısa sürer.
 """
 
+import os
 import random
 import time
 from typing import Callable, TypeVar
 
+import yfinance as yf
+
 T = TypeVar("T")
 
 RATE_LIMIT_MARKERS = ("Too Many Requests", "Rate limited", "429")
+
+
+def configure_yfinance() -> None:
+    """
+    Uygulama başlangıcında bir kez çağrılır.
+
+    Render gibi paylaşımlı bulut sağlayıcıların egress IP'leri, çok sayıda
+    yfinance kullanıcısı tarafından paylaşıldığından Yahoo Finance tarafında
+    kalıcı/uzun süreli olarak engellenebiliyor (basit rate-limit'ten farklı:
+    yeniden denemek bile çözmüyor, "boş yanıt" ya da 429 dönmeye devam ediyor).
+    Bu durumda tek gerçek çözüm istekleri farklı bir IP üzerinden (proxy)
+    yönlendirmektir. YF_PROXY_URL ortam değişkeni tanımlıysa (örn.
+    "http://user:pass@host:port") tüm yfinance istekleri bu proxy üzerinden
+    gider; tanımlı değilse davranış öncekiyle aynı kalır.
+    """
+    proxy_url = os.environ.get("YF_PROXY_URL")
+    if proxy_url:
+        yf.config.network.proxy = proxy_url
+        print("[yf_retry] yfinance istekleri YF_PROXY_URL üzerinden yönlendiriliyor.")
+    yf.config.network.retries = 2
 
 
 def is_rate_limit_error(exc: Exception) -> bool:
