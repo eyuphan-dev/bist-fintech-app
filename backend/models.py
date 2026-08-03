@@ -12,6 +12,12 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     virtual_balance = Column(Numeric(15, 2), default=100000.00)
+    # Getiri (%) hesabının referans sermayesi. Kullanıcı bakiyesini manuel
+    # değiştirdiğinde (/api/user/balance) bu alan da aynı miktarda kaydırılır
+    # (bkz. UserBot.baseline_value ile aynı mantık) — aksi halde kullanıcı
+    # bakiyesini örn. 1.000.000 TL'ye ayarlayıp hiç işlem yapmadan liderlik
+    # tablosunda sahte %900 kâr gösterebilirdi.
+    baseline_value = Column(Numeric(15, 2), default=100000.00)
     is_bot = Column(Boolean, default=False)
     # KVKK & Sorumluluk reddi onayı (kayıt sırasında zorunlu)
     terms_accepted = Column(Boolean, default=False, nullable=False)

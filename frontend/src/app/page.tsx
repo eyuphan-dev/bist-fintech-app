@@ -32,6 +32,8 @@ const formatDateTime = (iso?: string | null) => {
 interface Portfolio {
   balance: number;
   total_portfolio_value: number;
+  baseline_value: number;
+  profit_loss_pct: number;
   items: PortfolioItem[];
 }
 
@@ -222,9 +224,22 @@ export default function Home() {
           token={token}
           onClose={() => setShowBalanceModal(false)}
           onSuccess={(newBalance) =>
-            setPortfolio((p) =>
-              p ? { ...p, balance: newBalance, total_portfolio_value: newBalance + (p.total_portfolio_value - p.balance) } : p
-            )
+            setPortfolio((p) => {
+              if (!p) return p;
+              // Backend'deki mantıkla aynı: bakiyedeki değişim kadar referans
+              // sermayeyi (baseline_value) de kaydır ki K/Z yüzdesi bozulmasın.
+              const delta = newBalance - p.balance;
+              const newTotal = p.total_portfolio_value + delta;
+              const newBaseline = p.baseline_value + delta;
+              const newProfitPct = newBaseline ? ((newTotal - newBaseline) / newBaseline) * 100 : 0;
+              return {
+                ...p,
+                balance: newBalance,
+                total_portfolio_value: newTotal,
+                baseline_value: newBaseline,
+                profit_loss_pct: newProfitPct,
+              };
+            })
           }
         />
       )}
@@ -255,10 +270,10 @@ export default function Home() {
                       {portfolio.total_portfolio_value.toLocaleString("tr-TR")} TL
                     </h3>
                     <p className={`text-xs mt-1 font-semibold flex items-center ${
-                      portfolio.total_portfolio_value >= 100000 ? "text-[#10B981]" : "text-[#F43F5E]"
+                      portfolio.profit_loss_pct >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"
                     }`}>
-                      {portfolio.total_portfolio_value >= 100000 ? <TrendingUp className="w-3.5 h-3.5 mr-1" /> : <TrendingDown className="w-3.5 h-3.5 mr-1" />}
-                      %{(((portfolio.total_portfolio_value - 100000) / 100000) * 100).toFixed(2)} Toplam K/Z
+                      {portfolio.profit_loss_pct >= 0 ? <TrendingUp className="w-3.5 h-3.5 mr-1" /> : <TrendingDown className="w-3.5 h-3.5 mr-1" />}
+                      %{portfolio.profit_loss_pct.toFixed(2)} Toplam K/Z
                     </p>
                   </div>
                   <div className="w-10 h-10 bg-[#10B981]/10 rounded-xl flex items-center justify-center">

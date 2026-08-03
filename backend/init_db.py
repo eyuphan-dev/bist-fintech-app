@@ -69,6 +69,9 @@ INITIAL_STOCKS = [
 # Var olan tablolara sonradan eklenen kolonlar (SQLite ALTER TABLE ADD COLUMN destekler;
 # create_all() zaten var olan tabloları güncellemediği için elle taşınır)
 MIGRATIONS = {
+    "users": {
+        "baseline_value": "NUMERIC(15, 2) DEFAULT 100000.00",
+    },
     "stocks": {
         "is_katilim_compliant": "INTEGER DEFAULT 0",
         "purification_rate": "NUMERIC(5, 2) DEFAULT 0.00",

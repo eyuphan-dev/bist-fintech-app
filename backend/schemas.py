@@ -186,6 +186,8 @@ class PortfolioItemResponse(BaseModel):
 class PortfolioResponse(BaseModel):
     balance: float
     total_portfolio_value: float
+    baseline_value: float
+    profit_loss_pct: float
     items: List[PortfolioItemResponse]
 
 class BotLogResponse(BaseModel):
