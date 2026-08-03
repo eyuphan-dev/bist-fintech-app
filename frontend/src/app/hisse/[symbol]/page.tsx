@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
@@ -24,12 +24,12 @@ type SectionKey = "genel" | "pro" | "hesaplayici" | "topluluk";
 
 type RangeKey = "1D" | "1W" | "1M" | "1Y" | "5Y";
 
-const RANGES: { key: RangeKey; label: string }[] = [
-  { key: "1D", label: "1G" },
-  { key: "1W", label: "1H" },
-  { key: "1M", label: "1A" },
-  { key: "1Y", label: "1Y" },
-  { key: "5Y", label: "5Y" },
+const RANGES: { key: RangeKey; label: string; periodLabel: string }[] = [
+  { key: "1D", label: "1G", periodLabel: "Bugün" },
+  { key: "1W", label: "1H", periodLabel: "Son 1 Hafta" },
+  { key: "1M", label: "1A", periodLabel: "Son 1 Ay" },
+  { key: "1Y", label: "1Y", periodLabel: "Son 1 Yıl" },
+  { key: "5Y", label: "5Y", periodLabel: "Son 5 Yıl" },
 ];
 
 const SECTIONS: { key: SectionKey; label: string; icon: any }[] = [
@@ -146,6 +146,15 @@ export default function StockDetailPage() {
     fetchHistory();
     return () => { cancelled = true; };
   }, [symbol, chartRange]);
+
+  // Seçili aralığın kendi yüzdelik değişimi (dönem başı -> dönem sonu fiyat)
+  const rangeChangePct = useMemo(() => {
+    if (chartData.length < 2) return null;
+    const first = chartData[0].price;
+    const last = chartData[chartData.length - 1].price;
+    if (!first) return null;
+    return ((last - first) / first) * 100;
+  }, [chartData]);
 
   // Yorumlar
   const fetchComments = async () => {
@@ -300,7 +309,18 @@ export default function StockDetailPage() {
           {section === "genel" && (
             <>
               <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
-                <div className="flex items-center justify-end gap-1 mb-2">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="text-xs">
+                    <span className="text-gray-500">{RANGES.find((r) => r.key === chartRange)?.periodLabel}: </span>
+                    {rangeChangePct !== null ? (
+                      <span className={`font-bold tabular-nums ${rangeChangePct >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"}`}>
+                        {rangeChangePct >= 0 ? "+" : ""}{rangeChangePct.toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span className="text-gray-600">—</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
                   {RANGES.map((r) => (
                     <button
                       key={r.key}
@@ -314,6 +334,7 @@ export default function StockDetailPage() {
                       {r.label}
                     </button>
                   ))}
+                  </div>
                 </div>
                 {chartLoading && chartData.length === 0 ? (
                   <div className="flex items-center justify-center h-[320px] text-xs text-gray-500">
