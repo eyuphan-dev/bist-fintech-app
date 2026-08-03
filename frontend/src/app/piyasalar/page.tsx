@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, RefreshCw } from "lucide-react";
+import { Search, RefreshCw, Star } from "lucide-react";
 import KatilimBadge from "../components/KatilimBadge";
 import { useAuth, API_BASE } from "../context/AuthContext";
 
@@ -18,11 +18,12 @@ interface Stock {
 }
 
 export default function PiyasalarPage() {
-  const { refreshTrigger } = useAuth();
+  const { token, refreshTrigger } = useAuth();
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [katilimOnly, setKatilimOnly] = useState(false);
+  const [watchedSymbols, setWatchedSymbols] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchStocks = async () => {
@@ -37,6 +38,48 @@ export default function PiyasalarPage() {
     };
     fetchStocks();
   }, [refreshTrigger]);
+
+  useEffect(() => {
+    if (!token) {
+      setWatchedSymbols(new Set());
+      return;
+    }
+    const fetchWatchlist = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/watchlist`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data: { symbol: string }[] = await res.json();
+          setWatchedSymbols(new Set(data.map((d) => d.symbol)));
+        }
+      } catch (err) {
+        console.error("İzleme listesi alınamadı:", err);
+      }
+    };
+    fetchWatchlist();
+  }, [token, refreshTrigger]);
+
+  const toggleWatch = async (e: React.MouseEvent, symbol: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!token) return;
+    const isWatched = watchedSymbols.has(symbol);
+    try {
+      const res = await fetch(`${API_BASE}/watchlist/${symbol}`, {
+        method: isWatched ? "DELETE" : "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setWatchedSymbols((prev) => {
+          const next = new Set(prev);
+          if (isWatched) next.delete(symbol);
+          else next.add(symbol);
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error("İzleme listesi güncellenemedi:", err);
+    }
+  };
 
   const filteredStocks = stocks.filter((s) => {
     const matchesQuery =
@@ -87,9 +130,20 @@ export default function PiyasalarPage() {
             <Link
               key={stock.symbol}
               href={`/hisse/${stock.symbol}`}
-              className="bg-[#151921] p-4 rounded-2xl border border-[#242B35] hover:border-[#10B981]/40 transition flex flex-col gap-3"
+              className="bg-[#151921] p-4 rounded-2xl border border-[#242B35] hover:border-[#10B981]/40 transition flex flex-col gap-3 relative"
             >
-              <div className="flex items-start justify-between">
+              {token && (
+                <button
+                  onClick={(e) => toggleWatch(e, stock.symbol)}
+                  title={watchedSymbols.has(stock.symbol) ? "Favorilerden çıkar" : "Favorilere ekle"}
+                  className={`absolute top-3 right-3 transition ${
+                    watchedSymbols.has(stock.symbol) ? "text-[#F59E0B]" : "text-gray-600 hover:text-[#F59E0B]"
+                  }`}
+                >
+                  <Star className="w-4 h-4" fill={watchedSymbols.has(stock.symbol) ? "currentColor" : "none"} />
+                </button>
+              )}
+              <div className="flex items-start justify-between pr-6">
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-white tracking-wide">{stock.symbol}</span>

@@ -3,13 +3,15 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays } from "lucide-react";
+import { LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays, Star, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
 
 const NAV_LINKS = [
   { href: "/", label: "Portföyüm", icon: Wallet },
   { href: "/piyasalar", label: "Piyasalar", icon: TrendingUp },
+  { href: "/favoriler", label: "Favorilerim", icon: Star },
+  { href: "/tarayici", label: "Hisse Tarayıcı", icon: SlidersHorizontal },
   { href: "/heatmap", label: "Isı Haritası", icon: Flame },
   { href: "/takvim", label: "Bilanço & KAP Takvimi", icon: CalendarDays },
   { href: "/bot", label: "Yapay Zeka Trader", icon: Bot },

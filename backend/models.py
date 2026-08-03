@@ -469,6 +469,20 @@ class StockNotificationPreference(Base):
     stock = relationship("Stock")
 
 
+class Watchlist(Base):
+    """Kullanıcının 'Favorilerim/İzleme Listesi'ne eklediği hisseler."""
+    __tablename__ = "watchlist"
+    __table_args__ = (UniqueConstraint("user_id", "stock_id", name="uq_watchlist_user_stock"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    stock = relationship("Stock")
+
+
 class Notification(Base):
     """Kullanıcıya özel, sistem içi bildirim geçmişi (fiyat/KAP/AI sinyal alarmlarının çıktısı)."""
     __tablename__ = "notifications"
