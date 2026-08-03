@@ -22,6 +22,7 @@ from typing import Iterable, Optional
 from sqlalchemy.orm import Session
 
 import models
+from constants import EXTREME_CHANGE_GUARD_PCT
 
 
 def _create_notification(db: Session, user_id: int, stock_id: Optional[int], notif_type: str, title: str, message: str) -> None:
@@ -35,19 +36,40 @@ def _create_notification(db: Session, user_id: int, stock_id: Optional[int], not
 
 
 def _get_latest_price_and_change(db: Session, stock_id: int):
-    history = (
+    """
+    Güncel fiyat ve GÜNLÜK % değişim (önceki iş gününün kapanışına göre) döner.
+
+    Önceki sürüm son iki StockPrice kaydı (5 dakikalık tik) arasındaki farkı
+    "günlük değişim" olarak kullanıyordu — kullanıcı "%5 günlük değişimde uyar"
+    dese bile gün boyunca kademeli büyüyen bir hareket hiç yakalanmıyor, tek bir
+    5 dakikalık sert spike ise günlük eşiğin çok altında kalsa bile yanlışlıkla
+    tetikleyebiliyordu (bkz. main.py:get_stocks'taki aynı düzeltme).
+    """
+    latest = (
         db.query(models.StockPrice)
         .filter_by(stock_id=stock_id)
         .order_by(models.StockPrice.recorded_at.desc())
-        .limit(2)
-        .all()
+        .first()
     )
-    if not history:
+    if not latest:
         return None, None
-    current = float(history[0].price)
-    if len(history) < 2 or float(history[1].price) <= 0:
+    current = float(latest.price)
+
+    prev_close_row = (
+        db.query(models.StockPriceDaily)
+        .filter(models.StockPriceDaily.stock_id == stock_id, models.StockPriceDaily.trade_date < date.today())
+        .order_by(models.StockPriceDaily.trade_date.desc())
+        .first()
+    )
+    if not prev_close_row or float(prev_close_row.close) <= 0:
         return current, None
-    change_pct = ((current - float(history[1].price)) / float(history[1].price)) * 100
+
+    prev_close = float(prev_close_row.close)
+    change_pct = ((current - prev_close) / prev_close) * 100
+    # Kurumsal işlem (bölünme/bedelsiz) sonrası yanlış alarm tetiklememek için
+    # aynı koruma (bkz. main.py:EXTREME_CHANGE_GUARD_PCT).
+    if abs(change_pct) > EXTREME_CHANGE_GUARD_PCT:
+        return current, None
     return current, change_pct
 
 

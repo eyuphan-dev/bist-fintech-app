@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
@@ -47,6 +48,7 @@ from insider_client import fetch_insider_trades, get_recent_insider_buys
 from sentiment import score_sentiment
 from yfinance_client import fetch_stock_news
 from cache import get_cached_news, set_cached_news
+from constants import EXTREME_CHANGE_GUARD_PCT
 
 def _rate_limit_key(request: Request) -> str:
     """
@@ -226,11 +228,6 @@ def _get_latest_db_price(db: Session, stock_id: int) -> float:
         .first()
     )
     return float(latest_record.price) if latest_record else 0.0
-
-
-# Sermaye artırımı/bölünme gibi kurumsal işlemler sonrası yanlış yüzde göstermemek
-# için eşik (bkz. get_stocks/get_stock_detail).
-EXTREME_CHANGE_GUARD_PCT = 50.0
 
 
 # --- STOCKS ---
@@ -906,10 +903,17 @@ def get_portfolio(current_user: models.User = Depends(get_current_user), db: Ses
         ))
         
     total_portfolio_value = float(current_user.virtual_balance) + total_stock_value
-    
+
+    # Toplam K/Z, sabit 100.000 TL yerine kullanıcının referans sermayesine
+    # (baseline_value) göre hesaplanır — bkz. models.py:User.baseline_value.
+    baseline = float(current_user.baseline_value or 100000.0)
+    overall_profit_loss_pct = ((total_portfolio_value - baseline) / baseline) * 100 if baseline else 0.0
+
     return PortfolioResponse(
         balance=round(float(current_user.virtual_balance), 2),
         total_portfolio_value=round(total_portfolio_value, 2),
+        baseline_value=round(baseline, 2),
+        profit_loss_pct=round(overall_profit_loss_pct, 2),
         items=items
     )
 
@@ -990,7 +994,11 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
             current_user.virtual_balance = float(current_user.virtual_balance) + revenue
 
             remaining_qty = float(portfolio_entry.quantity) - trade.quantity
-            if remaining_qty == 0:
+            # Decimal->float dönüşümü + float çıkarma "tam sıfır" yerine 1e-13 gibi bir
+            # kalıntı üretebilir; == 0 karşılaştırması bu durumda pozisyonu silmeyip
+            # "hayalet" (neredeyse sıfır ama sıfır değil) bir kayıt bırakır. orders.py'deki
+            # eşdeğer kod (_execute_single_order) zaten <= 0 kullanıyor, burada da aynısı.
+            if remaining_qty <= 0:
                 db.delete(portfolio_entry)
             else:
                 portfolio_entry.quantity = remaining_qty
@@ -1399,7 +1407,12 @@ def _compute_actor_bot_stats(
         if log.action_type == "SAT":
             sell_trades += 1
             reason = log.reason_text or ""
-            if "Kâr/Zarar: %-" not in reason and "Kâr/Zarar: %0" not in reason:
+            # Alt dize kontrolü ("%0" içeriyor mu) yanlış pozitifler üretiyordu: "%0.03" veya
+            # "%0.99" gibi hafif KÂRLI işlemler de "%0" alt dizesini içerdiği için win_trades'e
+            # hiç eklenmiyordu — win rate olduğundan düşük görünüyordu. Gerçek sayısal değeri
+            # regex ile ayrıştırıp > 0 kontrolü yapmak doğru olan.
+            match = re.search(r"Kâr/Zarar:\s*%(-?\d+\.?\d*)", reason)
+            if match and float(match.group(1)) > 0:
                 win_trades += 1
 
     win_rate = (win_trades / sell_trades * 100) if sell_trades > 0 else 0.0
@@ -1437,6 +1450,11 @@ def update_user_balance(
     begin_write_transaction(db)
     try:
         user_row = db.query(models.User).filter_by(id=current_user.id).first()
+        # Bakiyedeki değişim kadar referans sermayeyi (baseline_value) de kaydır ki
+        # eklenen/çekilen nakit "Toplam Getiri" yüzdesine kâr/zarar gibi yansımasın
+        # (bkz. update_user_bot_balance'taki aynı mantık).
+        delta = float(req.new_balance) - float(user_row.virtual_balance)
+        user_row.baseline_value = float(user_row.baseline_value or 100000.0) + delta
         user_row.virtual_balance = req.new_balance
         _log_user_action(db, user_row.id, "BALANCE_UPDATE", f"Kullanıcı bakiyesi {req.new_balance} TL olarak güncellendi.")
         db.commit()
@@ -1643,7 +1661,8 @@ def get_leaderboard(db: Session = Depends(get_db)):
     leaderboard = []
     for user in users:
         total_value = _portfolio_value(db, user.id, False, float(user.virtual_balance))
-        profit_loss_pct = ((total_value - 100000.0) / 100000.0) * 100
+        baseline = float(user.baseline_value or 100000.0)
+        profit_loss_pct = ((total_value - baseline) / baseline) * 100 if baseline else 0.0
         leaderboard.append(LeaderboardItem(
             username=user.username,
             total_portfolio_value=round(total_value, 2),

@@ -15,7 +15,7 @@ interface Stock {
   is_active: boolean;
   sector: string | null;
   current_price: number;
-  price_change_pct: number;
+  price_change_pct: number | null;
   is_katilim_compliant: boolean;
   purification_rate: number;
 }
@@ -72,9 +72,12 @@ export default function HeatmapPage() {
   }, [refreshTrigger]);
 
   // Sembol -> yüzde değişim eşleşmesi; fill.colors callback'i içinde y (kutu boyutu,
-  // her zaman pozitif) yerine gerçek işaretli değere buradan erişiyoruz.
+  // her zaman pozitif) yerine gerçek işaretli değere buradan erişiyoruz. Backend, bir
+  // kurumsal işlem (bölünme/bedelsiz) sonrası yanlış sıçrama göstermemek için bilinçli
+  // olarak null döndürebiliyor (bkz. EXTREME_CHANGE_GUARD_PCT) — null'ı 0 sanıp "hiç
+  // değişmemiş/yeşil" göstermek yanlış olur, bu yüzden Map açıkça null'ı da taşır.
   const pctBySymbol = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, number | null>();
     stocks.forEach((s) => map.set(s.symbol, s.price_change_pct));
     return map;
   }, [stocks]);
@@ -82,9 +85,9 @@ export default function HeatmapPage() {
   // Renk skalası günün gerçek hareket aralığına göre kalibre edilir: sabit ±3% gibi bir
   // eşik, hareketlerin çoğu ±1%'in altında kaldığında neredeyse tüm kutuları aynı gri
   // tonda gösterip skalayı anlamsızlaştırıyordu. En büyük hareketi doygunluk noktası yapmak
-  // renk farkını her zaman görünür kılar.
+  // renk farkını her zaman görünür kılar. null (karşılaştırılamayan) hisseler hariç tutulur.
   const heatClampPct = useMemo(() => {
-    const maxAbs = stocks.reduce((m, s) => Math.max(m, Math.abs(s.price_change_pct)), 0);
+    const maxAbs = stocks.reduce((m, s) => (s.price_change_pct === null ? m : Math.max(m, Math.abs(s.price_change_pct))), 0);
     return Math.max(MIN_HEAT_CLAMP_PCT, maxAbs);
   }, [stocks]);
 
@@ -104,8 +107,9 @@ export default function HeatmapPage() {
         name: sector,
         data: items.map((s) => ({
           x: s.symbol,
-          // Kutu boyutu: hareketin büyüklüğü (mutlak değişim), asla sıfır olmasın diye taban değer eklendi
-          y: Math.round((0.3 + Math.abs(s.price_change_pct)) * 100) / 100,
+          // Kutu boyutu: hareketin büyüklüğü (mutlak değişim), asla sıfır olmasın diye taban değer eklendi.
+          // Karşılaştırılamayan (null) hisseler en küçük/nötr kutu olarak gösterilir.
+          y: Math.round((0.3 + Math.abs(s.price_change_pct ?? 0)) * 100) / 100,
         })),
       })),
     [sectorGroups]
@@ -124,7 +128,8 @@ export default function HeatmapPage() {
         enabled: true,
         style: { fontSize: "11px", fontWeight: 700 },
         formatter: (text: string) => {
-          const pct = pctBySymbol.get(text) ?? 0;
+          const pct = pctBySymbol.get(text);
+          if (pct === null || pct === undefined) return [text, "—"];
           return [text, `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`];
         },
       },
@@ -145,7 +150,9 @@ export default function HeatmapPage() {
           ({ seriesIndex, dataPointIndex }: { seriesIndex: number; dataPointIndex: number }) => {
             const point = series[seriesIndex]?.data[dataPointIndex];
             if (!point) return NEUTRAL_HEX;
-            return getHeatColor(pctBySymbol.get(point.x) ?? 0, heatClampPct);
+            const pct = pctBySymbol.get(point.x);
+            if (pct === null || pct === undefined) return NEUTRAL_HEX;
+            return getHeatColor(pct, heatClampPct);
           },
         ] as unknown as string[],
       },
@@ -155,11 +162,15 @@ export default function HeatmapPage() {
         custom: ({ seriesIndex, dataPointIndex }: { seriesIndex: number; dataPointIndex: number }) => {
           const point = series[seriesIndex]?.data[dataPointIndex];
           if (!point) return "";
-          const pct = pctBySymbol.get(point.x) ?? 0;
-          const color = getHeatColor(pct, heatClampPct);
+          const pct = pctBySymbol.get(point.x);
+          const isUnavailable = pct === null || pct === undefined;
+          const color = isUnavailable ? NEUTRAL_HEX : getHeatColor(pct, heatClampPct);
+          const label = isUnavailable
+            ? "Kurumsal işlem nedeniyle karşılaştırılamıyor"
+            : `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
           return `<div style="background:#151921;border:1px solid #242B35;border-radius:8px;padding:8px 10px;font-size:12px;color:#fff">
             <div style="font-weight:700">${point.x}</div>
-            <div style="color:${color};font-weight:700">${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%</div>
+            <div style="color:${color};font-weight:700">${label}</div>
           </div>`;
         },
       },
@@ -255,14 +266,23 @@ export default function HeatmapPage() {
                   </td>
                   <td className="px-3 py-2 text-gray-400 truncate max-w-[220px]">{s.company_name}</td>
                   <td className="px-3 py-2 text-right text-white tabular-nums">{s.current_price} TL</td>
-                  <td
-                    className={`px-3 py-2 text-right font-semibold tabular-nums ${
-                      s.price_change_pct >= 0 ? "text-[#0D9488]" : "text-[#F43F5E]"
-                    }`}
-                  >
-                    {s.price_change_pct >= 0 ? "+" : ""}
-                    {s.price_change_pct}%
-                  </td>
+                  {s.price_change_pct !== null ? (
+                    <td
+                      className={`px-3 py-2 text-right font-semibold tabular-nums ${
+                        s.price_change_pct >= 0 ? "text-[#0D9488]" : "text-[#F43F5E]"
+                      }`}
+                    >
+                      {s.price_change_pct >= 0 ? "+" : ""}
+                      {s.price_change_pct}%
+                    </td>
+                  ) : (
+                    <td
+                      title="Kurumsal işlem (bölünme/bedelsiz sermaye artışı) nedeniyle günlük değişim şu an güvenilir hesaplanamıyor."
+                      className="px-3 py-2 text-right font-semibold tabular-nums text-gray-500"
+                    >
+                      —
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

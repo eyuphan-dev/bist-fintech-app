@@ -42,9 +42,9 @@ const TIME_FRAME_OPTIONS: { value: "1D" | "1W" | "1M"; label: string; hint: stri
 ];
 
 const RISK_MODE_OPTIONS: { value: "slow" | "normal" | "aggressive"; emoji: string; label: string; hint: string }[] = [
-  { value: "slow", emoji: "🐢", label: "Yavaş", hint: "Min. Güven %80 · SL %2.5 / TP %5" },
+  { value: "slow", emoji: "🐢", label: "Yavaş", hint: "Min. Güven %85 · SL %2.5 / TP %5" },
   { value: "normal", emoji: "⚖️", label: "Normal", hint: "Min. Güven %65 · SL %4.5 / TP %9" },
-  { value: "aggressive", emoji: "🚀", label: "Agresif", hint: "Min. Güven %52 · SL %8 / TP %16" },
+  { value: "aggressive", emoji: "🚀", label: "Agresif", hint: "Min. Güven %20 · SL %8 / TP %16" },
 ];
 
 function formatCountdown(seconds: number | null): string {
