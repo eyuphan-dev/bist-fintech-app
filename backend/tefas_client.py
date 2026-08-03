@@ -2,10 +2,16 @@
 tefas_client.py
 ----------------
 TEFAS (Türkiye Elektronik Fon Alım Satım Platformu) günlük fon fiyatlarını
-çeken istemci. TEFAS'ın resmi dokümante edilmiş bir API'si yoktur; bu modül
-tefas.gov.tr'nin kendi web arayüzünün kullandığı genel BindHistoryInfo
-uç noktasını (yaygın olarak açık kaynak TEFAS scraper'larında kullanılır) baz alır.
-Uç değişirse fonksiyonlar sessizce boş sonuç döner, uygulamayı düşürmez.
+çeken istemci.
+
+NOT (2026-08-03): TEFAS 2026'da eski "fundturkey.com.tr/api/DB/BindHistoryInfo"
+uç noktasını tamamen kaldırdı (artık 404 "Method not found or disabled"
+dönüyor) — bu yüzden fon fiyatları hiçbir zaman güncellenmiyordu. Yeni resmi
+API "www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir" kullanılarak canlı test
+edildi (gerçek fiyat/tarih verisi doğrulandı). TEFAS bu uç noktada dakikada
+~6 istek sınırı uyguluyor; bu yüzden fon başına ayrı istek atmak yerine, her
+fon TİPİ (YAT/EMK/BYF) için TEK istekte TÜM fonların anlık görüntüsü çekilip
+takip edilen fon kodlarına göre istemci tarafında eşleştirilir.
 """
 
 from datetime import datetime, timedelta
@@ -16,53 +22,67 @@ from sqlalchemy.orm import Session
 
 import models
 
-TEFAS_HISTORY_URL = "https://www.tefas.gov.tr/api/DB/BindHistoryInfo"
-TEFAS_COMPARE_URL = "https://www.tefas.gov.tr/api/DB/BindComparisonFundReturns"
+TEFAS_INFO_URL = "https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-    "Referer": "https://www.tefas.gov.tr/TarihselVeriler.aspx",
+    "Content-Type": "application/json",
+    "Accept": "*/*",
     "Origin": "https://www.tefas.gov.tr",
+    "Referer": "https://www.tefas.gov.tr/tr/fon-verileri",
 }
+
+# funds tablosundaki fon_type alanları bu tiplerin dışına genelde çıkmıyor;
+# üçünü de taramak fon başına tek tek istek atmaktan çok daha ucuz.
+FUND_KINDS = ("YAT", "EMK", "BYF")
+
+# TEFAS'ın "veri yok" (tatil/hafta sonu vb.) durumunda döndürdüğü zararsız hata
+# metinleri — bunlar gerçek bir hata değil, boş sonuç olarak yorumlanır.
+EMPTY_RESULT_MARKERS = ("out of bounds", "veri bulunamadı", "null\" because")
 
 # Katılım (Faizsiz) endeksine giren yaygın fon tipi anahtar kelimeleri
 KATILIM_KEYWORDS = ["katılım", "katilim", "kira sertifikası", "kira sertifikasi"]
 
 
-def fetch_fund_history(fund_code: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+def _fetch_kind_snapshot(kind: str, from_date: datetime, to_date: datetime) -> List[Dict[str, Any]]:
     """
-    TEFAS'tan tek bir fon için tarihsel fiyat geçmişini çeker.
-    Tarihler 'DD.MM.YYYY' formatında olmalıdır.
+    Belirli bir fon tipi için tarih aralığındaki TÜM fonların (fiyat, tarih,
+    fon adı vb.) anlık görüntüsünü tek istekte çeker.
     """
-    payload = {
-        "fontip": "YAT",
-        "bastarih": start_date,
-        "bittarih": end_date,
-        "fonkod": fund_code,
+    body = {
+        "fonTipi": kind,
+        "fonKodu": None,
+        "aramaMetni": None,
+        "fonTurKod": None,
+        "fonGrubu": None,
+        "sfonTurKod": None,
+        "fonTurAciklama": None,
+        "kurucuKod": None,
+        "basTarih": from_date.strftime("%Y%m%d"),
+        "bitTarih": to_date.strftime("%Y%m%d"),
+        "basSira": 1,
+        "bitSira": 100000,
+        "dil": "TR",
+        "sFonTurKod": "",
+        "fonKod": "",
+        "fonGrup": "",
+        "fonUnvanTip": "",
     }
-    try:
-        resp = requests.post(TEFAS_HISTORY_URL, data=payload, headers=HEADERS, timeout=10)
-        if resp.status_code != 200:
-            return []
-        data = resp.json()
-        rows = data.get("data", [])
-        parsed = []
-        for row in rows:
-            parsed.append({
-                "price": float(row.get("FIYAT", 0) or 0),
-                "date": row.get("TARIH", ""),
-            })
-        return parsed
-    except Exception as e:
-        print(f"[TefasClient] Fon geçmişi çekme hatası ({fund_code}): {e}")
-        return []
+    resp = requests.post(TEFAS_INFO_URL, json=body, headers=HEADERS, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    err_msg = (data.get("errorMessage") or "").lower()
+    if err_msg and not any(marker in err_msg for marker in EMPTY_RESULT_MARKERS):
+        raise RuntimeError(f"TEFAS API hatası ({kind}): {data.get('errorMessage')}")
+
+    return data.get("resultList") or []
 
 
 def update_tefas_funds(db: Session, fund_codes: Optional[List[str]] = None) -> int:
     """
-    Takip edilen fonlar için TEFAS'tan son fiyatı çeker, funds/fund_prices
-    tablolarını günceller. fund_codes verilmezse veritabanındaki tüm fonlar kullanılır.
+    Takip edilen fonlar için TEFAS'tan son fiyatı çeker, fund_prices tablosunu
+    günceller. fund_codes verilmezse veritabanındaki tüm fonlar kullanılır.
     Döner: güncellenen fon sayısı.
     """
     funds = db.query(models.Fund).all()
@@ -73,13 +93,36 @@ def update_tefas_funds(db: Session, fund_codes: Optional[List[str]] = None) -> i
         print("[TefasClient] Takip edilen fon bulunamadı (funds tablosu boş).")
         return 0
 
+    tracked_codes = {f.code.upper() for f in funds}
     today = datetime.now()
-    start = (today - timedelta(days=7)).strftime("%d.%m.%Y")
-    end = today.strftime("%d.%m.%Y")
+    # Son 2 iş günü (hafta sonu/tatil güvenliği için 4 gün geriye bakılır),
+    # daily_return hesaplamak için en az 2 fiyat noktası gerekiyor.
+    from_date = today - timedelta(days=4)
+
+    # fund_code -> [{"price":..., "date": "YYYY-MM-DD"}, ...] (tarihe göre sıralı)
+    history_by_code: Dict[str, List[Dict[str, Any]]] = {}
+    for kind in FUND_KINDS:
+        try:
+            rows = _fetch_kind_snapshot(kind, from_date, today)
+        except Exception as e:
+            print(f"[TefasClient] {kind} tipi fon verisi çekilemedi: {e}")
+            continue
+        for row in rows:
+            code = (row.get("fonKodu") or "").upper()
+            if code not in tracked_codes:
+                continue
+            price = row.get("fiyat")
+            date_str = row.get("tarih")
+            if price is None or not date_str:
+                continue
+            history_by_code.setdefault(code, []).append({
+                "price": float(price),
+                "date": date_str,
+            })
 
     updated = 0
     for fund in funds:
-        history = fetch_fund_history(fund.code, start, end)
+        history = history_by_code.get(fund.code.upper())
         if not history:
             continue
 
@@ -140,11 +183,7 @@ def seed_katilim_funds(db: Session) -> None:
 def _parse_tefas_date(date_str: str):
     if not date_str:
         return None
-    # TEFAS "TARIH" alanı genelde "/Date(1700000000000)/" epoch-ms formatındadır
     try:
-        if date_str.startswith("/Date("):
-            epoch_ms = int(date_str.replace("/Date(", "").replace(")/", "").split("+")[0])
-            return datetime.utcfromtimestamp(epoch_ms / 1000).date()
         return datetime.strptime(date_str[:10], "%Y-%m-%d").date()
     except Exception:
         return None
