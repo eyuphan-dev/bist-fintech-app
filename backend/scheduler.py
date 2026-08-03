@@ -23,6 +23,7 @@ from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
 from tefas_client import update_tefas_funds
 from analysis_engine import refresh_earnings_calendar
+from daily_history import refresh_daily_history
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +185,17 @@ def refresh_market_data_job():
             print(f"[Scheduler] Bilanço takvimi tazelendi: {updated} hisse güncellendi.")
         except Exception as e:
             print(f"[Scheduler] Bilanço takvimi tazeleme hatası: {e}")
+            db.rollback()
+
+        # 1H/1A/1Y/5Y grafik seçenekleri için günlük OHLCV geçmişi (bkz. daily_history.py).
+        # İlk çalıştırmada hisse başına tam 5 yıl çekildiği için bu adım dakikalar
+        # sürebilir — bilerek burada, kullanıcı isteğinin dışında tutuluyor.
+        print("[Scheduler] Günlük fiyat geçmişi (1H/1A/1Y/5Y grafikleri) tazeleniyor...")
+        try:
+            updated = refresh_daily_history(db)
+            print(f"[Scheduler] Günlük geçmiş tazelendi: {updated} hisse güncellendi.")
+        except Exception as e:
+            print(f"[Scheduler] Günlük geçmiş tazeleme hatası: {e}")
             db.rollback()
 
         print("[Scheduler] AI sinyal alarmları kontrol ediliyor...")

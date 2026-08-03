@@ -325,6 +325,55 @@ def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
     )
 
 
+# Aralık kodu -> kaç gün geriye gidileceği (1D hariç, o intraday tablosundan gelir)
+HISTORY_RANGE_DAYS = {"1W": 7, "1M": 31, "1Y": 366, "5Y": 1827}
+
+
+@app.get("/api/stocks/{symbol}/history", response_model=List[StockPriceResponse])
+def get_stock_history(symbol: str, range: str = "1D", db: Session = Depends(get_db)):
+    """
+    Hisse detay grafiği için zaman aralığına göre fiyat serisi döner (Midas
+    benzeri 1G/1H/1A/1Y/5Y seçici). 1D dışındaki tüm aralıklar günlük OHLCV
+    tablosundan (stock_prices_daily) gelir — bkz. daily_history.py.
+    """
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    range_code = range.upper()
+
+    if range_code == "1D":
+        records = db.query(models.StockPrice)\
+            .filter_by(stock_id=stock.id)\
+            .order_by(models.StockPrice.recorded_at.desc())\
+            .limit(100)\
+            .all()
+        records.reverse()
+        return [
+            StockPriceResponse(price=float(r.price), volume=r.volume, recorded_at=r.recorded_at)
+            for r in records
+        ]
+
+    days = HISTORY_RANGE_DAYS.get(range_code)
+    if days is None:
+        raise HTTPException(status_code=400, detail="Geçersiz aralık. 1D, 1W, 1M, 1Y veya 5Y kullanın.")
+
+    cutoff = date.today() - timedelta(days=days)
+    daily_records = db.query(models.StockPriceDaily)\
+        .filter(models.StockPriceDaily.stock_id == stock.id, models.StockPriceDaily.trade_date >= cutoff)\
+        .order_by(models.StockPriceDaily.trade_date.asc())\
+        .all()
+
+    return [
+        StockPriceResponse(
+            price=float(r.close),
+            volume=r.volume,
+            recorded_at=datetime.combine(r.trade_date, datetime.min.time()),
+        )
+        for r in daily_records
+    ]
+
+
 # --- KAP DISCLOSURES ---
 
 @app.get("/api/stocks/{symbol}/kap-disclosures")
