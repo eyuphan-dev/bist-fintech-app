@@ -1,194 +1,119 @@
 import requests
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+from typing import List, Dict, Any
+from datetime import datetime, timedelta
 
-# KAP public disclosure API (undocumented but publicly accessible)
-KAP_DISCLOSURE_URL = "https://efts.kap.org.tr/BIST-AJAX-EFT/AjaxSearchV3"
-KAP_MEMBER_DISCLOSURES_URL = "https://www.kap.org.tr/tr/api/disclosures/member"
+# NOT (2026-08-03): Eski entegrasyon iki artık ölü/çalışmayan uç noktayı
+# kullanıyordu — "efts.kap.org.tr" domaini artık DNS'te bile çözülmüyor
+# (NXDOMAIN) ve "/tr/api/disclosures/member/{symbol}" yolu KAP'ın WAF'ı
+# tarafından sessizce bağlantı düşürülerek (connection drop / timeout)
+# engelleniyordu. Bu yüzden KAP bildirimleri hiçbir zaman gelmiyordu.
+#
+# Doğru ve halihazırda çalışan uç nokta "/tr/api/disclosure/members/byCriteria"
+# (POST, tarih aralığı + opsiyonel üye OID listesi alır, sembol bazlı filtre
+# desteklemez). Sembole göre filtreleme, dönen listedeki stockCodes/
+# relatedStocks alanlarına bakılarak istemci tarafında yapılır.
+KAP_QUERY_URL = "https://www.kap.org.tr/tr/api/disclosure/members/byCriteria"
+
+# KAP tek istekte en fazla ~2000 kayıt döndürüyor (en güncelden geriye doğru);
+# çok geniş tarih aralıkları isteği geçersiz kılmaz ama eski kayıtlar kesilir.
+MAX_LOOKBACK_DAYS = 14
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "tr-TR,tr;q=0.9",
-    "Referer": "https://www.kap.org.tr/",
+    "Content-Type": "application/json",
+    "Referer": "https://www.kap.org.tr/tr/bildirim-sorgu",
     "Origin": "https://www.kap.org.tr",
 }
 
-def fetch_kap_disclosures(symbol: str, limit: int = 8) -> List[Dict[str, Any]]:
+
+def _query_disclosures(from_date: datetime, to_date: datetime) -> List[Dict[str, Any]]:
+    """KAP'ın genel bildirim akışını (tüm şirketler, tüm hisseler) tarih aralığına göre çeker."""
+    body = {
+        "fromDate": from_date.strftime("%Y-%m-%d"),
+        "toDate": to_date.strftime("%Y-%m-%d"),
+        "mkkMemberOidList": [],
+        "subjectList": [],
+    }
+    resp = requests.post(KAP_QUERY_URL, json=body, headers=HEADERS, timeout=8)
+    resp.raise_for_status()
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
+def _matching_symbols(item: Dict[str, Any], known_symbols: set) -> set:
+    """Bir bildirim kaydının ilgili olduğu, takip ettiğimiz sembolleri döner."""
+    matched = set()
+    for field in ("stockCodes", "relatedStocks"):
+        value = item.get(field)
+        if not value:
+            continue
+        for code in value.split(","):
+            code = code.strip().upper()
+            if code in known_symbols:
+                matched.add(code)
+    return matched
+
+
+def _symbol_matches(item: Dict[str, Any], symbol: str) -> bool:
+    return bool(_matching_symbols(item, {symbol.upper()}))
+
+
+def _to_disclosure_dict(item: Dict[str, Any]) -> Dict[str, Any]:
+    date_str = item.get("publishDate") or ""
+    index = item.get("disclosureIndex")
+    return {
+        "title": item.get("summary") or item.get("subject") or "Kamuoyu Bildirimi",
+        "date": _format_date(date_str),
+        "date_raw": date_str,
+        "type": item.get("subject") or item.get("disclosureCategory") or "",
+        "company": item.get("kapTitle") or "",
+        "url": f"https://www.kap.org.tr/tr/Bildirim/{index}" if index else "",
+    }
+
+
+def fetch_kap_disclosures(symbol: str, limit: int = 8, lookback_days: int = MAX_LOOKBACK_DAYS) -> List[Dict[str, Any]]:
     """
-    Fetches recent KAP public disclosures for a given BIST stock symbol.
-    Uses the KAP EFTS (Electronic Filing and Trading System) public search API.
-    Returns a list of disclosure dicts.
+    Verilen BİST sembolü için son KAP bildirimlerini çeker.
+    KAP'ın herkese açık API'si sembol bazlı filtre desteklemediğinden (üye OID'i
+    gerektirir), tarih aralığındaki TÜM piyasa bildirimleri tek istekte çekilip
+    stockCodes/relatedStocks alanlarına göre istemci tarafında filtrelenir.
     """
-    disclosures = []
-    
+    now = datetime.utcnow()
     try:
-        # Method 1: Try the EFTS search endpoint
-        params = {
-            "ftype": "searchResultBulletin",
-            "term": symbol,
-            "page": 1,
-            "perPage": limit
-        }
-        
-        resp = requests.get(
-            KAP_DISCLOSURE_URL,
-            params=params,
-            headers=HEADERS,
-            timeout=4
-        )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            # EFTS returns results in a nested structure
-            items = data.get("data", {}).get("current", []) or data.get("data", []) or []
-            
-            if isinstance(items, list) and len(items) > 0:
-                for item in items[:limit]:
-                    disclosure = _parse_efts_disclosure(item, symbol)
-                    if disclosure:
-                        disclosures.append(disclosure)
-                        
-                if disclosures:
-                    return disclosures
-                    
+        items = _query_disclosures(now - timedelta(days=lookback_days), now)
     except Exception as e:
-        print(f"KAP EFTS fetch failed for {symbol}: {str(e)}")
+        print(f"KAP bildirim sorgusu başarısız ({symbol}): {str(e)}")
+        return []
 
-    try:
-        # Method 2: Try the KAP member disclosures API directly
-        resp2 = requests.get(
-            f"{KAP_MEMBER_DISCLOSURES_URL}/{symbol}",
-            headers=HEADERS,
-            timeout=4
-        )
-        
-        if resp2.status_code == 200:
-            data2 = resp2.json()
-            items2 = data2 if isinstance(data2, list) else data2.get("data", [])
-            
-            for item in items2[:limit]:
-                disclosure = _parse_member_disclosure(item, symbol)
-                if disclosure:
-                    disclosures.append(disclosure)
-                    
-    except Exception as e:
-        print(f"KAP member API fetch failed for {symbol}: {str(e)}")
+    matches = [item for item in items if _symbol_matches(item, symbol)]
+    return [_to_disclosure_dict(item) for item in matches[:limit]]
 
-    return disclosures
-
-def _parse_efts_disclosure(item: Dict, symbol: str) -> Optional[Dict[str, Any]]:
-    """Parse a disclosure from the EFTS search API response."""
-    try:
-        # The EFTS structure typically looks like this
-        title = (
-            item.get("title", "") or 
-            item.get("bildirimTipiAciklama", "") or 
-            item.get("subject", "") or
-            "Kamuoyu Bildirimi"
-        )
-        
-        date_str = (
-            item.get("disclosureDate", "") or
-            item.get("publishDate", "") or
-            item.get("publishedAt", "") or
-            item.get("date", "")
-        )
-        
-        formatted_date = _format_date(date_str)
-        
-        url = item.get("disclosureLink", "") or item.get("url", "") or item.get("link", "")
-        if url and not url.startswith("http"):
-            url = f"https://www.kap.org.tr{url}"
-            
-        disclosure_type = (
-            item.get("disclosureType", "") or 
-            item.get("bildirimTipi", "") or
-            item.get("type", "")
-        )
-        
-        company_name = (
-            item.get("companyName", "") or 
-            item.get("sirketAdi", "") or
-            item.get("memberName", "")
-        )
-        
-        return {
-            "title": title,
-            "date": formatted_date,
-            "date_raw": date_str,
-            "type": disclosure_type,
-            "company": company_name or symbol,
-            "url": url,
-        }
-    except Exception:
-        return None
-
-def _parse_member_disclosure(item: Dict, symbol: str) -> Optional[Dict[str, Any]]:
-    """Parse a disclosure from the member API response."""
-    try:
-        title = (
-            item.get("bildirimTipiAciklama", "") or 
-            item.get("subject", "") or
-            item.get("title", "") or
-            "Kamuoyu Bildirimi"
-        )
-        
-        date_str = (
-            item.get("publishDate", "") or
-            item.get("disclosureDate", "") or
-            item.get("tarih", "")
-        )
-        
-        formatted_date = _format_date(date_str)
-        
-        url = item.get("url", "") or item.get("disclosureLink", "")
-        if url and not url.startswith("http"):
-            url = f"https://www.kap.org.tr{url}"
-            
-        return {
-            "title": title,
-            "date": formatted_date,
-            "date_raw": date_str,
-            "type": item.get("bildirimTipi", "") or item.get("type", ""),
-            "company": item.get("memberName", symbol),
-            "url": url,
-        }
-    except Exception:
-        return None
 
 def _format_date(date_str: str) -> str:
     """Formats a date string from KAP API to a human-readable format."""
     if not date_str:
         return ""
-    
+
     # Try common date formats
     formats = [
+        "%d.%m.%Y %H:%M:%S",
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%dT%H:%M:%SZ",
         "%Y-%m-%d",
-        "%d.%m.%Y %H:%M:%S",
         "%d.%m.%Y",
         "%d/%m/%Y",
     ]
-    
+
     for fmt in formats:
         try:
-            dt = datetime.strptime(date_str[:19], fmt[:len(date_str[:19].split(" ")[0]) + (10 if "T" in date_str or " " in date_str else 0)])
+            dt = datetime.strptime(date_str[:19] if " " in fmt or "T" in fmt else date_str[:10], fmt)
             return dt.strftime("%d.%m.%Y")
-        except:
+        except Exception:
             pass
-    
-    # If no format matched, try to extract the date part directly
-    if len(date_str) >= 10:
-        try:
-            # Try parsing the first 10 characters
-            dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
-            return dt.strftime("%d.%m.%Y")
-        except:
-            pass
-    
+
     return date_str[:10] if len(date_str) >= 10 else date_str
 
 def get_kap_search_url(symbol: str) -> str:
@@ -201,17 +126,38 @@ def fetch_kap_news(db, limit: int = 20) -> list:
     Takip edilen tüm aktif hisseler için genel KAP bildirim akışını çeker ve
     kap_notifications tablosuna yazar. Kullanıcı arayüzünde "Piyasa Haberleri"
     (genel akış) sekmesi için kullanılır.
+
+    Önceki sürüm her hisse için ayrı ayrı istek atıyordu (N istek); artık tek
+    bir POST isteğiyle son 2 günün TÜM piyasa bildirimleri çekilip, takip
+    edilen sembollere göre istemci tarafında eşleştiriliyor — hem daha hızlı
+    hem de KAP'ın WAF'ını gereksiz yere zorlamıyor.
     """
     import models
 
+    now = datetime.utcnow()
+    try:
+        items = _query_disclosures(now - timedelta(days=2), now)
+    except Exception as e:
+        print(f"[KAP] Genel bildirim akışı çekilemedi: {e}")
+        return []
+
+    stocks = db.query(models.Stock).filter_by(is_active=True).all()
+    symbol_to_stock = {s.symbol.upper(): s for s in stocks}
+    known_symbols = set(symbol_to_stock.keys())
+
     notifications = []
     newly_created = []
-    stocks = db.query(models.Stock).filter_by(is_active=True).all()
 
-    for stock in stocks:
-        disclosures = fetch_kap_disclosures(stock.symbol, limit=3)
-        for d in disclosures:
-            publish_date = _parse_disclosure_date(d.get("date_raw") or d.get("date", ""))
+    for item in items:
+        matched_symbols = _matching_symbols(item, known_symbols)
+        if not matched_symbols:
+            continue
+
+        d = _to_disclosure_dict(item)
+        publish_date = _parse_disclosure_date(d.get("date_raw") or d.get("date", ""))
+
+        for sym in matched_symbols:
+            stock = symbol_to_stock[sym]
             exists = (
                 db.query(models.KapNotification)
                 .filter_by(stock_id=stock.id, title=d.get("title", ""), publish_date=publish_date)
@@ -245,9 +191,10 @@ def fetch_kap_news(db, limit: int = 20) -> list:
 def _parse_disclosure_date(date_str: str):
     if not date_str:
         return datetime.utcnow()
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
+    for fmt in ("%d.%m.%Y %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
         try:
-            return datetime.strptime(date_str[:19] if "T" in fmt or " " in fmt else date_str[:10], fmt)
+            has_time = " " in fmt or "T" in fmt
+            return datetime.strptime(date_str[:19] if has_time else date_str[:10], fmt)
         except Exception:
             continue
     return datetime.utcnow()
