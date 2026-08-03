@@ -228,6 +228,11 @@ def _get_latest_db_price(db: Session, stock_id: int) -> float:
     return float(latest_record.price) if latest_record else 0.0
 
 
+# Sermaye artırımı/bölünme gibi kurumsal işlemler sonrası yanlış yüzde göstermemek
+# için eşik (bkz. get_stocks/get_stock_detail).
+EXTREME_CHANGE_GUARD_PCT = 50.0
+
+
 # --- STOCKS ---
 
 @app.get("/api/stocks", response_model=List[StockResponse])
@@ -263,7 +268,7 @@ def get_stocks(db: Session = Depends(get_db)):
     response = []
     for stock in stocks:
         current_price = 0.0
-        price_change_pct = 0.0
+        price_change_pct: Optional[float] = None
 
         latest_record = (
             db.query(models.StockPrice)
@@ -290,6 +295,14 @@ def get_stocks(db: Session = Depends(get_db)):
                 if prev_tick and float(prev_tick.price) > 0:
                     price_change_pct = ((current_price - float(prev_tick.price)) / float(prev_tick.price)) * 100
 
+            # Sermaye artırımı/bedelsiz/bölünme gibi kurumsal işlemler referans fiyatı
+            # tek seferde katlarca değiştirebiliyor (bkz. KTLEV: 156→44 TL, gerçek bir
+            # kayıp değil, pay sayısı artışı). BİST'in normal devre kesici sınırları
+            # bunu asla üretmez; bu yüzden %50'yi aşan sıçramalar güvenilmez kabul edilip
+            # yanlış "-71%" gibi bir rakam göstermek yerine None (bilgi yok) döndürülür.
+            if price_change_pct is not None and abs(price_change_pct) > EXTREME_CHANGE_GUARD_PCT:
+                price_change_pct = None
+
         response.append({
             "id": stock.id,
             "symbol": stock.symbol,
@@ -297,7 +310,7 @@ def get_stocks(db: Session = Depends(get_db)):
             "is_active": stock.is_active,
             "sector": stock.sector,
             "current_price": round(current_price, 2),
-            "price_change_pct": round(price_change_pct, 2),
+            "price_change_pct": round(price_change_pct, 2) if price_change_pct is not None else None,
             "is_katilim_compliant": bool(stock.is_katilim_compliant),
             "purification_rate": float(stock.purification_rate or 0.0)
         })
@@ -326,7 +339,36 @@ def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
         
     # Latest price — DB'deki son kayıttan (borsa kapalıyken Cuma kapanışında donuk kalır)
     current_price = _get_latest_db_price(db, stock.id) or float(price_records[-1].price)
-    
+
+    # Önceki kapanış: stock_prices_daily'deki bugünden ÖNCEKİ en son gün.
+    # Günlük % değişim = (güncel fiyat - önceki kapanış) / önceki kapanış — Midas/Yahoo
+    # Finance ile aynı mantık (bkz. get_stocks() içindeki aynı hesap, orada tüm liste
+    # için toplu/optimize edilmiş hali var; burada tek hisse olduğu için basit sorgu yeterli).
+    today = date.today()
+    prev_close_row = (
+        db.query(models.StockPriceDaily)
+        .filter(models.StockPriceDaily.stock_id == stock.id, models.StockPriceDaily.trade_date < today)
+        .order_by(models.StockPriceDaily.trade_date.desc())
+        .first()
+    )
+    previous_close = float(prev_close_row.close) if prev_close_row else None
+    change_pct = (
+        round(((current_price - previous_close) / previous_close) * 100, 2)
+        if previous_close and previous_close > 0
+        else None
+    )
+    # Kurumsal işlem (bedelsiz/bölünme) sonrası yanlış sıçrama göstermemek için
+    # aynı koruma (bkz. get_stocks() ve EXTREME_CHANGE_GUARD_PCT).
+    if change_pct is not None and abs(change_pct) > EXTREME_CHANGE_GUARD_PCT:
+        change_pct = None
+
+    # Bugünün açılışı ve gün içi yüksek/düşük: bugüne ait gün-içi tiklerden.
+    today_start = datetime.combine(today, datetime.min.time())
+    today_ticks = [p for p in price_records if p.recorded_at >= today_start]
+    open_price = float(today_ticks[0].price) if today_ticks else None
+    day_high = max((float(p.price) for p in today_ticks), default=None)
+    day_low = min((float(p.price) for p in today_ticks), default=None)
+
     # Calculate indicators
     df_data = {
         "price": [float(p.price) for p in price_records],
@@ -358,7 +400,12 @@ def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
         company_name=stock.company_name,
         current_price=round(current_price, 2),
         prices=prices_response,
-        indicators=indicators
+        indicators=indicators,
+        previous_close=round(previous_close, 2) if previous_close is not None else None,
+        open_price=round(open_price, 2) if open_price is not None else None,
+        day_high=round(day_high, 2) if day_high is not None else None,
+        day_low=round(day_low, 2) if day_low is not None else None,
+        change_pct=change_pct,
     )
 
 

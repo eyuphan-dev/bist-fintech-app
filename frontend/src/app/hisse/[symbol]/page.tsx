@@ -243,11 +243,18 @@ export default function StockDetailPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-white">{stockDetail.symbol}</h1>
-            {summary && (
+            {stockDetail.change_pct !== null && stockDetail.change_pct !== undefined ? (
               <span className={`text-xs px-1.5 py-0.5 rounded tabular-nums font-semibold ${
-                summary.price_change_pct >= 0 ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
+                stockDetail.change_pct >= 0 ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
               }`}>
-                %{summary.price_change_pct >= 0 ? "+" : ""}{summary.price_change_pct}
+                %{stockDetail.change_pct >= 0 ? "+" : ""}{stockDetail.change_pct}
+              </span>
+            ) : (
+              <span
+                title="Kurumsal işlem (bölünme/bedelsiz sermaye artışı) nedeniyle günlük değişim şu an güvenilir hesaplanamıyor."
+                className="text-xs px-1.5 py-0.5 rounded tabular-nums font-semibold bg-gray-500/10 text-gray-500"
+              >
+                —
               </span>
             )}
           </div>
@@ -274,6 +281,35 @@ export default function StockDetailPage() {
           )}
         </div>
       </div>
+
+      {(stockDetail.previous_close || stockDetail.open_price || stockDetail.day_high || stockDetail.day_low) && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-[#151921] border border-[#242B35] rounded-xl p-3">
+          <div>
+            <p className="text-gray-500">Önceki Kapanış</p>
+            <p className="font-semibold text-white tabular-nums">
+              {stockDetail.previous_close !== null && stockDetail.previous_close !== undefined ? `${stockDetail.previous_close} TL` : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500">Açılış</p>
+            <p className="font-semibold text-white tabular-nums">
+              {stockDetail.open_price !== null && stockDetail.open_price !== undefined ? `${stockDetail.open_price} TL` : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500">Gün İçi Yüksek</p>
+            <p className="font-semibold text-[#10B981] tabular-nums">
+              {stockDetail.day_high !== null && stockDetail.day_high !== undefined ? `${stockDetail.day_high} TL` : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500">Gün İçi Düşük</p>
+            <p className="font-semibold text-[#F43F5E] tabular-nums">
+              {stockDetail.day_low !== null && stockDetail.day_low !== undefined ? `${stockDetail.day_low} TL` : "—"}
+            </p>
+          </div>
+        </div>
+      )}
 
       {showNotificationModal && (
         <NotificationPreferenceModal
