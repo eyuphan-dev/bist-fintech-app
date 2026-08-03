@@ -12,7 +12,7 @@ interface Stock {
   company_name: string;
   is_active: boolean;
   current_price: number;
-  price_change_pct: number;
+  price_change_pct: number | null;
   is_katilim_compliant: boolean;
   purification_rate: number;
 }
@@ -93,11 +93,20 @@ export default function PiyasalarPage() {
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-white tracking-wide">{stock.symbol}</span>
-                    <span className={`text-[10px] font-semibold px-1 rounded tabular-nums ${
-                      stock.price_change_pct >= 0 ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
-                    }`}>
-                      %{stock.price_change_pct >= 0 ? "+" : ""}{stock.price_change_pct}
-                    </span>
+                    {stock.price_change_pct !== null ? (
+                      <span className={`text-[10px] font-semibold px-1 rounded tabular-nums ${
+                        stock.price_change_pct >= 0 ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
+                      }`}>
+                        %{stock.price_change_pct >= 0 ? "+" : ""}{stock.price_change_pct}
+                      </span>
+                    ) : (
+                      <span
+                        title="Kurumsal işlem (bölünme/bedelsiz sermaye artışı) nedeniyle günlük değişim şu an güvenilir hesaplanamıyor."
+                        className="text-[10px] font-semibold px-1 rounded tabular-nums bg-gray-500/10 text-gray-500"
+                      >
+                        —
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] text-gray-500 mt-0.5 truncate max-w-[180px]">{stock.company_name}</p>
                 </div>

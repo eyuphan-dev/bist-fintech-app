@@ -56,7 +56,7 @@ class StockResponse(BaseModel):
     is_active: bool
     sector: Optional[str] = None
     current_price: float
-    price_change_pct: float
+    price_change_pct: Optional[float] = None
     is_katilim_compliant: bool
     purification_rate: float
 
@@ -156,6 +156,11 @@ class StockDetailResponse(BaseModel):
     current_price: float
     prices: List[StockPriceResponse]
     indicators: Dict[str, Any]
+    previous_close: Optional[float] = None
+    open_price: Optional[float] = None
+    day_high: Optional[float] = None
+    day_low: Optional[float] = None
+    change_pct: Optional[float] = None
 
 class TradeRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=10)
