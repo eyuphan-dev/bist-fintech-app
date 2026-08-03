@@ -92,6 +92,39 @@ def fetch_stock_news(symbol: str, limit: int = 8) -> List[Dict]:
     return items
 
 
+def fetch_daily_history(symbol: str, period: str = "5y") -> List[Dict]:
+    """
+    Uzun vadeli grafik seçenekleri (1H/1A/1Y/5Y) için GÜNLÜK OHLCV geçmişini çeker.
+    fetch_historical_prices'tan farkı: sadece kapanış değil OHLC'nin tamamını
+    ve datetime yerine saf date döndürür (stock_prices_daily tablosuyla birebir eşleşir).
+    """
+    yahoo_symbol = f"{symbol}.IS"
+    bars: List[Dict] = []
+    try:
+        ticker = yf.Ticker(yahoo_symbol)
+        history = call_with_retry(
+            lambda: ticker.history(period=period, interval="1d"),
+            attempts=2, label=f"{symbol}.daily_history",
+        )
+        for index, row in history.iterrows():
+            # Gün henüz kapanmadıysa (bugünün barı, borsa açıkken) yfinance bazen
+            # Close için NaN döndürüyor — stock_prices_daily.close NOT NULL olduğundan
+            # bu barı atlamak gerekiyor (aksi halde DB insert'i IntegrityError ile patlar).
+            if not pd.notna(row["Close"]):
+                continue
+            bars.append({
+                "trade_date": index.to_pydatetime().date(),
+                "open": round(float(row["Open"]), 2) if pd.notna(row["Open"]) else None,
+                "high": round(float(row["High"]), 2) if pd.notna(row["High"]) else None,
+                "low": round(float(row["Low"]), 2) if pd.notna(row["Low"]) else None,
+                "close": round(float(row["Close"]), 2),
+                "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else 0,
+            })
+    except Exception as e:
+        print(f"Error fetching daily history for {symbol}: {str(e)}")
+    return bars
+
+
 def fetch_historical_prices(symbol: str, period: str = "1mo", interval: str = "1d") -> List[Dict]:
     """
     Fetches historical price data for a BIST stock.

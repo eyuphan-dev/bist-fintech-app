@@ -22,6 +22,16 @@ const TradingViewChart = dynamic(() => import("../../components/TradingViewChart
 
 type SectionKey = "genel" | "pro" | "hesaplayici" | "topluluk";
 
+type RangeKey = "1D" | "1W" | "1M" | "1Y" | "5Y";
+
+const RANGES: { key: RangeKey; label: string }[] = [
+  { key: "1D", label: "1G" },
+  { key: "1W", label: "1H" },
+  { key: "1M", label: "1A" },
+  { key: "1Y", label: "1Y" },
+  { key: "5Y", label: "5Y" },
+];
+
 const SECTIONS: { key: SectionKey; label: string; icon: any }[] = [
   { key: "genel", label: "Genel Bakış", icon: LineChartIcon },
   { key: "pro", label: "Derin Bilanço Analizi", icon: Gauge },
@@ -44,6 +54,9 @@ export default function StockDetailPage() {
   const [openNewsIdx, setOpenNewsIdx] = useState<number | null>(null);
   const [section, setSection] = useState<SectionKey>("genel");
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [chartRange, setChartRange] = useState<RangeKey>("1D");
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
 
   const [tradeQty, setTradeQty] = useState<number>(1);
   const [tradeLoading, setTradeLoading] = useState(false);
@@ -112,6 +125,27 @@ export default function StockDetailPage() {
     fetchKap();
     fetchNews();
   }, [symbol, refreshTrigger, token]);
+
+  // Grafik verisi (1G/1H/1A/1Y/5Y aralık seçici)
+  useEffect(() => {
+    if (!symbol) return;
+    let cancelled = false;
+
+    const fetchHistory = async () => {
+      setChartLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/stocks/${symbol}/history?range=${chartRange}`);
+        if (res.ok && !cancelled) setChartData(await res.json());
+      } catch (err) {
+        console.error("Fiyat geçmişi alınamadı:", err);
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    };
+
+    fetchHistory();
+    return () => { cancelled = true; };
+  }, [symbol, chartRange]);
 
   // Yorumlar
   const fetchComments = async () => {
@@ -266,7 +300,33 @@ export default function StockDetailPage() {
           {section === "genel" && (
             <>
               <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
-                <TradingViewChart data={stockDetail.prices} symbol={stockDetail.symbol} />
+                <div className="flex items-center justify-end gap-1 mb-2">
+                  {RANGES.map((r) => (
+                    <button
+                      key={r.key}
+                      onClick={() => setChartRange(r.key)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tabular-nums transition ${
+                        chartRange === r.key
+                          ? "bg-[#10B981] text-[#0B0E14]"
+                          : "text-gray-400 hover:text-white hover:bg-[#0B0E14]"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+                {chartLoading && chartData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[320px] text-xs text-gray-500">
+                    <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+                    Grafik yükleniyor...
+                  </div>
+                ) : chartData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[320px] text-xs text-gray-500">
+                    Bu aralık için yeterli veri bulunamadı.
+                  </div>
+                ) : (
+                  <TradingViewChart data={chartData} symbol={stockDetail.symbol} />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs bg-[#151921] p-4 rounded-xl border border-[#242B35]">

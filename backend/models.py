@@ -60,6 +60,29 @@ class StockPrice(Base):
     stock = relationship("Stock", back_populates="prices")
 
 
+class StockPriceDaily(Base):
+    """
+    Uzun vadeli grafik seçenekleri (1H/1A/1Y/5Y) için GÜNLÜK kapanış barları.
+    stock_prices tablosundaki 5 dakikalık gün-içi tiklerden bilerek ayrı
+    tutulur — aksi halde farklı aralıklardaki kayıtlar karışıp teknik
+    gösterge/AI bot hesaplamalarındaki "son N kayıt = son N tik" varsayımını
+    bozar. Hisse başına günde en fazla 1 kayıt olur (trade_date unique).
+    """
+    __tablename__ = "stock_prices_daily"
+    __table_args__ = (UniqueConstraint("stock_id", "trade_date", name="uq_stock_daily_date"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
+    trade_date = Column(Date, nullable=False, index=True)
+    open = Column(Numeric(12, 2), nullable=True)
+    high = Column(Numeric(12, 2), nullable=True)
+    low = Column(Numeric(12, 2), nullable=True)
+    close = Column(Numeric(12, 2), nullable=False)
+    volume = Column(Integer, nullable=True)
+
+    stock = relationship("Stock")
+
+
 class Portfolio(Base):
     __tablename__ = "portfolios"
 
