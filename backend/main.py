@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -233,25 +234,61 @@ def _get_latest_db_price(db: Session, stock_id: int) -> float:
 def get_stocks(db: Session = Depends(get_db)):
     stocks = db.query(models.Stock).filter_by(is_active=True).all()
 
+    # Günlük % değişim = (güncel fiyat - ÖNCEKİ İŞ GÜNÜNÜN KAPANIŞI) / o kapanış
+    # (Midas/Yahoo Finance ile aynı mantık). Önceki sürüm iki ardışık 5 dakikalık
+    # tik arasındaki farkı gösteriyordu (son güncellemeden bu yana ~5 dk'lık kırıntı
+    # bir değişim) — bu, gün içindeki gerçek hareketi yansıtmıyordu.
+    # stock_id -> önceki iş gününün kapanışı: tek sorguda tüm hisseler için çekilir.
+    today = date.today()
+    latest_daily_subq = (
+        db.query(
+            models.StockPriceDaily.stock_id,
+            func.max(models.StockPriceDaily.trade_date).label("max_date"),
+        )
+        .filter(models.StockPriceDaily.trade_date < today)
+        .group_by(models.StockPriceDaily.stock_id)
+        .subquery()
+    )
+    prev_close_rows = (
+        db.query(models.StockPriceDaily.stock_id, models.StockPriceDaily.close)
+        .join(
+            latest_daily_subq,
+            (models.StockPriceDaily.stock_id == latest_daily_subq.c.stock_id)
+            & (models.StockPriceDaily.trade_date == latest_daily_subq.c.max_date),
+        )
+        .all()
+    )
+    prev_close_map = {stock_id: float(close) for stock_id, close in prev_close_rows}
+
     response = []
     for stock in stocks:
         current_price = 0.0
         price_change_pct = 0.0
 
-        # Son iki DB kaydına göre günlük değişim — borsa kapalıyken bu kayıtlar
-        # değişmediği için sonuç otomatik olarak son kapanışta donuk kalır.
-        history = db.query(models.StockPrice)\
-            .filter(models.StockPrice.stock_id == stock.id)\
-            .order_by(models.StockPrice.recorded_at.desc())\
-            .limit(2)\
-            .all()
+        latest_record = (
+            db.query(models.StockPrice)
+            .filter(models.StockPrice.stock_id == stock.id)
+            .order_by(models.StockPrice.recorded_at.desc())
+            .first()
+        )
 
-        if history:
-            current_price = float(history[0].price)
-            if len(history) > 1:
-                prev_price = float(history[1].price)
-                if prev_price > 0:
-                    price_change_pct = ((current_price - prev_price) / prev_price) * 100
+        if latest_record:
+            current_price = float(latest_record.price)
+            prev_close = prev_close_map.get(stock.id)
+            if prev_close and prev_close > 0:
+                price_change_pct = ((current_price - prev_close) / prev_close) * 100
+            else:
+                # stock_prices_daily'de henüz kaydı olmayan (yeni eklenmiş/backfill
+                # bekleyen) hisseler için eski tik-tik davranışına düş (0'dan iyidir).
+                prev_tick = (
+                    db.query(models.StockPrice)
+                    .filter(models.StockPrice.stock_id == stock.id)
+                    .order_by(models.StockPrice.recorded_at.desc())
+                    .offset(1).limit(1)
+                    .first()
+                )
+                if prev_tick and float(prev_tick.price) > 0:
+                    price_change_pct = ((current_price - float(prev_tick.price)) / float(prev_tick.price)) * 100
 
         response.append({
             "id": stock.id,
