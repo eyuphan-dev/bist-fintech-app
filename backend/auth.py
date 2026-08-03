@@ -1,5 +1,6 @@
 import os
 import jwt
+import pytz
 from datetime import datetime, timedelta
 from typing import Union, Any
 from passlib.context import CryptContext
@@ -7,6 +8,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db
+from market_hours import TR_TZ
 import models
 
 # Prod'da JWT_SECRET_KEY environment variable ZORUNLUDUR. Yerel geliştirme için
@@ -18,7 +20,15 @@ if not SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY environment variable üretimde zorunludur.")
     SECRET_KEY = "dev-only-insecure-secret-key-do-not-use-in-production"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 hours
+# Sabit saatlik oturum sıfırlama: token, giriş saatinden 24 saat sonra değil,
+# bir sonraki 09:00 (Türkiye saati) itibarıyla dolar. Böylece gün içinde ne
+# zaman giriş yapılırsa yapılsın, kullanıcı ertesi sabah 09:00'a kadar tekrar
+# login ekranına düşmez (rastgele saatlerde oturum sonu yerine öngörülebilir
+# tek bir günlük sıfırlama noktası).
+DAILY_SESSION_RESET_HOUR = 9
+# Giriş saat 08:xx gibi sıfırlama saatine çok yakınsa oturum saniyeler içinde
+# dolmasın diye asgari oturum süresi garantisi.
+MIN_SESSION_MINUTES = 60
 
 import bcrypt
 from fastapi.security import OAuth2PasswordBearer
@@ -41,11 +51,21 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(pwd_bytes, salt)
     return hashed.decode("utf-8")
 
+def _next_daily_reset(now_tr: datetime) -> datetime:
+    """Türkiye saatiyle bir sonraki 09:00 sıfırlama anını döner (asgari 1 saat garantili)."""
+    reset_today = now_tr.replace(hour=DAILY_SESSION_RESET_HOUR, minute=0, second=0, microsecond=0)
+    target = reset_today if now_tr < reset_today else reset_today + timedelta(days=1)
+    if target - now_tr < timedelta(minutes=MIN_SESSION_MINUTES):
+        target += timedelta(days=1)
+    return target
+
+
 def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire_tr = _next_daily_reset(datetime.now(TR_TZ))
+        expire = expire_tr.astimezone(pytz.utc).replace(tzinfo=None)
     to_encode = {"exp": expire, "sub": str(subject)}
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
