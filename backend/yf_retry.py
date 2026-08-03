@@ -39,7 +39,12 @@ def configure_yfinance() -> None:
     """
     proxy_url = os.environ.get("YF_PROXY_URL")
     if proxy_url:
-        yf.config.network.proxy = proxy_url
+        # yfinance bu değeri doğrudan curl_cffi'nin Session.proxies alanına atıyor;
+        # curl_cffi orada bir STRING değil, {"http": ..., "https": ...} şeklinde bir
+        # dict bekliyor (aksi halde "proxies.get(...)" çağrısı "'str' object has no
+        # attribute 'get'" ile patlıyor — tüm yfinance istekleri, crumb/cookie alma
+        # dahil, sessizce başarısız olur).
+        yf.config.network.proxy = {"http": proxy_url, "https": proxy_url}
         print("[yf_retry] yfinance istekleri YF_PROXY_URL üzerinden yönlendiriliyor.")
     yf.config.network.retries = 2
 
