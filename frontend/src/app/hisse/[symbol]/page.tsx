@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   ArrowLeft, RefreshCw, Gauge, Users, Calculator, Newspaper, LineChart as LineChartIcon,
-  ChevronDown, ExternalLink, Bell,
+  ChevronDown, ExternalLink, Bell, Star,
 } from "lucide-react";
 
 import KatilimBadge from "../../components/KatilimBadge";
@@ -57,6 +57,8 @@ export default function StockDetailPage() {
   const [chartRange, setChartRange] = useState<RangeKey>("1D");
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [isWatched, setIsWatched] = useState(false);
+  const [watchLoading, setWatchLoading] = useState(false);
 
   const [tradeQty, setTradeQty] = useState<number>(1);
   const [tradeLoading, setTradeLoading] = useState(false);
@@ -80,6 +82,42 @@ export default function StockDetailPage() {
   }, [refreshTrigger]);
 
   const summary = stockList.find((s) => s.symbol === symbol);
+
+  // İzleme listesi (favori) durumu
+  useEffect(() => {
+    if (!token || !symbol) {
+      setIsWatched(false);
+      return;
+    }
+    const fetchWatchStatus = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/watchlist`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data: { symbol: string }[] = await res.json();
+          setIsWatched(data.some((d) => d.symbol === symbol));
+        }
+      } catch (err) {
+        console.error("İzleme listesi durumu alınamadı:", err);
+      }
+    };
+    fetchWatchStatus();
+  }, [token, symbol, refreshTrigger]);
+
+  const toggleWatch = async () => {
+    if (!token || watchLoading) return;
+    setWatchLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/watchlist/${symbol}`, {
+        method: isWatched ? "DELETE" : "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setIsWatched((v) => !v);
+    } catch (err) {
+      console.error("İzleme listesi güncellenemedi:", err);
+    } finally {
+      setWatchLoading(false);
+    }
+  };
 
   // Detay + KAP bildirimleri
   useEffect(() => {
@@ -270,6 +308,18 @@ export default function StockDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <p className="text-2xl font-bold text-white tabular-nums">{stockDetail.current_price} TL</p>
+          {token && (
+            <button
+              onClick={toggleWatch}
+              disabled={watchLoading}
+              title={isWatched ? "Favorilerden çıkar" : "Favorilere ekle"}
+              className={`bg-[#151921] border border-[#242B35] hover:border-[#F59E0B]/40 p-2 rounded-lg transition disabled:opacity-50 ${
+                isWatched ? "text-[#F59E0B]" : "text-gray-400 hover:text-[#F59E0B]"
+              }`}
+            >
+              <Star className="w-4 h-4" fill={isWatched ? "currentColor" : "none"} />
+            </button>
+          )}
           {token && (
             <button
               onClick={() => setShowNotificationModal(true)}

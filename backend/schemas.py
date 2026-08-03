@@ -448,3 +448,33 @@ class NotificationResponse(BaseModel):
 
 class UnreadCountResponse(BaseModel):
     count: int
+
+
+class ScreenerItemResponse(BaseModel):
+    symbol: str
+    company_name: str
+    sector: Optional[str] = None
+    current_price: float
+    price_change_pct: Optional[float] = None
+    is_katilim_compliant: bool
+    pe_ratio: Optional[float] = None
+    pb_ratio: Optional[float] = None
+    roe: Optional[float] = None
+    piotroski_score: Optional[int] = None
+    altman_z_score: Optional[float] = None
+    debt_to_equity: Optional[float] = None
+    net_margin: Optional[float] = None
+
+
+class WatchlistItemResponse(BaseModel):
+    symbol: str
+    company_name: str
+    current_price: float
+    price_change_pct: Optional[float] = None
+    is_katilim_compliant: bool
+    purification_rate: float
+    added_at: datetime
+
+    @field_serializer("added_at")
+    def _serialize_added_at(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)

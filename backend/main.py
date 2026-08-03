@@ -28,6 +28,7 @@ from schemas import (
     PendingOrderCreate, PendingOrderUpdate, PendingOrderResponse, StockNewsItem,
     PivotLevelsResponse, ForeignHoldingTrendResponse, EarningsCalendarItem,
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
+    WatchlistItemResponse, ScreenerItemResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -232,22 +233,23 @@ def _get_latest_db_price(db: Session, stock_id: int) -> float:
 
 # --- STOCKS ---
 
-@app.get("/api/stocks", response_model=List[StockResponse])
-def get_stocks(db: Session = Depends(get_db)):
-    stocks = db.query(models.Stock).filter_by(is_active=True).all()
+def _bulk_price_and_change(db: Session, stock_ids: List[int]) -> Dict[int, tuple]:
+    """
+    Verilen hisse id'leri için {stock_id: (current_price, price_change_pct)} döner.
+    Günlük % değişim = (güncel fiyat - ÖNCEKİ İŞ GÜNÜNÜN KAPANIŞI) / o kapanış
+    (Midas/Yahoo Finance ile aynı mantık) — get_stocks() ve /api/watchlist arasında
+    paylaşılır ki aynı hesap iki yerde ayrı ayrı yazılıp birbirinden sapmasın.
+    """
+    if not stock_ids:
+        return {}
 
-    # Günlük % değişim = (güncel fiyat - ÖNCEKİ İŞ GÜNÜNÜN KAPANIŞI) / o kapanış
-    # (Midas/Yahoo Finance ile aynı mantık). Önceki sürüm iki ardışık 5 dakikalık
-    # tik arasındaki farkı gösteriyordu (son güncellemeden bu yana ~5 dk'lık kırıntı
-    # bir değişim) — bu, gün içindeki gerçek hareketi yansıtmıyordu.
-    # stock_id -> önceki iş gününün kapanışı: tek sorguda tüm hisseler için çekilir.
     today = date.today()
     latest_daily_subq = (
         db.query(
             models.StockPriceDaily.stock_id,
             func.max(models.StockPriceDaily.trade_date).label("max_date"),
         )
-        .filter(models.StockPriceDaily.trade_date < today)
+        .filter(models.StockPriceDaily.stock_id.in_(stock_ids), models.StockPriceDaily.trade_date < today)
         .group_by(models.StockPriceDaily.stock_id)
         .subquery()
     )
@@ -262,44 +264,72 @@ def get_stocks(db: Session = Depends(get_db)):
     )
     prev_close_map = {stock_id: float(close) for stock_id, close in prev_close_rows}
 
+    # Her hisse için en son 2 tik: [0]=güncel, [1]=bir önceki (prev_close yoksa fallback için).
+    # stock_prices tablosu süresiz büyüdüğü için ".filter(stock_id.in_(...))" + Python'da
+    # ilk 2'yi almak TÜM geçmişi çekip belleğe yığar (ciddi performans riski); bunun yerine
+    # DB tarafında ROW_NUMBER() ile hisse başına en yeni 2 satır seçilir.
+    row_num = func.row_number().over(
+        partition_by=models.StockPrice.stock_id,
+        order_by=models.StockPrice.recorded_at.desc(),
+    ).label("rn")
+    ranked_subq = (
+        db.query(
+            models.StockPrice.stock_id,
+            models.StockPrice.price,
+        )
+        .filter(models.StockPrice.stock_id.in_(stock_ids))
+        .add_columns(row_num)
+        .subquery()
+    )
+    latest_two_rows = (
+        db.query(ranked_subq.c.stock_id, ranked_subq.c.price)
+        .filter(ranked_subq.c.rn <= 2)
+        .order_by(ranked_subq.c.stock_id, ranked_subq.c.rn)
+        .all()
+    )
+    ticks_by_stock: Dict[int, list] = {}
+    for stock_id, price in latest_two_rows:
+        ticks_by_stock.setdefault(stock_id, []).append(price)
+
+    result: Dict[int, tuple] = {}
+    for stock_id in stock_ids:
+        ticks = ticks_by_stock.get(stock_id, [])
+        if not ticks:
+            result[stock_id] = (0.0, None)
+            continue
+
+        current_price = float(ticks[0])
+        price_change_pct: Optional[float] = None
+        prev_close = prev_close_map.get(stock_id)
+        if prev_close and prev_close > 0:
+            price_change_pct = ((current_price - prev_close) / prev_close) * 100
+        elif len(ticks) > 1 and float(ticks[1]) > 0:
+            # stock_prices_daily'de henüz kaydı olmayan (yeni eklenmiş/backfill
+            # bekleyen) hisseler için eski tik-tik davranışına düş (0'dan iyidir).
+            prev_tick_price = float(ticks[1])
+            price_change_pct = ((current_price - prev_tick_price) / prev_tick_price) * 100
+
+        # Sermaye artırımı/bedelsiz/bölünme gibi kurumsal işlemler referans fiyatı
+        # tek seferde katlarca değiştirebiliyor (bkz. KTLEV: 156→44 TL, gerçek bir
+        # kayıp değil, pay sayısı artışı). BİST'in normal devre kesici sınırları
+        # bunu asla üretmez; bu yüzden %50'yi aşan sıçramalar güvenilmez kabul edilip
+        # yanlış "-71%" gibi bir rakam göstermek yerine None (bilgi yok) döndürülür.
+        if price_change_pct is not None and abs(price_change_pct) > EXTREME_CHANGE_GUARD_PCT:
+            price_change_pct = None
+
+        result[stock_id] = (current_price, price_change_pct)
+
+    return result
+
+
+@app.get("/api/stocks", response_model=List[StockResponse])
+def get_stocks(db: Session = Depends(get_db)):
+    stocks = db.query(models.Stock).filter_by(is_active=True).all()
+    price_map = _bulk_price_and_change(db, [s.id for s in stocks])
+
     response = []
     for stock in stocks:
-        current_price = 0.0
-        price_change_pct: Optional[float] = None
-
-        latest_record = (
-            db.query(models.StockPrice)
-            .filter(models.StockPrice.stock_id == stock.id)
-            .order_by(models.StockPrice.recorded_at.desc())
-            .first()
-        )
-
-        if latest_record:
-            current_price = float(latest_record.price)
-            prev_close = prev_close_map.get(stock.id)
-            if prev_close and prev_close > 0:
-                price_change_pct = ((current_price - prev_close) / prev_close) * 100
-            else:
-                # stock_prices_daily'de henüz kaydı olmayan (yeni eklenmiş/backfill
-                # bekleyen) hisseler için eski tik-tik davranışına düş (0'dan iyidir).
-                prev_tick = (
-                    db.query(models.StockPrice)
-                    .filter(models.StockPrice.stock_id == stock.id)
-                    .order_by(models.StockPrice.recorded_at.desc())
-                    .offset(1).limit(1)
-                    .first()
-                )
-                if prev_tick and float(prev_tick.price) > 0:
-                    price_change_pct = ((current_price - float(prev_tick.price)) / float(prev_tick.price)) * 100
-
-            # Sermaye artırımı/bedelsiz/bölünme gibi kurumsal işlemler referans fiyatı
-            # tek seferde katlarca değiştirebiliyor (bkz. KTLEV: 156→44 TL, gerçek bir
-            # kayıp değil, pay sayısı artışı). BİST'in normal devre kesici sınırları
-            # bunu asla üretmez; bu yüzden %50'yi aşan sıçramalar güvenilmez kabul edilip
-            # yanlış "-71%" gibi bir rakam göstermek yerine None (bilgi yok) döndürülür.
-            if price_change_pct is not None and abs(price_change_pct) > EXTREME_CHANGE_GUARD_PCT:
-                price_change_pct = None
-
+        current_price, price_change_pct = price_map.get(stock.id, (0.0, None))
         response.append({
             "id": stock.id,
             "symbol": stock.symbol,
@@ -311,8 +341,104 @@ def get_stocks(db: Session = Depends(get_db)):
             "is_katilim_compliant": bool(stock.is_katilim_compliant),
             "purification_rate": float(stock.purification_rate or 0.0)
         })
-        
+
     return response
+
+
+SCREENER_SORT_FIELDS = {
+    "price_change_pct": lambda item: item.price_change_pct,
+    "pe_ratio": lambda item: item.pe_ratio,
+    "pb_ratio": lambda item: item.pb_ratio,
+    "roe": lambda item: item.roe,
+    "piotroski_score": lambda item: item.piotroski_score,
+    "current_price": lambda item: item.current_price,
+}
+
+
+@app.get("/api/screener", response_model=List[ScreenerItemResponse])
+def get_screener(
+    db: Session = Depends(get_db),
+    sector: Optional[str] = None,
+    katilim_only: bool = False,
+    min_pe: Optional[float] = None,
+    max_pe: Optional[float] = None,
+    min_pb: Optional[float] = None,
+    max_pb: Optional[float] = None,
+    min_roe: Optional[float] = None,
+    min_piotroski: Optional[int] = None,
+    sort_by: str = "price_change_pct",
+    order: str = "desc",
+):
+    """
+    Hisse Tarayıcı: finansal oran filtreleriyle (F/K, PD/DD, ROE, Piotroski skoru,
+    sektör, Katılım uygunluğu) BİST hisselerini filtreleyip sıralar (Midas'ın
+    "hisse tarayıcı" özelliğinin eşdeğeri). company_analysis'i olmayan (henüz
+    analiz edilmemiş) hisseler filtre uygulanmadıysa listede kalır, filtre
+    uygulanmışsa (o alan None olduğu için) elenir.
+    """
+    query = db.query(models.Stock).filter_by(is_active=True)
+    if sector:
+        query = query.filter(models.Stock.sector == sector)
+    if katilim_only:
+        query = query.filter(models.Stock.is_katilim_compliant.is_(True))
+    stocks = query.all()
+
+    price_map = _bulk_price_and_change(db, [s.id for s in stocks])
+    analysis_rows = (
+        db.query(models.CompanyAnalysis)
+        .filter(models.CompanyAnalysis.stock_id.in_([s.id for s in stocks]))
+        .all()
+    )
+    analysis_by_stock = {row.stock_id: row for row in analysis_rows}
+
+    items = []
+    for stock in stocks:
+        current_price, price_change_pct = price_map.get(stock.id, (0.0, None))
+        analysis = analysis_by_stock.get(stock.id)
+
+        pe_ratio = float(analysis.pe_ratio) if analysis and analysis.pe_ratio is not None else None
+        pb_ratio = float(analysis.pb_ratio) if analysis and analysis.pb_ratio is not None else None
+        roe = float(analysis.roe) if analysis and analysis.roe is not None else None
+        piotroski_score = analysis.piotroski_score if analysis else None
+
+        if min_pe is not None and (pe_ratio is None or pe_ratio < min_pe):
+            continue
+        if max_pe is not None and (pe_ratio is None or pe_ratio > max_pe):
+            continue
+        if min_pb is not None and (pb_ratio is None or pb_ratio < min_pb):
+            continue
+        if max_pb is not None and (pb_ratio is None or pb_ratio > max_pb):
+            continue
+        if min_roe is not None and (roe is None or roe < min_roe):
+            continue
+        if min_piotroski is not None and (piotroski_score is None or piotroski_score < min_piotroski):
+            continue
+
+        items.append(ScreenerItemResponse(
+            symbol=stock.symbol,
+            company_name=stock.company_name,
+            sector=stock.sector,
+            current_price=round(current_price, 2),
+            price_change_pct=round(price_change_pct, 2) if price_change_pct is not None else None,
+            is_katilim_compliant=bool(stock.is_katilim_compliant),
+            pe_ratio=pe_ratio,
+            pb_ratio=pb_ratio,
+            roe=roe,
+            piotroski_score=piotroski_score,
+            altman_z_score=float(analysis.altman_z_score) if analysis and analysis.altman_z_score is not None else None,
+            debt_to_equity=float(analysis.debt_to_equity) if analysis and analysis.debt_to_equity is not None else None,
+            net_margin=float(analysis.net_margin) if analysis and analysis.net_margin is not None else None,
+        ))
+
+    # Sıralanan alanı olan/olmayanları ayırıp yalnızca doluları sıralıyoruz; None
+    # değerler (yön ne olursa olsun) her zaman listenin sonuna düşer.
+    sort_key = SCREENER_SORT_FIELDS.get(sort_by, SCREENER_SORT_FIELDS["price_change_pct"])
+    with_value = [i for i in items if sort_key(i) is not None]
+    without_value = [i for i in items if sort_key(i) is None]
+    with_value.sort(key=sort_key, reverse=(order != "asc"))
+
+    return with_value + without_value
+
 
 @app.get("/api/stocks/{symbol}", response_model=StockDetailResponse)
 def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
@@ -1330,6 +1456,84 @@ def mark_all_notifications_read(
     )
     db.commit()
     return {"message": "Tüm bildirimler okundu olarak işaretlendi."}
+
+
+# --- WATCHLIST (FAVORİLER) ---
+
+@app.get("/api/watchlist", response_model=List[WatchlistItemResponse])
+def get_watchlist(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Kullanıcının izleme listesindeki hisseleri güncel fiyat/değişim bilgisiyle döner."""
+    rows = (
+        db.query(models.Watchlist)
+        .filter_by(user_id=current_user.id)
+        .order_by(models.Watchlist.created_at.desc())
+        .all()
+    )
+    if not rows:
+        return []
+
+    stock_by_id = {r.stock.id: r.stock for r in rows}
+    price_map = _bulk_price_and_change(db, list(stock_by_id.keys()))
+
+    items = []
+    for row in rows:
+        stock = stock_by_id[row.stock.id]
+        current_price, price_change_pct = price_map.get(stock.id, (0.0, None))
+        items.append(WatchlistItemResponse(
+            symbol=stock.symbol,
+            company_name=stock.company_name,
+            current_price=round(current_price, 2),
+            price_change_pct=round(price_change_pct, 2) if price_change_pct is not None else None,
+            is_katilim_compliant=bool(stock.is_katilim_compliant),
+            purification_rate=float(stock.purification_rate or 0.0),
+            added_at=row.created_at,
+        ))
+    return items
+
+
+@app.post("/api/watchlist/{symbol}", status_code=status.HTTP_201_CREATED)
+def add_to_watchlist(
+    symbol: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bir hisseyi kullanıcının izleme listesine ekler (zaten ekliyse no-op)."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    existing = db.query(models.Watchlist).filter_by(user_id=current_user.id, stock_id=stock.id).first()
+    if existing:
+        return {"message": f"{stock.symbol} zaten izleme listenizde."}
+
+    db.add(models.Watchlist(user_id=current_user.id, stock_id=stock.id))
+    db.commit()
+    return {"message": f"{stock.symbol} izleme listenize eklendi."}
+
+
+@app.delete("/api/watchlist/{symbol}")
+def remove_from_watchlist(
+    symbol: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bir hisseyi kullanıcının izleme listesinden çıkarır."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper()).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    deleted = (
+        db.query(models.Watchlist)
+        .filter_by(user_id=current_user.id, stock_id=stock.id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Bu hisse izleme listenizde değil.")
+    return {"message": f"{stock.symbol} izleme listenizden çıkarıldı."}
 
 
 # --- AI BOT DATA ---
