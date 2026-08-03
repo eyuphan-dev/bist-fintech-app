@@ -273,12 +273,16 @@ def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
     if not stock:
         raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
         
-    # Fetch last 100 prices for chart & indicator calculations
+    # Fetch last 100 prices for chart & indicator calculations.
+    # DESC + limit, sonra kronolojik sıraya çevir — asc + limit toplam kayıt
+    # 100'ü geçtiğinde en ESKİ 100 kaydı döndürüyordu (grafik/indikatörler
+    # donmuş, güncel olmayan veriyle hesaplanıyordu).
     price_records = db.query(models.StockPrice)\
         .filter_by(stock_id=stock.id)\
-        .order_by(models.StockPrice.recorded_at.asc())\
+        .order_by(models.StockPrice.recorded_at.desc())\
         .limit(100)\
         .all()
+    price_records.reverse()
         
     if not price_records:
         raise HTTPException(status_code=400, detail="Bu hisseye ait fiyat verisi bulunmamaktadır.")

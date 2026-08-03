@@ -407,11 +407,16 @@ def _execute_bot_trading_cycle(
     stock_by_id = {s.id: s for s in stocks}
 
     for stock in stocks:
+        # DESC + limit ile SON 500 kayıt çekilip kronolojik sıraya (eskiden yeniye)
+        # çevrilir. Önceki haliyle (asc + limit) toplam kayıt 500'ü geçtiğinde en
+        # ESKİ 500 kayıt dönüyordu — bot, birikmiş geçmişi olan hisselerde asla
+        # güncel fiyatı görmüyor, donmuş bir pencerede işlem yapıyordu.
         price_records = db.query(models.StockPrice)\
             .filter_by(stock_id=stock.id)\
-            .order_by(models.StockPrice.recorded_at.asc())\
+            .order_by(models.StockPrice.recorded_at.desc())\
             .limit(500)\
             .all()
+        price_records.reverse()
 
         if not price_records:
             continue

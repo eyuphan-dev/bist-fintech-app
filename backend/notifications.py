@@ -177,13 +177,16 @@ def check_ai_signal_triggers(db: Session) -> None:
             continue
 
         if pref.stock_id not in signal_cache:
+            # DESC + limit, sonra kronolojik sıraya çevir (bkz. bot.py'deki aynı düzeltme) —
+            # asc + limit birikmiş geçmişte en eski 500 kaydı döndürüp sinyali donduruyordu.
             price_records = (
                 db.query(models.StockPrice)
                 .filter_by(stock_id=pref.stock_id)
-                .order_by(models.StockPrice.recorded_at.asc())
+                .order_by(models.StockPrice.recorded_at.desc())
                 .limit(500)
                 .all()
             )
+            price_records.reverse()
             if not price_records:
                 signal_cache[pref.stock_id] = ("BEKLE", None, 0.0)
             else:
