@@ -55,16 +55,22 @@ def _get_latest_price_and_change(db: Session, stock_id: int):
         return None, None
     current = float(latest.price)
 
-    prev_close_row = (
-        db.query(models.StockPriceDaily)
-        .filter(models.StockPriceDaily.stock_id == stock_id, models.StockPriceDaily.trade_date < date.today())
-        .order_by(models.StockPriceDaily.trade_date.desc())
-        .first()
-    )
-    if not prev_close_row or float(prev_close_row.close) <= 0:
-        return current, None
+    # Öncelik: Yahoo'nun resmi previousClose referansı (bkz. main.py:_bulk_price_and_change
+    # docstring'i) — yoksa kendi stock_prices_daily türetmemize düşülür.
+    stock = db.query(models.Stock).filter_by(id=stock_id).first()
+    prev_close: Optional[float] = float(stock.previous_close) if stock and stock.previous_close is not None else None
 
-    prev_close = float(prev_close_row.close)
+    if prev_close is None:
+        prev_close_row = (
+            db.query(models.StockPriceDaily)
+            .filter(models.StockPriceDaily.stock_id == stock_id, models.StockPriceDaily.trade_date < date.today())
+            .order_by(models.StockPriceDaily.trade_date.desc())
+            .first()
+        )
+        prev_close = float(prev_close_row.close) if prev_close_row and float(prev_close_row.close) > 0 else None
+
+    if prev_close is None or prev_close <= 0:
+        return current, None
     change_pct = ((current - prev_close) / prev_close) * 100
     # Kurumsal işlem (bölünme/bedelsiz) sonrası yanlış alarm tetiklememek için
     # aynı koruma (bkz. main.py:EXTREME_CHANGE_GUARD_PCT).

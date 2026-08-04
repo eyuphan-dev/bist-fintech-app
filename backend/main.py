@@ -239,9 +239,25 @@ def _bulk_price_and_change(db: Session, stock_ids: List[int]) -> Dict[int, tuple
     Günlük % değişim = (güncel fiyat - ÖNCEKİ İŞ GÜNÜNÜN KAPANIŞI) / o kapanış
     (Midas/Yahoo Finance ile aynı mantık) — get_stocks() ve /api/watchlist arasında
     paylaşılır ki aynı hesap iki yerde ayrı ayrı yazılıp birbirinden sapmasın.
+
+    Referans kapanış önceliği:
+      1) stocks.previous_close — Yahoo'nun (fast_info) resmi referansı, scheduler
+         her fiyat güncellemesinde tazeler. BİST'in tedbir/taban-tavan referans
+         fiyatı kurallarını doğru yansıtır (bkz. GUNDG: kendi türetmemiz -%18.9
+         derken Yahoo'nun resmi taban referansı -%9.96'ydı).
+      2) stock_prices_daily'den türetilen "son geçerli günlük bar" (Yahoo referansı
+         henüz çekilmemişse — örn. ilk deploy sonrası ya da yeni eklenen hisse).
+      3) İki ardışık tik farkı (ikisi de yoksa).
     """
     if not stock_ids:
         return {}
+
+    yahoo_prev_close_map = {
+        stock_id: float(prev_close)
+        for stock_id, prev_close in db.query(models.Stock.id, models.Stock.previous_close)
+        .filter(models.Stock.id.in_(stock_ids), models.Stock.previous_close.isnot(None))
+        .all()
+    }
 
     today = date.today()
     latest_daily_subq = (
@@ -300,7 +316,7 @@ def _bulk_price_and_change(db: Session, stock_ids: List[int]) -> Dict[int, tuple
 
         current_price = float(ticks[0])
         price_change_pct: Optional[float] = None
-        prev_close = prev_close_map.get(stock_id)
+        prev_close = yahoo_prev_close_map.get(stock_id) or prev_close_map.get(stock_id)
         if prev_close and prev_close > 0:
             price_change_pct = ((current_price - prev_close) / prev_close) * 100
         elif len(ticks) > 1 and float(ticks[1]) > 0:
@@ -463,18 +479,20 @@ def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
     # Latest price — DB'deki son kayıttan (borsa kapalıyken Cuma kapanışında donuk kalır)
     current_price = _get_latest_db_price(db, stock.id) or float(price_records[-1].price)
 
-    # Önceki kapanış: stock_prices_daily'deki bugünden ÖNCEKİ en son gün.
-    # Günlük % değişim = (güncel fiyat - önceki kapanış) / önceki kapanış — Midas/Yahoo
-    # Finance ile aynı mantık (bkz. get_stocks() içindeki aynı hesap, orada tüm liste
-    # için toplu/optimize edilmiş hali var; burada tek hisse olduğu için basit sorgu yeterli).
+    # Önceki kapanış: önce Yahoo'nun resmi referansı (stocks.previous_close), yoksa
+    # stock_prices_daily'deki bugünden ÖNCEKİ en son gün (bkz. _bulk_price_and_change
+    # docstring'indeki öncelik sırası ve GUNDG örneği).
     today = date.today()
-    prev_close_row = (
-        db.query(models.StockPriceDaily)
-        .filter(models.StockPriceDaily.stock_id == stock.id, models.StockPriceDaily.trade_date < today)
-        .order_by(models.StockPriceDaily.trade_date.desc())
-        .first()
-    )
-    previous_close = float(prev_close_row.close) if prev_close_row else None
+    if stock.previous_close is not None:
+        previous_close = float(stock.previous_close)
+    else:
+        prev_close_row = (
+            db.query(models.StockPriceDaily)
+            .filter(models.StockPriceDaily.stock_id == stock.id, models.StockPriceDaily.trade_date < today)
+            .order_by(models.StockPriceDaily.trade_date.desc())
+            .first()
+        )
+        previous_close = float(prev_close_row.close) if prev_close_row else None
     change_pct = (
         round(((current_price - previous_close) / previous_close) * 100, 2)
         if previous_close and previous_close > 0

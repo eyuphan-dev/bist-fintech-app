@@ -54,7 +54,7 @@ def init_cache_from_db():
             else:
                 res = fetch_current_price(stock.symbol)
                 if res:
-                    price, volume = res
+                    price, volume, previous_close = res
                     now = datetime.utcnow()
                     set_latest_price(stock.symbol, price, volume, now)
                     db.add(
@@ -65,6 +65,8 @@ def init_cache_from_db():
                             recorded_at=now,
                         )
                     )
+                    if previous_close is not None:
+                        stock.previous_close = previous_close
                     print(f"  yfinance'dan yeni çekildi: {stock.symbol} → {price} TL")
         db.commit()
     except Exception as e:
@@ -114,7 +116,7 @@ def update_bist_prices_job():
                 time.sleep(0.4)
             res = fetch_current_price(stock.symbol)
             if res:
-                price, volume = res
+                price, volume, previous_close = res
                 db.add(
                     models.StockPrice(
                         stock_id=stock.id,
@@ -123,6 +125,8 @@ def update_bist_prices_job():
                         recorded_at=now_utc,
                     )
                 )
+                if previous_close is not None:
+                    stock.previous_close = previous_close
                 set_latest_price(stock.symbol, price, volume, now_utc)
                 updated.append(f"{stock.symbol}({price})")
 

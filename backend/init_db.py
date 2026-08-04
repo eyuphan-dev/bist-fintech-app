@@ -77,6 +77,7 @@ MIGRATIONS = {
         "purification_rate": "NUMERIC(5, 2) DEFAULT 0.00",
         "non_compliance_reason": "TEXT",
         "sector": "TEXT",
+        "previous_close": "NUMERIC(10, 2)",
     },
     "company_analysis": {
         "ev_ebitda": "NUMERIC(10, 2)",

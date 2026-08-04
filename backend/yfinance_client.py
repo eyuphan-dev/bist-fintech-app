@@ -5,10 +5,33 @@ from typing import Dict, List, Optional, Tuple
 
 from yf_retry import call_with_retry
 
-def fetch_current_price(symbol: str) -> Optional[Tuple[float, int]]:
+def _safe_previous_close(ticker: "yf.Ticker", symbol: str) -> Optional[float]:
     """
-    Fetches the current price and volume for a BIST stock from Yahoo Finance.
-    Returns: Tuple[price, volume] or None
+    Yahoo'nun kendi "önceki kapanış" referansını (fast_info.previousClose) çeker.
+    Bu değer, BİST'in tedbir/taban-tavan gibi kurallarına göre borsanın resmi
+    referans fiyatını yansıtır; kendi stock_prices_daily tablomuzdan türettiğimiz
+    "son geçerli günlük bar" değerinden daha güvenilirdir — özellikle bir hissenin
+    günlük kapanışı birkaç gündür oluşmadığı (tedbir/az işlem gören) durumlarda
+    kendi hesabımız günler öncesine giderken Yahoo doğru referansı veriyor.
+    ticker.history()'den SONRA çağrıldığında ek ağ isteği YARATMAZ (aynı session
+    üzerinden anlık dönüyor) — bu yüzden mevcut price_history çağrısının hemen
+    ardından, ayrı bir retry/backoff olmadan "best effort" çağrılır.
+    """
+    try:
+        fi = ticker.fast_info
+        prev_close = fi.get("previousClose") if hasattr(fi, "get") else fi.previous_close
+        if prev_close and prev_close == prev_close:  # NaN kontrolü (NaN != NaN)
+            return round(float(prev_close), 2)
+    except Exception as e:
+        print(f"[yfinance_client] previousClose alınamadı ({symbol}): {e}")
+    return None
+
+
+def fetch_current_price(symbol: str) -> Optional[Tuple[float, int, Optional[float]]]:
+    """
+    Fetches the current price, volume and Yahoo'nun resmi önceki kapanış referansını
+    (previous_close) for a BIST stock from Yahoo Finance.
+    Returns: Tuple[price, volume, previous_close] or None
     """
     yahoo_symbol = f"{symbol}.IS"
     try:
@@ -22,14 +45,14 @@ def fetch_current_price(symbol: str) -> Optional[Tuple[float, int]]:
             last_row = history.iloc[-1]
             price = round(float(last_row["Close"]), 2)
             volume = int(last_row["Volume"])
-            return price, volume
+            return price, volume, _safe_previous_close(ticker, symbol)
 
         # Fallback to info if history is empty (e.g. pre-market or post-market)
         info = call_with_retry(lambda: ticker.info, attempts=2, label=f"{symbol}.price_info")
         price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
         volume = info.get("regularMarketVolume") or info.get("volume") or 0
         if price:
-            return round(float(price), 2), int(volume)
+            return round(float(price), 2), int(volume), _safe_previous_close(ticker, symbol)
 
     except Exception as e:
         print(f"Error fetching current price for {symbol}: {str(e)}")

@@ -46,6 +46,13 @@ class Stock(Base):
     purification_rate = Column(Numeric(5, 2), default=0.00)  # Arınma Oranı (%)
     non_compliance_reason = Column(String, nullable=True)
 
+    # Yahoo Finance'ın resmi "önceki kapanış" referansı (fast_info.previousClose),
+    # scheduler her fiyat güncellemesinde tazeler. Günlük % değişim hesabında
+    # kendi stock_prices_daily türetmemizden ÖNCE bu kullanılır — BİST'in tedbir/
+    # taban-tavan referans fiyatı kurallarını Yahoo bizden daha doğru yansıtıyor
+    # (bkz. GUNDG örneği: kendi hesabımız -%18.9 derken gerçek taban -%9.96'ydı).
+    previous_close = Column(Numeric(10, 2), nullable=True)
+
     # Relationships
     prices = relationship("StockPrice", back_populates="stock", cascade="all, delete-orphan")
     portfolios = relationship("Portfolio", back_populates="stock")
