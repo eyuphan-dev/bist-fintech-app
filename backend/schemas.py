@@ -197,6 +197,8 @@ class BotLogResponse(BaseModel):
     price: float
     quantity: float
     reason_text: Optional[str]
+    time_frame: Optional[str] = None
+    days_held: Optional[int] = None
     created_at: datetime
 
     class Config:

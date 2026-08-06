@@ -132,6 +132,9 @@ class BotLog(Base):
     price = Column(Numeric(10, 2), nullable=False)
     quantity = Column(Numeric(12, 4), nullable=False)
     reason_text = Column(String, nullable=True)
+    # İşlem anında botun çalıştığı zaman dilimi ('1D'/'1W'/'1M') — bot loglarını
+    # strateji bazında filtreleyip gruplayabilmek için (eski kayıtlarda NULL olabilir).
+    time_frame = Column(String(5), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

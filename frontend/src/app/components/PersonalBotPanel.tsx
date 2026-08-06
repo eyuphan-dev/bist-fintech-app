@@ -32,8 +32,17 @@ interface BotLog {
   price: number;
   quantity: number;
   reason_text: string;
+  time_frame: "1D" | "1W" | "1M" | null;
+  days_held: number | null;
   created_at: string;
 }
+
+const LOG_TIME_FRAME_FILTERS: { value: "1D" | "1W" | "1M" | "ALL"; label: string }[] = [
+  { value: "ALL", label: "Tümü" },
+  { value: "1D", label: "1 Günlük" },
+  { value: "1W", label: "1 Haftalık" },
+  { value: "1M", label: "1 Aylık" },
+];
 
 const TIME_FRAME_OPTIONS: { value: "1D" | "1W" | "1M"; label: string; hint: string }[] = [
   { value: "1D", label: "1 Günlük (Gün İçi / Scalp)", hint: "RSI(7) + EMA9/21 momentum" },
@@ -68,6 +77,7 @@ export default function PersonalBotPanel() {
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [logFilter, setLogFilter] = useState<"1D" | "1W" | "1M" | "ALL">("ALL");
 
   const fetchStatus = useCallback(async () => {
     if (!token) return;
@@ -397,43 +407,76 @@ export default function PersonalBotPanel() {
 
       {/* İşlem Günlüğü */}
       <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
-        <h4 className="text-xs font-bold text-white uppercase tracking-wide mb-4 flex items-center gap-1.5">
+        <h4 className="text-xs font-bold text-white uppercase tracking-wide mb-3 flex items-center gap-1.5">
           <ArrowLeftRight className="w-3.5 h-3.5" /> Kişisel Bot İşlem Günlüğü
         </h4>
-        {logs.length === 0 ? (
-          <p className="text-center py-6 text-gray-500 text-xs">
-            Botunuz henüz işlem yapmadı. BİST seansı saatlerinde (10:00-18:15) işlem yapacaktır.
-          </p>
-        ) : (
-          <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-            {logs.map((log) => (
-              <div key={log.id} className="p-3.5 bg-[#0B0E14] border border-[#242B35] rounded-xl space-y-1.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-white">{log.symbol}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                      log.action_type === "AL" ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
-                    }`}>
-                      {log.action_type}
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {LOG_TIME_FRAME_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setLogFilter(f.value)}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition ${
+                logFilter === f.value
+                  ? "bg-[#F59E0B]/10 border-[#F59E0B]/30 text-[#F59E0B]"
+                  : "bg-[#0B0E14] border-[#242B35] text-gray-400 hover:border-[#F59E0B]/20"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {(() => {
+          const filteredLogs = logFilter === "ALL" ? logs : logs.filter((l) => l.time_frame === logFilter);
+          if (filteredLogs.length === 0) {
+            return (
+              <p className="text-center py-6 text-gray-500 text-xs">
+                {logs.length === 0
+                  ? "Botunuz henüz işlem yapmadı. BİST seansı saatlerinde (10:00-18:15) işlem yapacaktır."
+                  : "Bu zaman diliminde henüz işlem yok."}
+              </p>
+            );
+          }
+          return (
+            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+              {filteredLogs.map((log) => (
+                <div key={log.id} className="p-3.5 bg-[#0B0E14] border border-[#242B35] rounded-xl space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-white">{log.symbol}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        log.action_type === "AL" ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
+                      }`}>
+                        {log.action_type}
+                      </span>
+                      {log.time_frame && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#F59E0B]/10 text-[#F59E0B]">
+                          {LOG_TIME_FRAME_FILTERS.find((f) => f.value === log.time_frame)?.label ?? log.time_frame}
+                        </span>
+                      )}
+                      {log.action_type === "SAT" && log.days_held !== null && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#242B35] text-gray-300">
+                          {log.days_held === 0 ? "Aynı gün kapandı" : `${log.days_held}. günde kapandı`}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-gray-500 tabular-nums">
+                      {new Date(log.created_at).toLocaleString("tr-TR")}
                     </span>
                   </div>
-                  <span className="text-[10px] text-gray-500 tabular-nums">
-                    {new Date(log.created_at).toLocaleString("tr-TR")}
-                  </span>
-                </div>
-                <p className="text-gray-400 font-medium tabular-nums">
-                  {log.quantity} adet {log.symbol} — {log.price} TL
-                </p>
-                <div className="pt-1.5 border-t border-[#242B35] flex items-start gap-1">
-                  <Activity className="w-3.5 h-3.5 text-[#F59E0B] shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-gray-400 italic">
-                    <span className="font-semibold text-gray-300 not-italic">Gerekçe:</span> {log.reason_text}
+                  <p className="text-gray-400 font-medium tabular-nums">
+                    {log.quantity} adet {log.symbol} — {log.price} TL
                   </p>
+                  <div className="pt-1.5 border-t border-[#242B35] flex items-start gap-1">
+                    <Activity className="w-3.5 h-3.5 text-[#F59E0B] shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-gray-400 italic">
+                      <span className="font-semibold text-gray-300 not-italic">Gerekçe:</span> {log.reason_text}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

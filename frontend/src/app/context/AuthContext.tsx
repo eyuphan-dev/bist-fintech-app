@@ -78,11 +78,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const bumpRefresh = useCallback(() => setRefreshTrigger((p) => p + 1), []);
 
   const login = useCallback(async (username: string, password: string) => {
+    const controller = new AbortController();
+    // Render free plan'da backend uzun süre boşta kalırsa "uyanması" 30-60 sn
+    // sürebilir; tarayıcının varsayılan (dakikalarca) timeout'unu beklemek yerine
+    // kullanıcıya makul bir sürede anlamlı bir hata gösteriyoruz.
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
+        signal: controller.signal,
       });
       const data = await res.json();
       if (res.ok) {
@@ -91,8 +97,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { ok: true };
       }
       return { ok: false, message: data.detail || "Kimlik doğrulama başarısız." };
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return { ok: false, message: "Sunucu yanıt vermedi (uyanıyor olabilir), lütfen birkaç saniye sonra tekrar deneyin." };
+      }
       return { ok: false, message: "Sunucuya bağlanılamadı." };
+    } finally {
+      clearTimeout(timeoutId);
     }
   }, []);
 

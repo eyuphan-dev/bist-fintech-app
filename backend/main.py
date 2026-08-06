@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -15,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 import nh3
 
 import models
-from database import engine, get_db, begin_write_transaction
+from database import engine, get_db, begin_write_transaction, SessionLocal
 from schemas import (
     UserCreate, UserResponse, Token, LoginRequest,
     StockResponse, StockDetailResponse, StockPriceResponse,
@@ -159,15 +159,18 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 @app.post("/api/auth/login", response_model=Token)
-def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+def login(login_data: LoginRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     user = db.query(models.User).filter_by(username=login_data.username).first()
     if not user or user.is_bot or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Hatalı kullanıcı adı veya şifre.")
-    
-    # Giriş olayını logla
-    _log_user_action(db, user.id, "LOGIN", f"Kullanıcı giriş yaptı")
-    
+
     access_token = create_access_token(subject=user.username)
+
+    # Giriş olayı kritik olmayan bir kayıttır; yanıtı geciktirmemesi için
+    # (ve login isteğinin scheduler/diğer yazma işlemleriyle DB kilidi için
+    # yarışmaması için) response döndükten SONRA ayrı bir session ile loglanır.
+    background_tasks.add_task(_log_user_action_background, user.id, "LOGIN", "Kullanıcı giriş yaptı")
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/api/auth/me", response_model=UserResponse)
@@ -211,6 +214,27 @@ def _log_user_action(
         db.flush()  # commit öncesi yaz, ana transaction ile birlikte
     except Exception as e:
         print(f"[UserLog] Log yazılamıyor ({action}): {e}")
+
+
+def _log_user_action_background(user_id: int, action: str, details: str = ""):
+    """
+    _log_user_action'ın BackgroundTasks ile çağrılan sürümü: kendi DB session'ını
+    açar, kaydı yazıp commit eder ve kapatır. İstek/yanıt döngüsünü bloklamaz.
+    """
+    db = SessionLocal()
+    try:
+        db.add(models.UserLog(
+            user_id=user_id,
+            action=action,
+            details=details,
+            created_at=datetime.utcnow(),
+        ))
+        db.commit()
+    except Exception as e:
+        print(f"[UserLog] Log yazılamıyor ({action}): {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 # --- FİYAT DEĞERLEME YARDIMCISI ---
@@ -1834,21 +1858,44 @@ def update_user_bot_settings(
 
 @app.get("/api/user/bot/logs", response_model=List[BotLogResponse])
 def get_user_bot_logs(
+    time_frame: Optional[str] = None,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Giriş yapan kullanıcının kişisel AI botunun işlem günlüğünü döner."""
-    logs = db.query(models.BotLog)\
+    """
+    Giriş yapan kullanıcının kişisel AI botunun işlem günlüğünü döner.
+    time_frame verilirse ('1D'/'1W'/'1M') yalnızca o stratejiyle yapılan işlemler döner.
+    Her SAT kaydı için, aynı hissede ondan önceki en yakın AL kaydına göre pozisyonun
+    kaç gün açık kaldığı (days_held) hesaplanır.
+    """
+    # AL/SAT eşleştirmesi (days_held) için filtre uygulanmadan tüm geçmiş çekilir,
+    # eşleştirme sonrası istenen zaman dilimine göre daraltılıp son 100 kayıt döndürülür.
+    all_logs = db.query(models.BotLog)\
         .filter_by(user_id=current_user.id)\
-        .order_by(models.BotLog.created_at.desc())\
-        .limit(50)\
+        .order_by(models.BotLog.created_at.asc())\
         .all()
+
+    last_buy_at = {}
+    days_held_by_log_id = {}
+    for log in all_logs:
+        if log.action_type == "AL":
+            last_buy_at[log.stock_id] = log.created_at
+        elif log.action_type == "SAT":
+            buy_time = last_buy_at.pop(log.stock_id, None)
+            if buy_time:
+                days_held_by_log_id[log.id] = max(0, (log.created_at - buy_time).days)
+
+    filtered = [log for log in all_logs if not time_frame or log.time_frame == time_frame]
+    filtered.sort(key=lambda log: log.created_at, reverse=True)
+    filtered = filtered[:100]
+
     return [
         BotLogResponse(
             id=log.id, symbol=log.stock.symbol, action_type=log.action_type,
             price=float(log.price), quantity=float(log.quantity),
-            reason_text=log.reason_text, created_at=log.created_at
-        ) for log in logs
+            reason_text=log.reason_text, time_frame=log.time_frame,
+            days_held=days_held_by_log_id.get(log.id), created_at=log.created_at
+        ) for log in filtered
     ]
 
 

@@ -1,4 +1,5 @@
 services:
+  # NOT: Bu servis artik VPS'e (pm2 + aaPanel nginx) tasindi, bkz Desktop/borsa_sunucu_bilgileri.txt
   - type: web
     name: bist-simulasyonu-api
     runtime: python

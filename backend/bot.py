@@ -450,8 +450,9 @@ def _execute_bot_trading_cycle(
                 trade_allocation = available_cash * 0.15
 
                 if trade_allocation >= 100.0:
-                    quantity = round(trade_allocation / latest_price, 4)
-                    if quantity > 0:
+                    # BIST'te kesirli lot alınamaz; bütçeye sığan en fazla tam adet hesaplanır.
+                    quantity = float(int(trade_allocation // latest_price))
+                    if quantity >= 1:
                         cost = quantity * latest_price
                         balance_holder.virtual_balance = float(balance_holder.virtual_balance) - cost
 
@@ -470,7 +471,8 @@ def _execute_bot_trading_cycle(
                         )
                         db.add(models.BotLog(
                             user_id=owner_user_id, stock_id=stock.id, action_type="AL",
-                            price=latest_price, quantity=quantity, reason_text=reason
+                            price=latest_price, quantity=quantity, reason_text=reason,
+                            time_frame=time_frame,
                         ))
                         print(f"{log_label} SATIN ALIM: {stock.symbol} - {quantity} adet @ {latest_price} TL")
 
@@ -491,7 +493,8 @@ def _execute_bot_trading_cycle(
 
                 db.add(models.BotLog(
                     user_id=owner_user_id, stock_id=stock.id, action_type="SAT",
-                    price=latest_price, quantity=quantity, reason_text=reason
+                    price=latest_price, quantity=quantity, reason_text=reason,
+                    time_frame=time_frame,
                 ))
                 print(f"{log_label} SATIŞ: {stock.symbol} - {quantity} adet @ {latest_price} TL. Kâr/Zarar: %{profit_loss:.2f}")
 
