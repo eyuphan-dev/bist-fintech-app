@@ -6,6 +6,7 @@ import NavBar from "./components/NavBar";
 import Footer from "./components/Footer";
 import OnboardingHelpModal from "./components/OnboardingHelpModal";
 import MobileBottomNav from "./components/MobileBottomNav";
+import CacheGuard from "./components/CacheGuard";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -38,6 +39,7 @@ export default function RootLayout({
     <html lang="tr" suppressHydrationWarning>
       <body className={`${outfit.variable} antialiased bg-[#0B0E14]`} suppressHydrationWarning>
         <AuthProvider>
+          <CacheGuard />
           <div className="min-h-screen flex flex-col">
             <NavBar />
             <div className="flex-1 pb-16 md:pb-0">{children}</div>
