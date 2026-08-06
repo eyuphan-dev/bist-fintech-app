@@ -3,6 +3,9 @@ name: Deploy to VPS
 on:
   push:
     branches: [master]
+  # GitHub bazen push olayını tetiklemeyebiliyor; bu durumda Actions sekmesinden
+  # "Run workflow" ile deploy elle başlatılabilsin diye eklendi.
+  workflow_dispatch:
 
 jobs:
   deploy:
