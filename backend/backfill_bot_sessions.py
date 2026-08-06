@@ -20,13 +20,30 @@ _LABEL_TO_RISKMODE = {cfg["label"]: code for code, cfg in RISK_MODE_CONFIG.items
 
 
 def _parse_timeframe_riskmode(reason_text: str):
-    """'[1 Haftalık (Swing Trade) / ⚖️ Normal (Dengeli)] ...' -> ('1W', 'normal')"""
+    """
+    '[1 Günlük (Gün İçi / Scalp) / 🚀 Agresif (Yüksek Risk)] ...' -> ('1D', 'aggressive')
+    Etiketlerin kendisi de "/" içerdiğinden (örn. "Gün İçi / Scalp"), bracket içeriği
+    "/" ile bölünemez — bilinen etiketlerle prefix eşleşmesi yapılır.
+    """
     if not reason_text or "[" not in reason_text or "]" not in reason_text:
         return None, None
     bracket = reason_text.split("[", 1)[1].split("]", 1)[0]
-    parts = [p.strip() for p in bracket.split("/")]
-    tf = _LABEL_TO_TIMEFRAME.get(parts[0]) if len(parts) > 0 else None
-    rm = _LABEL_TO_RISKMODE.get(parts[1]) if len(parts) > 1 else None
+
+    tf = None
+    rest = None
+    for label, code in _LABEL_TO_TIMEFRAME.items():
+        if bracket.startswith(label):
+            tf = code
+            rest = bracket[len(label):].lstrip(" /").strip()
+            break
+
+    rm = None
+    if rest:
+        for label, code in _LABEL_TO_RISKMODE.items():
+            if rest == label:
+                rm = code
+                break
+
     return tf, rm
 
 
