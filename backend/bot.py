@@ -552,6 +552,28 @@ def run_ai_bot_simulation(db: Session):
     )
 
 
+def open_bot_session(db: Session, user_id: int, time_frame: str, risk_mode: str) -> "models.BotSession":
+    """Kullanıcı botu başlattığında (ya da strateji değiştirdiğinde) yeni bir oturum açar."""
+    session = models.BotSession(
+        user_id=user_id, time_frame=time_frame, risk_mode=risk_mode,
+        started_at=datetime.utcnow(),
+    )
+    db.add(session)
+    return session
+
+
+def close_open_bot_session(db: Session, user_id: int, end_reason: str) -> Optional["models.BotSession"]:
+    """Kullanıcının hâlâ açık (ended_at IS NULL) oturumunu kapatır."""
+    session = db.query(models.BotSession)\
+        .filter_by(user_id=user_id, ended_at=None)\
+        .order_by(models.BotSession.started_at.desc())\
+        .first()
+    if session:
+        session.ended_at = datetime.utcnow()
+        session.end_reason = end_reason
+    return session
+
+
 def _check_and_apply_expiry(db: Session, user_bot: "models.UserBot") -> bool:
     """
     ends_at geçmişse: açık pozisyonları piyasa fiyatından kapatır, botu pasif hale getirir.
@@ -571,6 +593,7 @@ def _check_and_apply_expiry(db: Session, user_bot: "models.UserBot") -> bool:
     )
 
     user_bot.is_active = False
+    close_open_bot_session(db, user_bot.user_id, f"Bot süresi doldu ({config['label']}).")
     db.add(models.UserLog(
         user_id=user_bot.user_id,
         action="BOT_EXPIRED",

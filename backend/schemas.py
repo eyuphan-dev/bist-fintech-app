@@ -480,3 +480,23 @@ class WatchlistItemResponse(BaseModel):
     @field_serializer("added_at")
     def _serialize_added_at(self, value: datetime) -> Optional[str]:
         return _utc_iso(value)
+
+
+class BotSessionResponse(BaseModel):
+    id: int
+    time_frame: str
+    time_frame_label: str
+    risk_mode: Optional[str]
+    risk_mode_label: Optional[str]
+    started_at: datetime
+    ended_at: Optional[datetime]
+    end_reason: Optional[str]
+    is_active: bool
+    trade_count: int
+
+    class Config:
+        from_attributes = True
+
+    @field_serializer("started_at", "ended_at")
+    def _serialize_dt(self, value: Optional[datetime]) -> Optional[str]:
+        return _utc_iso(value) if value else None

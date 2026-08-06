@@ -37,12 +37,18 @@ interface BotLog {
   created_at: string;
 }
 
-const LOG_TIME_FRAME_FILTERS: { value: "1D" | "1W" | "1M" | "ALL"; label: string }[] = [
-  { value: "ALL", label: "Tümü" },
-  { value: "1D", label: "1 Günlük" },
-  { value: "1W", label: "1 Haftalık" },
-  { value: "1M", label: "1 Aylık" },
-];
+interface BotSessionItem {
+  id: number;
+  time_frame: "1D" | "1W" | "1M";
+  time_frame_label: string;
+  risk_mode: string | null;
+  risk_mode_label: string | null;
+  started_at: string;
+  ended_at: string | null;
+  end_reason: string | null;
+  is_active: boolean;
+  trade_count: number;
+}
 
 const TIME_FRAME_OPTIONS: { value: "1D" | "1W" | "1M"; label: string; hint: string }[] = [
   { value: "1D", label: "1 Günlük (Gün İçi / Scalp)", hint: "RSI(7) + EMA9/21 momentum" },
@@ -70,28 +76,37 @@ function formatCountdown(seconds: number | null): string {
 export default function PersonalBotPanel() {
   const { token } = useAuth();
   const [status, setStatus] = useState<UserBotStatus | null>(null);
+  const [sessions, setSessions] = useState<BotSessionItem[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [logs, setLogs] = useState<BotLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [logFilter, setLogFilter] = useState<"1D" | "1W" | "1M" | "ALL">("ALL");
 
   const fetchStatus = useCallback(async () => {
     if (!token) return;
     try {
-      const [statusRes, logsRes] = await Promise.all([
+      const [statusRes, sessionsRes] = await Promise.all([
         fetch(`${API_BASE}/user/bot`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/user/bot/logs`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/user/bot/sessions`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (statusRes.ok) {
         const data = await statusRes.json();
         setStatus(data);
         setRemaining(data.remaining_seconds);
       }
-      if (logsRes.ok) setLogs(await logsRes.json());
+      if (sessionsRes.ok) {
+        const data: BotSessionItem[] = await sessionsRes.json();
+        setSessions(data);
+        setSelectedSessionId((prev) => {
+          if (prev !== null && data.some((s) => s.id === prev)) return prev;
+          return data.length > 0 ? data[0].id : null;
+        });
+      }
     } catch (err) {
       console.error("Kişisel bot verisi alınamadı:", err);
     } finally {
@@ -104,6 +119,29 @@ export default function PersonalBotPanel() {
     const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
+
+  useEffect(() => {
+    if (!token || selectedSessionId === null) {
+      setLogs([]);
+      return;
+    }
+    let cancelled = false;
+    setLogsLoading(true);
+    fetch(`${API_BASE}/user/bot/logs?session_id=${selectedSessionId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (!cancelled) setLogs(data);
+      })
+      .catch((err) => console.error("Oturum işlemleri alınamadı:", err))
+      .finally(() => {
+        if (!cancelled) setLogsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, selectedSessionId]);
 
   // İstemci tarafında saniye saniye geri sayım (30sn'lik fetch aralığı arasını doldurur)
   useEffect(() => {
@@ -405,78 +443,111 @@ export default function PersonalBotPanel() {
         </p>
       </div>
 
-      {/* İşlem Günlüğü */}
+      {/* İşlem Günlüğü — Oturum Bazlı */}
       <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
-        <h4 className="text-xs font-bold text-white uppercase tracking-wide mb-3 flex items-center gap-1.5">
+        <h4 className="text-xs font-bold text-white uppercase tracking-wide mb-4 flex items-center gap-1.5">
           <ArrowLeftRight className="w-3.5 h-3.5" /> Kişisel Bot İşlem Günlüğü
         </h4>
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {LOG_TIME_FRAME_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setLogFilter(f.value)}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition ${
-                logFilter === f.value
-                  ? "bg-[#F59E0B]/10 border-[#F59E0B]/30 text-[#F59E0B]"
-                  : "bg-[#0B0E14] border-[#242B35] text-gray-400 hover:border-[#F59E0B]/20"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        {(() => {
-          const filteredLogs = logFilter === "ALL" ? logs : logs.filter((l) => l.time_frame === logFilter);
-          if (filteredLogs.length === 0) {
-            return (
-              <p className="text-center py-6 text-gray-500 text-xs">
-                {logs.length === 0
-                  ? "Botunuz henüz işlem yapmadı. BİST seansı saatlerinde (10:00-18:15) işlem yapacaktır."
-                  : "Bu zaman diliminde henüz işlem yok."}
-              </p>
-            );
-          }
-          return (
-            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-              {filteredLogs.map((log) => (
-                <div key={log.id} className="p-3.5 bg-[#0B0E14] border border-[#242B35] rounded-xl space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-bold text-white">{log.symbol}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        log.action_type === "AL" ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
-                      }`}>
-                        {log.action_type}
+        {sessions.length === 0 ? (
+          <p className="text-center py-6 text-gray-500 text-xs">
+            Botunuz henüz hiç başlatılmamış / işlem yapmamış.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-4">
+            {/* Sol: Oturum Listesi */}
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              {sessions.map((s, idx) => {
+                const sessionNo = sessions.length - idx;
+                const selected = selectedSessionId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedSessionId(s.id)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg border transition ${
+                      selected
+                        ? "bg-[#F59E0B]/10 border-[#F59E0B]/30"
+                        : "bg-[#0B0E14] border-[#242B35] hover:border-[#F59E0B]/20"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className={`text-xs font-bold ${selected ? "text-[#F59E0B]" : "text-white"}`}>
+                        {sessionNo}. Oturum
                       </span>
-                      {log.time_frame && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#F59E0B]/10 text-[#F59E0B]">
-                          {LOG_TIME_FRAME_FILTERS.find((f) => f.value === log.time_frame)?.label ?? log.time_frame}
-                        </span>
-                      )}
-                      {log.action_type === "SAT" && log.days_held !== null && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#242B35] text-gray-300">
-                          {log.days_held === 0 ? "Aynı gün kapandı" : `${log.days_held}. günde kapandı`}
+                      {s.is_active && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#10B981]/10 text-[#10B981]">
+                          AKTİF
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-gray-500 tabular-nums">
-                      {new Date(log.created_at).toLocaleString("tr-TR")}
-                    </span>
-                  </div>
-                  <p className="text-gray-400 font-medium tabular-nums">
-                    {log.quantity} adet {log.symbol} — {log.price} TL
-                  </p>
-                  <div className="pt-1.5 border-t border-[#242B35] flex items-start gap-1">
-                    <Activity className="w-3.5 h-3.5 text-[#F59E0B] shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-gray-400 italic">
-                      <span className="font-semibold text-gray-300 not-italic">Gerekçe:</span> {log.reason_text}
+                    <p className="text-[10px] text-gray-500 mt-0.5">{s.time_frame_label}</p>
+                    <p className="text-[10px] text-gray-600 mt-1 tabular-nums">
+                      {new Date(s.started_at).toLocaleDateString("tr-TR")}
+                      {s.ended_at ? ` — ${new Date(s.ended_at).toLocaleDateString("tr-TR")}` : " — devam ediyor"}
                     </p>
-                  </div>
-                </div>
-              ))}
+                    <p className="text-[10px] text-gray-600 mt-0.5">{s.trade_count} işlem</p>
+                  </button>
+                );
+              })}
             </div>
-          );
-        })()}
+
+            {/* Sağ: Seçili Oturumun İşlemleri */}
+            <div>
+              {(() => {
+                const selectedSession = sessions.find((s) => s.id === selectedSessionId);
+                if (selectedSession?.end_reason) {
+                  return (
+                    <p className="text-[10px] text-gray-500 mb-3 pb-3 border-b border-[#242B35]">
+                      <span className="font-semibold text-gray-400">Kapanış:</span> {selectedSession.end_reason}
+                    </p>
+                  );
+                }
+                return null;
+              })()}
+              {logsLoading ? (
+                <div className="flex items-center justify-center py-10 text-gray-500 text-xs">
+                  <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#F59E0B]" />
+                  İşlemler yükleniyor...
+                </div>
+              ) : logs.length === 0 ? (
+                <p className="text-center py-6 text-gray-500 text-xs">Bu oturumda henüz işlem yok.</p>
+              ) : (
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                  {logs.map((log) => (
+                    <div key={log.id} className="p-3.5 bg-[#0B0E14] border border-[#242B35] rounded-xl space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-white">{log.symbol}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            log.action_type === "AL" ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
+                          }`}>
+                            {log.action_type}
+                          </span>
+                          {log.action_type === "SAT" && log.days_held !== null && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#242B35] text-gray-300">
+                              {log.days_held === 0 ? "Aynı gün kapandı" : `${log.days_held}. günde kapandı`}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-gray-500 tabular-nums">
+                          {new Date(log.created_at).toLocaleString("tr-TR")}
+                        </span>
+                      </div>
+                      <p className="text-gray-400 font-medium tabular-nums">
+                        {log.quantity} adet {log.symbol} — {log.price} TL
+                      </p>
+                      <div className="pt-1.5 border-t border-[#242B35] flex items-start gap-1">
+                        <Activity className="w-3.5 h-3.5 text-[#F59E0B] shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-gray-400 italic">
+                          <span className="font-semibold text-gray-300 not-italic">Gerekçe:</span> {log.reason_text}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

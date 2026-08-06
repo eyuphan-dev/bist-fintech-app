@@ -142,6 +142,27 @@ class BotLog(Base):
     stock = relationship("Stock", back_populates="bot_logs")
 
 
+class BotSession(Base):
+    """
+    Kişisel botun her başlatılıp durdurulduğu/süresi dolduğu dönemi (oturum) temsil eder.
+    UI'da "bot 10 kere başlatılmış" listesi buradan gelir; her oturumun kapsadığı zaman
+    aralığında (started_at - ended_at) yapılan işlemler BotLog.created_at üzerinden eşlenir
+    (ayrı bir FK yerine zaman aralığı kullanılır ki eski BotLog kayıtları da geriye dönük
+    oturumlarla eşleşebilsin).
+    """
+    __tablename__ = "bot_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    time_frame = Column(String(5), nullable=False)
+    risk_mode = Column(String(20), nullable=True)
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    ended_at = Column(DateTime, nullable=True)  # NULL = hâlâ aktif oturum
+    end_reason = Column(String, nullable=True)
+
+    user = relationship("User")
+
+
 class BotPerformanceHistory(Base):
     __tablename__ = "bot_performance_history"
 

@@ -20,7 +20,7 @@ from schemas import (
     UserCreate, UserResponse, Token, LoginRequest,
     StockResponse, StockDetailResponse, StockPriceResponse,
     TradeRequest, PortfolioResponse, PortfolioItemResponse,
-    BotLogResponse, BotPerformancePoint, LeaderboardItem,
+    BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
@@ -38,6 +38,7 @@ from init_db import init_database
 from bot import (
     calculate_technical_indicators, get_strategy_config, BOT_STRATEGY_CONFIG,
     get_risk_mode_config, RISK_MODE_CONFIG, DEFAULT_RISK_MODE,
+    open_bot_session, close_open_bot_session,
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from market_hours import get_market_status_dict, is_market_open
@@ -154,6 +155,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         started_at=now,
         ends_at=now + default_config["duration"],
     ))
+    open_bot_session(db, new_user.id, "1D", DEFAULT_RISK_MODE)
     db.commit()
 
     return new_user
@@ -1809,6 +1811,9 @@ def update_user_bot_settings(
         config = get_strategy_config(req.time_frame)
         user_bot.started_at = datetime.utcnow()
         user_bot.ends_at = datetime.utcnow() + config["duration"]
+        if was_active:
+            close_open_bot_session(db, current_user.id, f"Strateji değiştirildi: {config['label']}.")
+            open_bot_session(db, current_user.id, req.time_frame, user_bot.risk_profile or DEFAULT_RISK_MODE)
 
     if req.risk_mode and req.risk_mode != user_bot.risk_profile:
         user_bot.risk_profile = req.risk_mode
@@ -1843,6 +1848,7 @@ def update_user_bot_settings(
                 db, current_user.id, "BOT_DEACTIVATE_RESET",
                 "Kişisel bot durduruldu: açık pozisyonlar kapatıldı, performans 100.000 TL'ye sıfırlandı."
             )
+            close_open_bot_session(db, current_user.id, "Kullanıcı tarafından durduruldu.")
 
         user_bot.is_active = req.is_active
         if req.is_active and not was_active:
@@ -1850,26 +1856,60 @@ def update_user_bot_settings(
             config = get_strategy_config(user_bot.time_frame or "1D")
             user_bot.started_at = datetime.utcnow()
             user_bot.ends_at = datetime.utcnow() + config["duration"]
+            open_bot_session(db, current_user.id, user_bot.time_frame or "1D", user_bot.risk_profile or DEFAULT_RISK_MODE)
 
     db.commit()
     db.refresh(user_bot)
     return get_user_bot_status(current_user, db)
 
 
+@app.get("/api/user/bot/sessions", response_model=List[BotSessionResponse])
+def get_user_bot_sessions(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının kişisel botunun başlatılıp durdurulduğu/süresi dolduğu her dönemi
+    (oturum) listeler — en yeni önce. UI'da soldaki oturum listesi buradan gelir.
+    """
+    sessions = db.query(models.BotSession)\
+        .filter_by(user_id=current_user.id)\
+        .order_by(models.BotSession.started_at.desc())\
+        .all()
+
+    result = []
+    for s in sessions:
+        end_bound = s.ended_at or datetime.utcnow()
+        trade_count = db.query(models.BotLog).filter(
+            models.BotLog.user_id == current_user.id,
+            models.BotLog.created_at >= s.started_at,
+            models.BotLog.created_at <= end_bound,
+        ).count()
+        config = get_strategy_config(s.time_frame)
+        risk_config = get_risk_mode_config(s.risk_mode)
+        result.append(BotSessionResponse(
+            id=s.id, time_frame=s.time_frame, time_frame_label=config["label"],
+            risk_mode=s.risk_mode, risk_mode_label=risk_config["label"] if s.risk_mode else None,
+            started_at=s.started_at, ended_at=s.ended_at, end_reason=s.end_reason,
+            is_active=s.ended_at is None, trade_count=trade_count,
+        ))
+    return result
+
+
 @app.get("/api/user/bot/logs", response_model=List[BotLogResponse])
 def get_user_bot_logs(
-    time_frame: Optional[str] = None,
+    session_id: Optional[int] = None,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Giriş yapan kullanıcının kişisel AI botunun işlem günlüğünü döner.
-    time_frame verilirse ('1D'/'1W'/'1M') yalnızca o stratejiyle yapılan işlemler döner.
-    Her SAT kaydı için, aynı hissede ondan önceki en yakın AL kaydına göre pozisyonun
-    kaç gün açık kaldığı (days_held) hesaplanır.
+    session_id verilirse yalnızca o oturumun zaman aralığındaki (started_at..ended_at)
+    işlemler döner. Her SAT kaydı için, aynı hissede ondan önceki en yakın AL kaydına
+    göre pozisyonun kaç gün açık kaldığı (days_held) hesaplanır.
     """
     # AL/SAT eşleştirmesi (days_held) için filtre uygulanmadan tüm geçmiş çekilir,
-    # eşleştirme sonrası istenen zaman dilimine göre daraltılıp son 100 kayıt döndürülür.
+    # eşleştirme sonrası istenen oturuma göre daraltılıp son 200 kayıt döndürülür.
     all_logs = db.query(models.BotLog)\
         .filter_by(user_id=current_user.id)\
         .order_by(models.BotLog.created_at.asc())\
@@ -1885,9 +1925,17 @@ def get_user_bot_logs(
             if buy_time:
                 days_held_by_log_id[log.id] = max(0, (log.created_at - buy_time).days)
 
-    filtered = [log for log in all_logs if not time_frame or log.time_frame == time_frame]
+    if session_id is not None:
+        session = db.query(models.BotSession).filter_by(id=session_id, user_id=current_user.id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Oturum bulunamadı.")
+        end_bound = session.ended_at or datetime.utcnow()
+        filtered = [log for log in all_logs if session.started_at <= log.created_at <= end_bound]
+    else:
+        filtered = all_logs
+
     filtered.sort(key=lambda log: log.created_at, reverse=True)
-    filtered = filtered[:100]
+    filtered = filtered[:200]
 
     return [
         BotLogResponse(
