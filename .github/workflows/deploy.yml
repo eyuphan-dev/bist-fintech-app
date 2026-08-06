@@ -25,6 +25,7 @@ jobs:
 
             cd /opt/borsa/frontend
             npm install --no-audit --no-fund
+            rm -rf .next
             npm run build
             pm2 restart borsa-frontend
 
