@@ -163,6 +163,22 @@ class BotSession(Base):
     user = relationship("User")
 
 
+class UserPerformanceHistory(Base):
+    """
+    Kullanıcının KENDİ portföyünün (bot değil) gün sonu toplam değeri.
+    BotPerformanceHistory ile aynı yapıda, ama kullanıcının manuel işlemlerinden
+    oluşan portföyünü izler; ikisi grafikte karşılaştırılabilsin diye ayrı tutulur.
+    """
+    __tablename__ = "user_performance_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    total_portfolio_value = Column(Numeric(15, 2), nullable=False)
+    recorded_date = Column(Date, nullable=False, index=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "recorded_date", name="uq_user_perf_user_date"),)
+
+
 class BotPerformanceHistory(Base):
     __tablename__ = "bot_performance_history"
 

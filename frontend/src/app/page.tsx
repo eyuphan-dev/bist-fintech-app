@@ -10,6 +10,8 @@ import {
 import LegalDisclaimerModal from "./components/LegalDisclaimerModal";
 import BalanceUpdateModal from "./components/BalanceUpdateModal";
 import PendingOrdersSection from "./components/PendingOrdersSection";
+import PortfolioAnalytics from "./components/PortfolioAnalytics";
+import PortfolioPerformanceChart from "./components/PortfolioPerformanceChart";
 import { useAuth, API_BASE } from "./context/AuthContext";
 
 interface PortfolioItem {
@@ -299,6 +301,10 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+
+              <PortfolioPerformanceChart refreshKey={refreshTrigger} />
+
+              <PortfolioAnalytics refreshKey={refreshTrigger} />
 
               <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
                 <h3 className="text-sm font-bold text-white tracking-wide uppercase mb-4">Hisse Pozisyonlarım</h3>

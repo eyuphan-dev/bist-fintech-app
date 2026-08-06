@@ -17,7 +17,7 @@ from database import SessionLocal
 import models
 from yfinance_client import fetch_current_price, fetch_stock_news
 from cache import set_latest_price
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pytz
 from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
@@ -265,6 +265,66 @@ def refresh_stock_news_job():
 
 
 # ---------------------------------------------------------------------------
+# Kullanıcı Portföy Değeri Günlük Anlık Görüntüsü
+# ---------------------------------------------------------------------------
+def snapshot_user_portfolios_job():
+    """
+    Her kullanıcının (bot değil, kendi manuel portföyünün) o günkü toplam değerini
+    user_performance_history tablosuna yazar — böylece kullanıcı zaman içindeki
+    performansını grafikte görebilir.
+
+    Aynı gün içinde tekrar çalışırsa mevcut kaydın üzerine yazar (gün başına tek
+    satır); bu sayede seans içinde birden fazla tetiklense de tablo şişmez.
+    Bot portföyleri bu görevin dışındadır, onları bot.py kendi döngüsünde yazar.
+    """
+    print("[Scheduler] Kullanıcı portföy değerleri kaydediliyor...")
+    db = SessionLocal()
+    try:
+        today = date.today()
+        users = db.query(models.User).filter_by(is_bot=False).all()
+
+        # Fiyatları her kullanıcı için tekrar sorgulamamak adına tek seferde okunur.
+        latest_prices = {}
+        for stock_id, price in (
+            db.query(models.StockPrice.stock_id, models.StockPrice.price)
+            .order_by(models.StockPrice.stock_id, models.StockPrice.recorded_at.desc())
+            .all()
+        ):
+            latest_prices.setdefault(stock_id, float(price))
+
+        saved = 0
+        for user in users:
+            positions = db.query(models.Portfolio).filter_by(
+                user_id=user.id, is_bot_portfolio=False
+            ).all()
+            stock_value = sum(
+                float(p.quantity) * latest_prices.get(p.stock_id, 0.0) for p in positions
+            )
+            total_value = float(user.virtual_balance) + stock_value
+
+            existing = db.query(models.UserPerformanceHistory).filter_by(
+                user_id=user.id, recorded_date=today
+            ).first()
+            if existing:
+                existing.total_portfolio_value = total_value
+            else:
+                db.add(models.UserPerformanceHistory(
+                    user_id=user.id,
+                    total_portfolio_value=total_value,
+                    recorded_date=today,
+                ))
+            saved += 1
+
+        db.commit()
+        print(f"[Scheduler] {saved} kullanıcının portföy değeri kaydedildi.")
+    except Exception as e:
+        print(f"[Scheduler] Portföy anlık görüntüsü alınamadı: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # MODÜL 2: Log Temizleme Görevi (90 günden eski kayıtları sil)
 # ---------------------------------------------------------------------------
 def log_cleanup_job():
@@ -374,6 +434,18 @@ def start_scheduler():
         hour=3,
         minute=0,
         id="log_cleaner",
+        max_instances=1,
+    )
+
+    # ── Görev 3: Kullanıcı Portföy Değeri Anlık Görüntüsü ────────────────
+    # Hafta içi her gün seans kapanışından sonra (18:30 TR = 15:30 UTC)
+    scheduler.add_job(
+        snapshot_user_portfolios_job,
+        "cron",
+        day_of_week="mon-fri",
+        hour=15,
+        minute=30,
+        id="user_portfolio_snapshot",
         max_instances=1,
     )
 

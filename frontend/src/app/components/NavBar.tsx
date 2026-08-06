@@ -5,10 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays,
-  Star, SlidersHorizontal, MoreHorizontal,
+  Star, SlidersHorizontal, MoreHorizontal, GitCompareArrows,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
+import GlobalStockSearch from "./GlobalStockSearch";
 
 // En sık kullanılanlar her zaman görünür; geri kalanı "Daha Fazla" menüsüne
 // toplanır — 8 öğenin tamamı tek satırda sığmayıp taşıyor, bazıları görünmüyordu.
@@ -21,6 +22,7 @@ const PRIMARY_NAV_LINKS = [
 ];
 
 const MORE_NAV_LINKS = [
+  { href: "/karsilastir", label: "Hisse Karşılaştır", icon: GitCompareArrows },
   { href: "/heatmap", label: "Isı Haritası", icon: Flame },
   { href: "/takvim", label: "Bilanço & KAP Takvimi", icon: CalendarDays },
   { href: "/fonlar", label: "Fonlar & Halka Arz", icon: PiggyBank },
@@ -105,6 +107,11 @@ export default function NavBar() {
           </div>
         </nav>
 
+        {/* Masaüstünde arama kutusu navigasyon ile kullanıcı bloğu arasında durur */}
+        <div className="hidden md:block flex-1 max-w-xs">
+          <GlobalStockSearch />
+        </div>
+
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right hidden sm:block">
             <p className="text-[10px] text-gray-500">Hoş Geldiniz,</p>
@@ -119,6 +126,11 @@ export default function NavBar() {
             <LogOut className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      {/* Mobilde arama, dar ekranda üst satıra sığmadığı için kendi satırında gösterilir */}
+      <div className="md:hidden max-w-6xl mx-auto px-4 pb-2.5">
+        <GlobalStockSearch />
       </div>
     </header>
   );

@@ -112,6 +112,11 @@ MIGRATIONS = {
         "opened_at": "TEXT",
         "updated_at": "TEXT",
     },
+    "bot_logs": {
+        # İşlem anındaki bot zaman dilimi ('1D'/'1W'/'1M') — oturum bazlı
+        # işlem günlüğü için sonradan eklendi, eski kayıtlarda NULL kalır.
+        "time_frame": "VARCHAR(5)",
+    },
 }
 
 

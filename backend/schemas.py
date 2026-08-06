@@ -60,6 +60,41 @@ class StockResponse(BaseModel):
     is_katilim_compliant: bool
     purification_rate: float
 
+class SectorAllocationItem(BaseModel):
+    sector: str
+    value: float
+    pct: float
+    position_count: int
+
+class PositionWeightItem(BaseModel):
+    symbol: str
+    value: float
+    pct: float
+
+class PortfolioAnalyticsResponse(BaseModel):
+    """Portföy dağılım/yoğunlaşma analizi (yalnızca mevcut portföy verisinden hesaplanır)."""
+    total_portfolio_value: float
+    cash_balance: float
+    stock_value: float
+    cash_pct: float
+    position_count: int
+    sectors: List[SectorAllocationItem]
+    positions: List[PositionWeightItem]
+    top_position_symbol: Optional[str] = None
+    top_position_pct: float
+    top_sector: Optional[str] = None
+    top_sector_pct: float
+    effective_position_count: float
+    diversification_score: int
+    katilim_compliant_pct: float
+
+class StockSearchResponse(BaseModel):
+    """Navbar global arama sonuçları için hafif model (fiyat sorgusu yapılmaz)."""
+    symbol: str
+    company_name: str
+    sector: Optional[str] = None
+    is_katilim_compliant: bool
+
 class CompanyAnalysisResponse(BaseModel):
     piotroski_score: Optional[int]
     pe_ratio: Optional[float]

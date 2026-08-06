@@ -17,6 +17,20 @@ export const metadata: Metadata = {
   title: "BIST Simülasyonu & Yapay Zeka Trader - Midas Deneyimi",
   description: "Borsa İstanbul 15 dakika gecikmeli verileri ile otonom çalışan yapay zeka trading simülasyonu ve arkadaş grubunuzla sanal portföy yarışı.",
   keywords: ["BIST", "Borsa Istanbul", "AI Trader", "Algoritmik Ticaret", "Sanal Portfoy", "Borsa Simulasyonu", "Midas"],
+  // PWA: telefonda "Ana ekrana ekle" ile tam ekran uygulama gibi çalışır
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "BIST Sim",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 // Mobil tarayıcılarda input odaklandığında otomatik yakınlaştırmayı önlemek için

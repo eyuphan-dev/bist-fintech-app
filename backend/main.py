@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -18,8 +18,9 @@ import models
 from database import engine, get_db, begin_write_transaction, SessionLocal
 from schemas import (
     UserCreate, UserResponse, Token, LoginRequest,
-    StockResponse, StockDetailResponse, StockPriceResponse,
+    StockResponse, StockDetailResponse, StockPriceResponse, StockSearchResponse,
     TradeRequest, PortfolioResponse, PortfolioItemResponse,
+    PortfolioAnalyticsResponse, SectorAllocationItem, PositionWeightItem,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -70,6 +71,23 @@ def _rate_limit_key(request: Request) -> str:
                 return f"user:{username}"
         except Exception:
             pass
+
+    # Üretimde uygulama Nginx'in arkasında çalışır; bu durumda request.client.host
+    # her kullanıcı için proxy'nin adresini (127.0.0.1) döndürür. Bu adres rate limit
+    # anahtarı olarak kullanılırsa TÜM kullanıcılar tek bir kovayı paylaşır ve birinin
+    # denemeleri diğerlerini kilitler. Bu yüzden gerçek istemci IP'si X-Forwarded-For
+    # başlığından okunur.
+    #
+    # Güvenlik notu: X-Forwarded-For istemci tarafından taklit edilebilir, ancak
+    # Nginx yapılandırmamız $proxy_add_x_forwarded_for kullandığı için gerçek IP
+    # zincirin SONUNA eklenir. Bu yüzden bilerek son eleman alınır — istemcinin
+    # gönderdiği sahte değerler baştaki elemanlar olarak kalır ve dikkate alınmaz.
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[-1].strip()
+        if client_ip:
+            return client_ip
+
     return get_remote_address(request)
 
 
@@ -114,7 +132,8 @@ def startup_event():
 # --- AUTHENTICATION ---
 
 @app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
     # Check if username or email already exists
     if db.query(models.User).filter_by(username=user_data.username).first():
         raise HTTPException(status_code=400, detail="Bu kullanıcı adı zaten alınmış.")
@@ -161,7 +180,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 @app.post("/api/auth/login", response_model=Token)
-def login(login_data: LoginRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, login_data: LoginRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     user = db.query(models.User).filter_by(username=login_data.username).first()
     if not user or user.is_bot or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Hatalı kullanıcı adı veya şifre.")
@@ -385,6 +405,101 @@ def get_stocks(db: Session = Depends(get_db)):
         })
 
     return response
+
+
+@app.get("/api/stocks/search", response_model=List[StockSearchResponse])
+def search_stocks(q: str = "", limit: int = 8, db: Session = Depends(get_db)):
+    """
+    Navbar'daki global arama kutusu için hafif hisse arama.
+
+    NOT: Bu route, "/api/stocks/{symbol}" tanımından ÖNCE gelmelidir; aksi halde
+    FastAPI "search" kelimesini bir sembol sanıp o endpoint'e yönlendirir.
+
+    Sembol ve şirket adı üzerinde büyük/küçük harf duyarsız arama yapar; sembolle
+    başlayan sonuçlar (THY → THYAO) en üstte gösterilir.
+    """
+    term = (q or "").strip()
+    if not term:
+        return []
+
+    capped_limit = max(1, min(limit, 25))
+    pattern = f"%{term}%"
+    # Sıralama (sembolle başlayanlar önce) Python tarafında yapıldığı için, LIMIT'i
+    # doğrudan sorguya uygularsak isabetli bir eşleşme (THY → THYAO) veritabanının
+    # döndürdüğü ilk N kaydın dışında kalıp elenebilir. Bu yüzden önce daha geniş bir
+    # aday kümesi çekilir, sıralama sonrası istenen sayıya kırpılır.
+    stocks = (
+        db.query(models.Stock)
+        .filter(models.Stock.is_active == True)  # noqa: E712 (SQLAlchemy kolon karşılaştırması)
+        .filter(or_(models.Stock.symbol.ilike(pattern), models.Stock.company_name.ilike(pattern)))
+        .limit(capped_limit * 5)
+        .all()
+    )
+
+    upper_term = term.upper()
+    stocks.sort(key=lambda s: (not s.symbol.upper().startswith(upper_term), s.symbol))
+    stocks = stocks[:capped_limit]
+
+    return [
+        StockSearchResponse(
+            symbol=s.symbol,
+            company_name=s.company_name,
+            sector=s.sector,
+            is_katilim_compliant=bool(s.is_katilim_compliant),
+        )
+        for s in stocks
+    ]
+
+
+@app.get("/api/stocks/compare", response_model=List[ScreenerItemResponse])
+def compare_stocks(symbols: str = "", db: Session = Depends(get_db)):
+    """
+    Birden fazla hisseyi yan yana karşılaştırmak için temel fiyat ve oran verilerini döner.
+    symbols virgülle ayrılmış sembol listesidir (örn. "THYAO,GARAN,BIMAS"), en fazla 4 hisse.
+
+    NOT: "/api/stocks/{symbol}" tanımından ÖNCE gelmelidir (bkz. search_stocks).
+    Sonuçlar istenen sırayla döner ki kullanıcının seçim sırası korunsun.
+    """
+    requested = [s.strip().upper() for s in (symbols or "").split(",") if s.strip()]
+    if not requested:
+        return []
+    requested = requested[:4]
+
+    stocks = db.query(models.Stock).filter(models.Stock.symbol.in_(requested)).all()
+    if not stocks:
+        return []
+
+    stock_ids = [s.id for s in stocks]
+    price_map = _bulk_price_and_change(db, stock_ids)
+    analysis_by_stock = {
+        row.stock_id: row
+        for row in db.query(models.CompanyAnalysis)
+        .filter(models.CompanyAnalysis.stock_id.in_(stock_ids))
+        .all()
+    }
+
+    by_symbol = {}
+    for stock in stocks:
+        current_price, price_change_pct = price_map.get(stock.id, (0.0, None))
+        analysis = analysis_by_stock.get(stock.id)
+        by_symbol[stock.symbol] = ScreenerItemResponse(
+            symbol=stock.symbol,
+            company_name=stock.company_name,
+            sector=stock.sector,
+            current_price=round(current_price, 2),
+            price_change_pct=round(price_change_pct, 2) if price_change_pct is not None else None,
+            is_katilim_compliant=bool(stock.is_katilim_compliant),
+            pe_ratio=float(analysis.pe_ratio) if analysis and analysis.pe_ratio is not None else None,
+            pb_ratio=float(analysis.pb_ratio) if analysis and analysis.pb_ratio is not None else None,
+            roe=float(analysis.roe) if analysis and analysis.roe is not None else None,
+            piotroski_score=analysis.piotroski_score if analysis else None,
+            altman_z_score=float(analysis.altman_z_score) if analysis and analysis.altman_z_score is not None else None,
+            debt_to_equity=float(analysis.debt_to_equity) if analysis and analysis.debt_to_equity is not None else None,
+            net_margin=float(analysis.net_margin) if analysis and analysis.net_margin is not None else None,
+        )
+
+    # İstenen sırayı koru; bulunamayan semboller sessizce atlanır
+    return [by_symbol[sym] for sym in requested if sym in by_symbol]
 
 
 SCREENER_SORT_FIELDS = {
@@ -1038,6 +1153,109 @@ def get_ipos(db: Session = Depends(get_db)):
 
 
 # --- PORTFOLIO & TRADING ---
+
+# Bu sayıya ulaşan "etkin pozisyon sayısı" tam çeşitlendirilmiş kabul edilir.
+# (Etkin pozisyon = 1/HHI; eşit ağırlıklı 8 pozisyon ile aynı yoğunlaşma seviyesi.)
+FULLY_DIVERSIFIED_POSITION_COUNT = 8
+
+
+@app.get("/api/portfolio/analytics", response_model=PortfolioAnalyticsResponse)
+def get_portfolio_analytics(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının portföyünün sektör dağılımını ve yoğunlaşma (konsantrasyon) riskini döner.
+
+    Yoğunlaşma ölçütü olarak Herfindahl-Hirschman Endeksi (HHI) kullanılır:
+    HHI = Σ(ağırlık²). Bunun tersi (1/HHI) "etkin pozisyon sayısı"nı verir — örneğin
+    portföyün %90'ı tek hissedeyse 10 hisse tutulsa bile etkin pozisyon sayısı 1'e yakındır.
+    Ağırlıklar yalnızca hisse değeri üzerinden hesaplanır (nakit ayrıca raporlanır),
+    çünkü yoğunlaşma riski hisse pozisyonlarının dağılımıyla ilgilidir.
+    """
+    portfolios = db.query(models.Portfolio).filter_by(user_id=current_user.id, is_bot_portfolio=False).all()
+
+    positions = []
+    sector_totals: Dict[str, Dict[str, Any]] = {}
+    katilim_value = 0.0
+    stock_value = 0.0
+
+    for item in portfolios:
+        stock = item.stock
+        value = float(item.quantity) * _get_latest_db_price(db, stock.id)
+        if value <= 0:
+            continue
+
+        stock_value += value
+        positions.append((stock.symbol, value))
+
+        sector_name = stock.sector or "Diğer"
+        bucket = sector_totals.setdefault(sector_name, {"value": 0.0, "count": 0})
+        bucket["value"] += value
+        bucket["count"] += 1
+
+        if stock.is_katilim_compliant:
+            katilim_value += value
+
+    cash_balance = float(current_user.virtual_balance)
+    total_portfolio_value = cash_balance + stock_value
+
+    # Hisse yoksa yoğunlaşma/çeşitlendirme tanımsızdır; sıfır değerlerle döneriz.
+    if stock_value <= 0:
+        return PortfolioAnalyticsResponse(
+            total_portfolio_value=round(total_portfolio_value, 2),
+            cash_balance=round(cash_balance, 2),
+            stock_value=0.0,
+            cash_pct=100.0 if total_portfolio_value > 0 else 0.0,
+            position_count=0,
+            sectors=[],
+            positions=[],
+            top_position_symbol=None,
+            top_position_pct=0.0,
+            top_sector=None,
+            top_sector_pct=0.0,
+            effective_position_count=0.0,
+            diversification_score=0,
+            katilim_compliant_pct=0.0,
+        )
+
+    position_items = [
+        PositionWeightItem(symbol=symbol, value=round(value, 2), pct=round(value / stock_value * 100, 2))
+        for symbol, value in sorted(positions, key=lambda p: p[1], reverse=True)
+    ]
+
+    sector_items = [
+        SectorAllocationItem(
+            sector=name,
+            value=round(data["value"], 2),
+            pct=round(data["value"] / stock_value * 100, 2),
+            position_count=data["count"],
+        )
+        for name, data in sorted(sector_totals.items(), key=lambda kv: kv[1]["value"], reverse=True)
+    ]
+
+    hhi = sum((value / stock_value) ** 2 for _, value in positions)
+    effective_positions = 1 / hhi if hhi > 0 else 0.0
+    diversification_score = int(
+        round(min(1.0, effective_positions / FULLY_DIVERSIFIED_POSITION_COUNT) * 100)
+    )
+
+    return PortfolioAnalyticsResponse(
+        total_portfolio_value=round(total_portfolio_value, 2),
+        cash_balance=round(cash_balance, 2),
+        stock_value=round(stock_value, 2),
+        cash_pct=round(cash_balance / total_portfolio_value * 100, 2) if total_portfolio_value > 0 else 0.0,
+        position_count=len(positions),
+        sectors=sector_items,
+        positions=position_items,
+        top_position_symbol=position_items[0].symbol,
+        top_position_pct=position_items[0].pct,
+        top_sector=sector_items[0].sector,
+        top_sector_pct=sector_items[0].pct,
+        effective_position_count=round(effective_positions, 2),
+        diversification_score=diversification_score,
+        katilim_compliant_pct=round(katilim_value / stock_value * 100, 2),
+    )
 
 @app.get("/api/portfolio", response_model=PortfolioResponse)
 def get_portfolio(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -1954,6 +2172,36 @@ def get_user_bot_performance(
 ):
     """Giriş yapan kullanıcının kişisel botunun performansını BİST100 ile karşılaştırır."""
     return _build_bot_performance_series(db, current_user.id)
+
+
+@app.get("/api/portfolio/performance", response_model=List[BotPerformancePoint])
+def get_user_portfolio_performance(
+    days: int = 90,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının kendi portföyünün (bot değil) gün sonu değer geçmişini döner.
+    Kayıtlar scheduler'daki snapshot_user_portfolios_job tarafından hafta içi
+    her akşam yazılır; bu yüzden yeni bir hesapta grafik birkaç gün sonra dolar.
+    """
+    cutoff = date.today() - timedelta(days=max(1, min(days, 365)))
+    rows = (
+        db.query(models.UserPerformanceHistory)
+        .filter(
+            models.UserPerformanceHistory.user_id == current_user.id,
+            models.UserPerformanceHistory.recorded_date >= cutoff,
+        )
+        .order_by(models.UserPerformanceHistory.recorded_date.asc())
+        .all()
+    )
+    return [
+        BotPerformancePoint(
+            date=r.recorded_date,
+            total_portfolio_value=float(r.total_portfolio_value),
+        )
+        for r in rows
+    ]
 
 
 # --- LEADERBOARD ---
