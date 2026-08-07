@@ -28,7 +28,14 @@ export default function TradingViewChart({ data, symbol }: TradingViewChartProps
       // We can use a timestamp in seconds to handle hourly/5m data, or just YYYY-MM-DD for daily
       // Let's use seconds timestamp to handle intra-day updates cleanly!
       return {
-        time: Math.floor(dateObj.getTime() / 1000) as any,
+        // lightweight-charts zaman etiketlerini HER ZAMAN UTC olarak render eder
+        // ve kütüphanenin saat dilimi ayarı yoktur. Ham UTC timestamp verince
+        // Türkiye'de (UTC+3) grafik tam 3 saat geriyi gösteriyordu. Timestamp'i
+        // yerel offset kadar kaydırarak kütüphanenin "UTC" render'ı yerel saati
+        // göstermiş olur (kütüphanenin belgelenmiş yaklaşımı).
+        time: Math.floor(
+          (dateObj.getTime() - dateObj.getTimezoneOffset() * 60_000) / 1000
+        ) as any,
         value: d.price,
       };
     }).sort((a, b) => a.time - b.time);

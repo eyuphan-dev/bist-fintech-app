@@ -120,6 +120,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def add_no_store_to_api(request: Request, call_next):
+    """
+    API yanıtlarına Cache-Control: no-store ekler.
+
+    Neden gerekli: FastAPI hiçbir Cache-Control başlığı göndermiyordu. Başlık
+    yokken tarayıcılar SEZGİSEL önbellekleme yapar (heuristic caching) ve aynı
+    URL'e giden sonraki istekleri ağa hiç çıkmadan önbellekten karşılayabilir.
+    Sonuç: frontend 15 saniyede bir yenilese bile kullanıcı ESKİ fiyatı ve eski
+    yüzde değişimi görmeye devam ediyordu — hisse eksiye dönmüşken ekranda hâlâ
+    artıda görünüyordu.
+
+    Yalnızca /api/ yolunu kapsar; statik varlıklar içerik-hash'li oldukları için
+    uzun süreli önbelleklenmeye devam etmelidir.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
 # Uygulama başlarken tablo/veri kontrolü + APScheduler
 @app.on_event("startup")
 def startup_event():
