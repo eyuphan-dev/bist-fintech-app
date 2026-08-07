@@ -30,6 +30,7 @@ class User(Base):
     performance_history = relationship("BotPerformanceHistory", back_populates="user", cascade="all, delete-orphan")
     user_logs = relationship("UserLog", back_populates="user", cascade="all, delete-orphan")
     personal_bot = relationship("UserBot", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
 
 
 class Stock(Base):
@@ -120,6 +121,67 @@ class Portfolio(Base):
     # Relationships
     user = relationship("User", back_populates="portfolios")
     stock = relationship("Stock", back_populates="portfolios")
+
+
+class Transaction(Base):
+    """
+    Kullanıcının kendi (bot dışı) gerçekleşmiş alım/satım işlemlerinin kalıcı kaydı.
+
+    Neden ayrı bir tablo: `portfolios` yalnızca AÇIK pozisyonun anlık halini tutar.
+    Bir pozisyon tamamen satıldığında satır silindiği için o hissenin alınıp
+    satıldığına dair hiçbir iz kalmıyordu — ne işlem geçmişi ne de gerçekleşen
+    kâr/zarar hesaplanabiliyordu. Bot tarafında bu izi `bot_logs` tutuyor;
+    burası onun kullanıcı tarafındaki karşılığıdır.
+
+    `realized_pnl` yalnızca SAT satırlarında doludur ve satış anındaki
+    ortalama maliyet üzerinden hesaplanır: (satış fiyatı - ortalama maliyet) * adet.
+    Bu değer sonradan yeniden hesaplanamaz (ortalama maliyet zamanla değişir),
+    bu yüzden işlem anında yazılır.
+    """
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
+    action_type = Column(String(10), nullable=False)  # 'AL' / 'SAT'
+    quantity = Column(Numeric(12, 4), nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
+    total_amount = Column(Numeric(15, 2), nullable=False)
+    # SAT işlemlerinde gerçekleşen kâr/zarar (TL). AL işlemlerinde NULL.
+    realized_pnl = Column(Numeric(15, 2), nullable=True)
+    # Satış anındaki ortalama maliyet — kullanıcıya "hangi maliyetten sattın" gösterebilmek için.
+    average_cost_at_trade = Column(Numeric(10, 2), nullable=True)
+    # 'MANUAL': /api/trade üzerinden anlık işlem, 'LIMIT_ORDER': bekleyen emrin gerçekleşmesi.
+    source = Column(String(20), default="MANUAL", nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="transactions")
+    stock = relationship("Stock")
+
+
+class StockVote(Base):
+    """
+    Topluluk beklenti anketi (road_map.md #6): kullanıcıların hisse başına
+    "Yükselir / Düşer" oyu. Yorum yazmaya göre çok daha düşük sürtünmeli olduğu
+    için yorum tabanlı sentiment'ten bağımsız, tek tıkla veri toplar.
+
+    Her kullanıcı bir hisse için TEK oy tutar; tekrar oy verdiğinde mevcut satır
+    güncellenir (UNIQUE kısıtı bunu garanti eder). `updated_at` sayesinde
+    "son 30 günün oyları" gibi taze bir kesit alınabilir.
+    """
+    __tablename__ = "stock_votes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
+    direction = Column(String(10), nullable=False)  # 'UP' / 'DOWN'
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "stock_id", name="uq_stock_vote_user_stock"),
+    )
 
 
 class BotLog(Base):

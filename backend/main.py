@@ -9,6 +9,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request, Background
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -21,6 +22,8 @@ from schemas import (
     StockResponse, StockDetailResponse, StockPriceResponse, StockSearchResponse,
     TradeRequest, PortfolioResponse, PortfolioItemResponse,
     PortfolioAnalyticsResponse, SectorAllocationItem, PositionWeightItem,
+    TransactionItem, TransactionHistoryResponse,
+    StockVoteRequest, StockVoteResponse, ChangePasswordRequest,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -43,6 +46,7 @@ from bot import (
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from market_hours import get_market_status_dict, is_market_open
+from transactions import record_transaction
 from analysis_engine import (
     calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError,
     calculate_pivot_levels, get_foreign_holding_trend,
@@ -198,6 +202,43 @@ def login(request: Request, login_data: LoginRequest, background_tasks: Backgrou
 @app.get("/api/auth/me", response_model=UserResponse)
 def get_me(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+
+@app.post("/api/auth/change-password")
+@limiter.limit("5/minute")
+def change_password(
+    request: Request,
+    payload: ChangePasswordRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Giriş yapmış kullanıcının şifresini değiştirir.
+
+    Mevcut şifre HER ZAMAN doğrulanır: token'ı çalınmış bir oturumun şifreyi
+    sessizce değiştirip hesabı ele geçirmesini engeller.
+
+    NOT: JWT'ler durumsuz (stateless) olduğu için şifre değişikliği daha önce
+    dağıtılmış token'ları geçersiz kılmaz; mevcut oturumlar süreleri dolana
+    kadar açık kalır. Anında iptal için token sürüm/kara liste mekanizması
+    gerekir — bu ayrı bir iştir.
+    """
+    # Bot hesaplarının şifresi kullanıcı tarafından değiştirilemez.
+    if current_user.is_bot:
+        raise HTTPException(status_code=403, detail="Bot hesabının şifresi değiştirilemez.")
+
+    user = db.query(models.User).filter_by(id=current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Mevcut şifreniz hatalı.")
+
+    user.password_hash = get_password_hash(payload.new_password)
+    db.commit()
+
+    _log_user_action(db, user.id, "PASSWORD_CHANGE", "Kullanıcı şifresini değiştirdi.")
+    return {"message": "Şifreniz başarıyla güncellendi."}
 
 
 # --- MARKET STATUS ---
@@ -1044,6 +1085,80 @@ def get_community_sentiment(symbol: str, db: Session = Depends(get_db)):
     )
 
 
+def _build_vote_response(db: Session, stock: models.Stock, user_id: int) -> StockVoteResponse:
+    """Bir hissenin oy sayımını ve çağıran kullanıcının kendi oyunu toplar."""
+    up_count = db.query(models.StockVote).filter_by(stock_id=stock.id, direction="UP").count()
+    down_count = db.query(models.StockVote).filter_by(stock_id=stock.id, direction="DOWN").count()
+    total = up_count + down_count
+
+    own = db.query(models.StockVote).filter_by(stock_id=stock.id, user_id=user_id).first()
+
+    return StockVoteResponse(
+        symbol=stock.symbol,
+        up_count=up_count,
+        down_count=down_count,
+        total_votes=total,
+        # Hiç oy yokken 0/0 bölmesi olmasın diye sıfır döndürülür.
+        up_pct=round((up_count / total) * 100, 2) if total else 0.0,
+        down_pct=round((down_count / total) * 100, 2) if total else 0.0,
+        user_vote=own.direction if own else None,
+    )
+
+
+@app.get("/api/stocks/{symbol}/vote", response_model=StockVoteResponse)
+def get_stock_vote(
+    symbol: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Hissenin topluluk beklenti anketi sonucu + kullanıcının kendi oyu."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+    return _build_vote_response(db, stock, current_user.id)
+
+
+@app.post("/api/stocks/{symbol}/vote", response_model=StockVoteResponse)
+@limiter.limit("20/minute")
+def cast_stock_vote(
+    request: Request,
+    symbol: str,
+    vote: StockVoteRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Hisse için 'Yükselir' (UP) / 'Düşer' (DOWN) oyu verir.
+
+    Her kullanıcının hisse başına TEK oyu vardır: tekrar oy verirse mevcut kaydı
+    güncellenir, yeni satır açılmaz (aksi halde bir kullanıcı defalarca oy verip
+    sonucu çarpıtabilirdi). Aynı kullanıcının iki isteği yarışırsa UNIQUE kısıtı
+    ikinciyi reddeder; bu durumda kayıt yeniden okunup güncellenir.
+    """
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    existing = db.query(models.StockVote).filter_by(stock_id=stock.id, user_id=current_user.id).first()
+    try:
+        if existing:
+            existing.direction = vote.direction
+        else:
+            db.add(models.StockVote(
+                user_id=current_user.id, stock_id=stock.id, direction=vote.direction
+            ))
+        db.commit()
+    except IntegrityError:
+        # Eşzamanlı ikinci istek araya girip satırı oluşturmuş olabilir.
+        db.rollback()
+        row = db.query(models.StockVote).filter_by(stock_id=stock.id, user_id=current_user.id).first()
+        if row:
+            row.direction = vote.direction
+            db.commit()
+
+    return _build_vote_response(db, stock, current_user.id)
+
+
 # --- KAP GENEL HABER AKIŞI ---
 
 @app.get("/api/earnings-calendar", response_model=List[EarningsCalendarItem])
@@ -1371,6 +1486,10 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
                 )
                 db.add(new_entry)
 
+            record_transaction(
+                db, user_id=current_user.id, stock_id=stock.id, action_type="AL",
+                quantity=trade.quantity, price=current_price, source="MANUAL",
+            )
             db.commit()
             return {"message": f"{trade.quantity} adet {stock.symbol} başarıyla alındı.", "balance": current_user.virtual_balance}
 
@@ -1380,6 +1499,10 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
 
             revenue = trade.quantity * current_price
             current_user.virtual_balance = float(current_user.virtual_balance) + revenue
+
+            # Gerçekleşen K/Z için ortalama maliyet SATIŞTAN ÖNCE okunmalı: pozisyon
+            # tamamen satıldığında satır siliniyor ve bu bilgi geri getirilemiyor.
+            avg_cost_before_sale = float(portfolio_entry.average_cost)
 
             remaining_qty = float(portfolio_entry.quantity) - trade.quantity
             # Decimal->float dönüşümü + float çıkarma "tam sıfır" yerine 1e-13 gibi bir
@@ -1391,6 +1514,11 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
             else:
                 portfolio_entry.quantity = remaining_qty
 
+            record_transaction(
+                db, user_id=current_user.id, stock_id=stock.id, action_type="SAT",
+                quantity=trade.quantity, price=current_price,
+                average_cost=avg_cost_before_sale, source="MANUAL",
+            )
             db.commit()
             return {"message": f"{trade.quantity} adet {stock.symbol} başarıyla satıldı.", "balance": current_user.virtual_balance}
     except Exception:
@@ -2202,6 +2330,100 @@ def get_user_portfolio_performance(
         )
         for r in rows
     ]
+
+
+@app.get("/api/portfolio/transactions", response_model=TransactionHistoryResponse)
+def get_user_transactions(
+    limit: int = 100,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının kendi (bot dışı) gerçekleşmiş alım/satım geçmişi ve gerçekleşen
+    kâr/zarar özeti. En yeni işlem başta döner.
+
+    Özet alanları TÜM geçmiş üzerinden hesaplanır, dönen `items` listesi ise
+    `limit` ile kırpılır — aksi halde kullanıcı sayfayı her açtığında toplam
+    kârı, kaç işlem gösterdiğimize göre değişirdi.
+    """
+    capped_limit = max(1, min(limit, 500))
+
+    base_query = (
+        db.query(models.Transaction, models.Stock)
+        .join(models.Stock, models.Stock.id == models.Transaction.stock_id)
+        .filter(models.Transaction.user_id == current_user.id)
+    )
+
+    # id.desc() ikincil sıralama olarak şart: aynı saniye içinde yapılan iki işlemde
+    # created_at eşitlenebiliyor ve tek başına ORDER BY created_at deterministik
+    # olmayan bir sıra döndürüyor (sayfa her yenilendiğinde farklı sıra).
+    rows = (
+        base_query
+        .order_by(models.Transaction.created_at.desc(), models.Transaction.id.desc())
+        .limit(capped_limit)
+        .all()
+    )
+
+    # --- Özet: tüm geçmiş üzerinden tek sorguda toplanır ---
+    all_tx = db.query(models.Transaction).filter_by(user_id=current_user.id).all()
+
+    total_realized = 0.0
+    total_buy = 0.0
+    total_sell = 0.0
+    buy_count = 0
+    sell_count = 0
+    winning_sells = 0
+
+    for tx in all_tx:
+        amount = float(tx.total_amount)
+        if tx.action_type == "AL":
+            buy_count += 1
+            total_buy += amount
+        else:
+            sell_count += 1
+            total_sell += amount
+            if tx.realized_pnl is not None:
+                pnl = float(tx.realized_pnl)
+                total_realized += pnl
+                if pnl > 0:
+                    winning_sells += 1
+
+    win_rate = round((winning_sells / sell_count) * 100, 2) if sell_count else None
+
+    items = []
+    for tx, stock in rows:
+        # Yüzdesel getiri, satılan pozisyonun MALİYETİNE oranla hesaplanır
+        # (satış hasılatına değil) — "10 TL'ye alıp 12 TL'ye sattım" = %20.
+        pnl_pct = None
+        if tx.realized_pnl is not None and tx.average_cost_at_trade:
+            cost_basis = float(tx.average_cost_at_trade) * float(tx.quantity)
+            if cost_basis > 0:
+                pnl_pct = round((float(tx.realized_pnl) / cost_basis) * 100, 2)
+
+        items.append(TransactionItem(
+            id=tx.id,
+            symbol=stock.symbol,
+            company_name=stock.company_name,
+            action_type=tx.action_type,
+            quantity=float(tx.quantity),
+            price=float(tx.price),
+            total_amount=float(tx.total_amount),
+            realized_pnl=float(tx.realized_pnl) if tx.realized_pnl is not None else None,
+            realized_pnl_pct=pnl_pct,
+            average_cost_at_trade=float(tx.average_cost_at_trade) if tx.average_cost_at_trade is not None else None,
+            source=tx.source,
+            created_at=tx.created_at,
+        ))
+
+    return TransactionHistoryResponse(
+        total_realized_pnl=round(total_realized, 2),
+        total_buy_amount=round(total_buy, 2),
+        total_sell_amount=round(total_sell, 2),
+        buy_count=buy_count,
+        sell_count=sell_count,
+        win_rate=win_rate,
+        items=items,
+    )
 
 
 # --- LEADERBOARD ---

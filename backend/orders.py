@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 import models
 from database import begin_write_transaction
 from market_hours import is_market_open
+from transactions import record_transaction
 
 
 def _get_latest_price(db: Session, stock_id: int) -> float:
@@ -100,6 +101,11 @@ def _execute_single_order(db: Session, order_id: int) -> None:
                     quantity=quantity, average_cost=current_price, is_bot_portfolio=False,
                 ))
 
+            record_transaction(
+                db, user_id=user.id, stock_id=order.stock_id, action_type="AL",
+                quantity=quantity, price=current_price, source="LIMIT_ORDER",
+            )
+
         else:  # LIMIT_SELL
             if not portfolio_entry or float(portfolio_entry.quantity) < quantity:
                 _fail_order(db, order, "Yetersiz hisse miktarı.")
@@ -107,11 +113,19 @@ def _execute_single_order(db: Session, order_id: int) -> None:
 
             revenue = quantity * current_price
             user.virtual_balance = float(user.virtual_balance) + revenue
+            # Ortalama maliyet satıştan ÖNCE okunur; pozisyon kapanırsa satır silinir.
+            avg_cost_before_sale = float(portfolio_entry.average_cost)
             remaining = float(portfolio_entry.quantity) - quantity
             if remaining <= 0:
                 db.delete(portfolio_entry)
             else:
                 portfolio_entry.quantity = remaining
+
+            record_transaction(
+                db, user_id=user.id, stock_id=order.stock_id, action_type="SAT",
+                quantity=quantity, price=current_price,
+                average_cost=avg_cost_before_sale, source="LIMIT_ORDER",
+            )
 
         order.status = "EXECUTED"
         order.executed_at = datetime.utcnow()

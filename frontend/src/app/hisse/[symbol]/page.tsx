@@ -14,6 +14,7 @@ import InsiderTrackerBadge from "../../components/InsiderTrackerBadge";
 import DividendCalculatorWidget from "../../components/DividendCalculatorWidget";
 import DcaBacktestWidget from "../../components/DcaBacktestWidget";
 import CommunitySentimentGauge from "../../components/CommunitySentimentGauge";
+import CommunityVoteWidget from "../../components/CommunityVoteWidget";
 import PendingOrdersPanel from "../../components/PendingOrdersPanel";
 import NotificationPreferenceModal from "../../components/NotificationPreferenceModal";
 import { useAuth, API_BASE } from "../../context/AuthContext";
@@ -589,6 +590,8 @@ export default function StockDetailPage() {
 
           {section === "topluluk" && (
             <div className="space-y-4">
+              <CommunityVoteWidget symbol={symbol} />
+
               <CommunitySentimentGauge symbol={symbol} refreshTrigger={refreshTrigger} />
 
               <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4 space-y-3">

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays,
-  Star, SlidersHorizontal, MoreHorizontal, GitCompareArrows,
+  Star, SlidersHorizontal, MoreHorizontal, GitCompareArrows, History, Settings,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
@@ -22,10 +22,12 @@ const PRIMARY_NAV_LINKS = [
 ];
 
 const MORE_NAV_LINKS = [
+  { href: "/islemlerim", label: "İşlem Geçmişim", icon: History },
   { href: "/karsilastir", label: "Hisse Karşılaştır", icon: GitCompareArrows },
   { href: "/heatmap", label: "Isı Haritası", icon: Flame },
   { href: "/takvim", label: "Bilanço & KAP Takvimi", icon: CalendarDays },
   { href: "/fonlar", label: "Fonlar & Halka Arz", icon: PiggyBank },
+  { href: "/ayarlar", label: "Hesap Ayarları", icon: Settings },
 ];
 
 /** Sayfalar arası ana gezinme çubuğu. Route değişse de token/user AuthContext'ten okunur. */

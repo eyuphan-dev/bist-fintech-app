@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, model_validator, field_serializer
 from datetime import datetime, date, timedelta, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 
 
 def _utc_iso(value: Optional[datetime]) -> Optional[str]:
@@ -40,6 +40,21 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ChangePasswordRequest(BaseModel):
+    """
+    Şifre değiştirme. Yeni şifre kuralı UserCreate ile aynı tutulur (min 6),
+    aksi halde kayıtta kabul edilmeyen bir şifre buradan geçebilirdi.
+    """
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6)
+
+    @model_validator(mode="after")
+    def _reject_same_password(self):
+        if self.current_password == self.new_password:
+            raise ValueError("Yeni şifre mevcut şifreyle aynı olamaz.")
+        return self
+
 
 class Token(BaseModel):
     access_token: str
@@ -243,6 +258,48 @@ class BotLogResponse(BaseModel):
     def _serialize_created_at(self, value: datetime) -> Optional[str]:
         return _utc_iso(value)
 
+class TransactionItem(BaseModel):
+    """Kullanıcının gerçekleşmiş tek bir alım/satım işlemi."""
+    id: int
+    symbol: str
+    company_name: str
+    action_type: str          # 'AL' / 'SAT'
+    quantity: float
+    price: float
+    total_amount: float
+    # Yalnızca SAT satırlarında dolu; AL'da None.
+    realized_pnl: Optional[float] = None
+    realized_pnl_pct: Optional[float] = None
+    average_cost_at_trade: Optional[float] = None
+    source: str               # 'MANUAL' / 'LIMIT_ORDER'
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+    @field_serializer("created_at")
+    def _serialize_created_at(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
+
+
+class TransactionHistoryResponse(BaseModel):
+    """
+    İşlem geçmişi + gerçekleşen (kapatılmış pozisyon) kâr/zarar özeti.
+
+    Buradaki K/Z, portföy sayfasındaki kâr/zarardan FARKLIDIR: orası açık
+    pozisyonların anlık (gerçekleşmemiş) durumunu gösterir, burası ise
+    satılmış pozisyonlardan cebe giren/çıkan kesinleşmiş tutardır.
+    """
+    total_realized_pnl: float
+    total_buy_amount: float
+    total_sell_amount: float
+    buy_count: int
+    sell_count: int
+    # Kâr ile kapatılan satışların tüm satışlara oranı (%) — None ise hiç satış yok.
+    win_rate: Optional[float] = None
+    items: List[TransactionItem]
+
+
 class BotPerformancePoint(BaseModel):
     date: date
     total_portfolio_value: float
@@ -346,6 +403,28 @@ class CommunitySentimentResponse(BaseModel):
     negative_pct: float
     neutral_pct: float
     verdict_text: str
+
+class StockVoteRequest(BaseModel):
+    """Kullanıcının hisse beklenti oyu. Literal ile geçersiz değerler şema düzeyinde reddedilir."""
+    direction: Literal["UP", "DOWN"]
+
+
+class StockVoteResponse(BaseModel):
+    """
+    Hisse bazlı topluluk beklenti anketi sonucu (road_map.md #6).
+
+    Yorum tabanlı `CommunitySentimentResponse`'tan bağımsızdır: orası yazılmış
+    yorumların metin analizinden gelir, burası tek tıkla verilen doğrudan oydur.
+    """
+    symbol: str
+    up_count: int
+    down_count: int
+    total_votes: int
+    up_pct: float
+    down_pct: float
+    # Giriş yapmış kullanıcının kendi oyu ('UP'/'DOWN'), hiç oy vermediyse None.
+    user_vote: Optional[str] = None
+
 
 class DividendGoalRequest(BaseModel):
     target_monthly_income: float = Field(..., gt=0, le=100_000_000, allow_inf_nan=False)
