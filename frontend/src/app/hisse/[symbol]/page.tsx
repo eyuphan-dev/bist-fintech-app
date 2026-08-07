@@ -642,12 +642,15 @@ export default function StockDetailPage() {
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                       placeholder="Bu hisse hakkında ne düşünüyorsunuz?"
-                      className="flex-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3 py-2 text-white text-xs outline-none transition"
+                      // min-w-0 şart: flex öğesinin varsayılan min-width:auto değeri,
+                      // input'un uzun placeholder metninin altına inmesini engelliyordu;
+                      // input şişip "Gönder" butonunu dar ekranlarda sağa taşırıyordu.
+                      className="flex-1 min-w-0 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3 py-2 text-white text-xs outline-none transition"
                     />
                     <button
                       onClick={handlePostComment}
                       disabled={commentLoading || commentText.trim().length < 2}
-                      className="bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50"
+                      className="shrink-0 bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50"
                     >
                       Gönder
                     </button>
