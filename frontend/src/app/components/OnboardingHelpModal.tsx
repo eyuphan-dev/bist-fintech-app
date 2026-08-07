@@ -111,7 +111,11 @@ export default function OnboardingHelpModal() {
       {/* Yüzen Yardım Butonu */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-5 right-5 z-40 w-11 h-11 rounded-full bg-[#F59E0B] hover:bg-[#d98a08] text-[#0B0E14] shadow-lg shadow-black/40 flex items-center justify-center transition active:scale-95"
+        // Mobilde alt gezinme çubuğunun ÜSTÜNE alınır: bottom-5 iken buton tam olarak
+        // çubuğun sağ slotundaki "Menü" düğmesinin üzerine denk gelip tıklanmasını
+        // engelliyordu. env(safe-area-inset-bottom) iOS home-indicator'ı da hesaba katar.
+        // md ve üzerinde alt çubuk gizli olduğu için buton eski yerinde kalır.
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-5 right-5 z-40 w-11 h-11 rounded-full bg-[#F59E0B] hover:bg-[#d98a08] text-[#0B0E14] shadow-lg shadow-black/40 flex items-center justify-center transition active:scale-95"
         title="Yardım"
       >
         <HelpCircle className="w-5 h-5" />
