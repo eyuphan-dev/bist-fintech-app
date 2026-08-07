@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  History, TrendingUp, TrendingDown, ArrowRight, Wallet, Target, Clock,
+  History, TrendingUp, TrendingDown, ArrowRight, Wallet, Target, Clock, RefreshCw,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
 
@@ -48,7 +48,7 @@ function fmtDate(iso: string): string {
 }
 
 export default function TransactionsPage() {
-  const { token } = useAuth();
+  const { token, loading: authLoading } = useAuth();
   const [data, setData] = useState<TransactionHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -77,6 +77,18 @@ export default function TransactionsPage() {
   const visible = (data?.items ?? []).filter(
     (t) => filter === "ALL" || t.action_type === filter
   );
+
+  // AuthContext token'ı localStorage'dan okurken token henüz null olur; bu aşamada
+  // doğrudan !token'a bakarsak giriş yapmış kullanıcıya bir an "giriş yapın"
+  // ekranı gösterilir. Bu yüzden önce loading kontrol edilir (bkz. app/page.tsx).
+  if (authLoading) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center">
+        <RefreshCw className="w-10 h-10 text-[#10B981] animate-spin mb-4" />
+        <p className="text-gray-400 font-medium">Yükleniyor...</p>
+      </div>
+    );
+  }
 
   if (!token) {
     return (

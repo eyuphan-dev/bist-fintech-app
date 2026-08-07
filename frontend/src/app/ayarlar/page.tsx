@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { Settings, KeyRound, Check, AlertCircle, User as UserIcon } from "lucide-react";
+import { Settings, KeyRound, Check, AlertCircle, User as UserIcon, RefreshCw } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
 
 export default function SettingsPage() {
-  const { token, user } = useAuth();
+  const { token, user, loading: authLoading } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -65,6 +65,17 @@ export default function SettingsPage() {
       setBusy(false);
     }
   };
+
+  // Önce loading: token localStorage'dan okunurken !token'a bakmak, giriş yapmış
+  // kullanıcıya bir an "giriş yapın" ekranı gösterirdi (bkz. app/page.tsx).
+  if (authLoading) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center">
+        <RefreshCw className="w-10 h-10 text-[#10B981] animate-spin mb-4" />
+        <p className="text-gray-400 font-medium">Yükleniyor...</p>
+      </div>
+    );
+  }
 
   if (!token) {
     return (
