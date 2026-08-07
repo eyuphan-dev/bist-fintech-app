@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { HelpCircle, X } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 interface HelpContent {
   title: string;
@@ -94,17 +95,24 @@ const STORAGE_KEY = "onboarding_help_seen_v1";
 
 export default function OnboardingHelpModal() {
   const pathname = usePathname() || "/";
+  const { token } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
+  // token şartı önemli: bu efekt giriş ekranında da çalışsaydı, kullanıcı modalı
+  // hiç görmeden "görüldü" bayrağı yakılır ve ilk girişinde tanıtım açılmazdı.
   useEffect(() => {
+    if (!token) return;
     const seen = localStorage.getItem(STORAGE_KEY);
     if (!seen) {
       setIsOpen(true);
       localStorage.setItem(STORAGE_KEY, "1");
     }
-  }, []);
+  }, [token]);
 
   const content = getHelpContent(pathname);
+
+  // Giriş ekranında yardım balonu gösterilmez — login sayfası sade kalsın.
+  if (!token) return null;
 
   return (
     <>

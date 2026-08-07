@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Clock, ShieldAlert } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const LEGAL_LINKS = [
   { label: "Gizlilik Sözleşmesi", href: "#gizlilik-sozlesmesi" },
@@ -11,6 +12,12 @@ const LEGAL_LINKS = [
 ];
 
 export default function Footer() {
+  const { token } = useAuth();
+
+  // Giriş ekranında gösterilmez — NavBar ve MobileBottomNav ile aynı davranış.
+  // Aksi halde login sayfasında sayfanın tek "kabuk" öğesi footer olarak kalıyordu.
+  if (!token) return null;
+
   return (
     <footer className="border-t border-[#242B35] bg-[#0B0E14] mt-10">
       {/* 15 Dakika Gecikmeli Veri Uyarı Bandı */}
