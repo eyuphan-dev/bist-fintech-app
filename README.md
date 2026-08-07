@@ -51,3 +51,30 @@ backend/
 frontend/
   src/app/      — Next.js App Router sayfaları ve bileşenleri
 ```
+
+## Sunucu Notu: Deploy sonrası eski arayüz görünüyorsa
+
+aaPanel, `/www/server/nginx/conf/proxy.conf` içinde **global** bir
+`proxy_cache cache_one;` (inactive=1d) tanımlar ve tüm vhost'lar bunu miras alır.
+Bu açıkken deploy sonrası nginx, eski HTML ve JS chunk'larını 1 güne kadar
+servis etmeye devam eder — tarayıcı cache'i temizlense bile.
+
+`/www/server/panel/vhost/nginx/borsa-trader.conf` içindeki her `proxy_pass`
+satırının altında `proxy_cache off;` bulunmalıdır. Bu dosya git'te değildir;
+aaPanel'de site yeniden oluşturulursa ayar kaybolur.
+
+Teşhis (silinmiş bir chunk hâlâ 200 dönüyorsa önbellek var demektir):
+
+```bash
+curl -s http://127.0.0.1:3001/<sayfa>            # Next ne diyor?
+curl -s https://borsa-trader.duckdns.org/<sayfa> # nginx ne diyor?
+# Farklıysa:
+grep -c "proxy_cache off" /www/server/panel/vhost/nginx/borsa-trader.conf
+find /www/server/nginx/proxy_cache_dir -type f -delete
+/www/server/nginx/sbin/nginx -s reload
+```
+
+Not: `/api/` yanıtları FastAPI cache başlığı göndermediği için önbelleğe
+girmiyor (denetlendi). Ancak varsayılan `proxy_cache_key` `Authorization`
+başlığını içermez — API'ye cache başlığı eklenirse kullanıcılar arası veri
+sızıntısı riski doğar.
