@@ -186,14 +186,29 @@ export default function StockDetailPage() {
     return () => { cancelled = true; };
   }, [symbol, chartRange]);
 
-  // Seçili aralığın kendi yüzdelik değişimi (dönem başı -> dönem sonu fiyat)
+  // Seçili aralığın yüzdelik değişimi.
+  //
+  // "1G" (Bugün) DİĞERLERİNDEN FARKLI hesaplanır: günlük değişimin referansı,
+  // grafikteki ilk veri noktası değil ÖNCEKİ KAPANIŞ fiyatıdır. Seriden
+  // hesaplayınca başlıktaki rozetle çelişiyordu — örn. GUNDG'de rozet %+10
+  // (1540 -> 1694) derken grafik -%11.68 yazıyordu, çünkü seri o gün daha
+  // yüksek bir noktadan başlıyordu. Başlıktaki rozetle aynı yetkili değeri
+  // (sunucuda hesaplanan change_pct) kullanarak iki rakamı da hizalıyoruz.
+  //
+  // Kurumsal işlem (bölünme/bedelsiz) durumunda backend change_pct'i null
+  // döner; o zaman burada da uydurma bir yüzde göstermeyip "—" gösterilir.
   const rangeChangePct = useMemo(() => {
+    if (chartRange === "1D") {
+      const pct = stockDetail?.change_pct;
+      return pct === null || pct === undefined ? null : Number(pct);
+    }
+    // Uzun vadeli aralıklarda dönem başı -> dönem sonu karşılaştırması doğrudur.
     if (chartData.length < 2) return null;
     const first = chartData[0].price;
     const last = chartData[chartData.length - 1].price;
     if (!first) return null;
     return ((last - first) / first) * 100;
-  }, [chartData]);
+  }, [chartData, chartRange, stockDetail?.change_pct]);
 
   // Yorumlar
   const fetchComments = async () => {

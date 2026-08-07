@@ -750,12 +750,30 @@ def get_stock_history(symbol: str, range: str = "1D", db: Session = Depends(get_
     range_code = range.upper()
 
     if range_code == "1D":
+        # Son 100 kaydı tarih filtresi olmadan almak YANLIŞTI: fiyat anlık görüntüleri
+        # yalnızca seans saatlerinde yazıldığı için, borsa kapalıyken bu 100 kayıt
+        # günlere yayılıyordu (örn. GUNDG'de 6 günü kapsıyordu) ve "Bugün" etiketli
+        # grafik aslında bir haftayı gösteriyordu.
+        #
+        # Bugünün tarihine göre filtrelemek de olmaz: hafta sonu/tatilde hiç kayıt
+        # olmadığı için grafik bomboş kalırdı. Bunun yerine, veride mevcut olan EN SON
+        # seans gününü bulup yalnızca o güne ait kayıtlar döndürülür — borsa kapalıyken
+        # aracı kurum uygulamalarının yaptığı gibi son seans gösterilir.
+        latest_ts = db.query(func.max(models.StockPrice.recorded_at))\
+            .filter(models.StockPrice.stock_id == stock.id)\
+            .scalar()
+        if not latest_ts:
+            return []
+
+        session_day = latest_ts.date()
         records = db.query(models.StockPrice)\
-            .filter_by(stock_id=stock.id)\
-            .order_by(models.StockPrice.recorded_at.desc())\
-            .limit(100)\
+            .filter(
+                models.StockPrice.stock_id == stock.id,
+                func.date(models.StockPrice.recorded_at) == session_day,
+            )\
+            .order_by(models.StockPrice.recorded_at.asc())\
             .all()
-        records.reverse()
+
         return [
             StockPriceResponse(price=float(r.price), volume=r.volume, recorded_at=r.recorded_at)
             for r in records
