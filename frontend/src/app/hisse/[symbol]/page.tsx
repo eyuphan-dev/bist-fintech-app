@@ -48,6 +48,8 @@ export default function StockDetailPage() {
 
   const [stockList, setStockList] = useState<any[]>([]);
   const [stockDetail, setStockDetail] = useState<any>(null);
+  // İşlem panelinde kullanılabilir bakiye ve elde tutulan lot gösterilebilsin diye.
+  const [portfolio, setPortfolio] = useState<any>(null);
   const [kapDisclosures, setKapDisclosures] = useState<any>(null);
   const [kapLoading, setKapLoading] = useState(false);
   const [news, setNews] = useState<any[]>([]);
@@ -224,6 +226,27 @@ export default function StockDetailPage() {
     if (symbol) fetchComments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol]);
+
+  // Bakiye/pozisyon bilgisi: refreshTrigger 15 sn'de bir arttığı için işlem
+  // sonrasında da kendiliğinden tazelenir.
+  useEffect(() => {
+    if (!token) {
+      setPortfolio(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/portfolio`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok && !cancelled) setPortfolio(await res.json());
+      } catch (err) {
+        console.error("Bakiye alınamadı:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token, refreshTrigger]);
 
   const handleTrade = async (action: "AL" | "SAT") => {
     if (!token) {
@@ -659,6 +682,47 @@ export default function StockDetailPage() {
         <div className="space-y-6">
           <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-3">
             <h3 className="text-sm font-bold text-white uppercase tracking-wide">Sanal İşlem Paneli</h3>
+
+            {/* Kullanılabilir bakiye ve mevcut pozisyon — kullanıcı ne kadar
+                alabileceğini/satabileceğini panelden ayrılmadan görsün. */}
+            {portfolio && (() => {
+              const available = portfolio.available_balance ?? portfolio.balance ?? 0;
+              const reserved = portfolio.reserved_balance ?? 0;
+              const owned = (portfolio.items ?? []).find((it: any) => it.symbol === symbol)?.quantity ?? 0;
+              const total = tradeQty * stockDetail.current_price;
+              const maxAffordable = stockDetail.current_price > 0 ? Math.floor(available / stockDetail.current_price) : 0;
+              return (
+                <div className="bg-[#0B0E14] border border-[#242B35] rounded-lg p-3 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Kullanılabilir Bakiye</span>
+                    <span className="font-bold text-white tabular-nums">
+                      {available.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
+                    </span>
+                  </div>
+                  {reserved > 0 && (
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-gray-600">Bekleyen emirlerde bloke</span>
+                      <span className="text-gray-500 tabular-nums">
+                        {reserved.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-gray-600">Bu fiyattan alabileceğiniz</span>
+                    <span className="text-gray-400 tabular-nums">{maxAffordable} lot</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] border-t border-[#242B35] pt-1.5">
+                    <span className="text-gray-600">{symbol} pozisyonunuz</span>
+                    <span className="text-gray-400 tabular-nums">{owned} lot</span>
+                  </div>
+                  {total > available && (
+                    <p className="text-[10px] text-[#F43F5E] pt-0.5">
+                      Bu tutar kullanılabilir bakiyenizi aşıyor.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-400 font-medium">Hisse Adeti:</span>

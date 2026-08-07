@@ -1467,8 +1467,11 @@ def get_portfolio(current_user: models.User = Depends(get_current_user), db: Ses
     baseline = float(current_user.baseline_value or 100000.0)
     overall_profit_loss_pct = ((total_portfolio_value - baseline) / baseline) * 100 if baseline else 0.0
 
+    reserved = _reserved_cash_for_pending_buys(db, current_user.id)
     return PortfolioResponse(
         balance=round(float(current_user.virtual_balance), 2),
+        reserved_balance=round(reserved, 2),
+        available_balance=round(float(current_user.virtual_balance) - reserved, 2),
         total_portfolio_value=round(total_portfolio_value, 2),
         baseline_value=round(baseline, 2),
         profit_loss_pct=round(overall_profit_loss_pct, 2),
@@ -1589,6 +1592,44 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
 # için botla veri çakışması yoktur. Gerçekleştirme, scheduler.py -> orders.py
 # üzerinden borsa açıkken otomatik yapılır (bkz. process_pending_orders).
 
+def _reserved_cash_for_pending_buys(db: Session, user_id: int, exclude_order_id: Optional[int] = None) -> float:
+    """
+    Bekleyen alış emirlerinin bakiyeden bloke ettiği toplam tutar.
+
+    LIMIT_BUY'da limit fiyatı, SCHEDULED_BUY'da güncel piyasa fiyatı esas alınır
+    (zamanlı emirde gerçekleşme fiyatı önceden bilinemez, tahmini bloke uygulanır).
+    `exclude_order_id` emir güncellenirken emrin kendi eski tutarını hariç tutmak içindir.
+    """
+    query = db.query(models.PendingOrder).filter(
+        models.PendingOrder.user_id == user_id,
+        models.PendingOrder.status == "PENDING",
+        models.PendingOrder.order_type.in_(("LIMIT_BUY", "SCHEDULED_BUY")),
+    )
+    if exclude_order_id is not None:
+        query = query.filter(models.PendingOrder.id != exclude_order_id)
+
+    total = 0.0
+    for o in query.all():
+        price = float(o.target_price) if o.target_price is not None else (_get_latest_db_price(db, o.stock_id) or 0.0)
+        total += float(o.quantity) * price
+    return total
+
+
+def _reserved_shares_for_pending_sells(
+    db: Session, user_id: int, stock_id: int, exclude_order_id: Optional[int] = None
+) -> float:
+    """Bir hisse için bekleyen satış emirlerinde bloke edilen toplam lot adedi."""
+    query = db.query(func.coalesce(func.sum(models.PendingOrder.quantity), 0)).filter(
+        models.PendingOrder.user_id == user_id,
+        models.PendingOrder.stock_id == stock_id,
+        models.PendingOrder.status == "PENDING",
+        models.PendingOrder.order_type == "LIMIT_SELL",
+    )
+    if exclude_order_id is not None:
+        query = query.filter(models.PendingOrder.id != exclude_order_id)
+    return float(query.scalar() or 0)
+
+
 @app.post("/api/orders", response_model=PendingOrderResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 def create_pending_order(
@@ -1605,6 +1646,51 @@ def create_pending_order(
     stock = db.query(models.Stock).filter_by(symbol=order.symbol.upper(), is_active=True).first()
     if not stock:
         raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    # ── Bakiye / pozisyon bloke kontrolü ────────────────────────────────────
+    # Gerçek aracı kurumlarda (Midas dahil) bekleyen bir alış emri, gereken tutarı
+    # bakiyeden BLOKE eder; bloke edilebilir para yoksa emir hiç oluşturulamaz.
+    # Bizde bu kontrol yalnızca emir GERÇEKLEŞİRKEN yapılıyordu, dolayısıyla
+    # kullanıcı bakiyesinin katlarca üstünde emir kuyruğa alabiliyordu (hepsi
+    # tetiklendiğinde biri hariç hepsi "Yetersiz bakiye" ile başarısız oluyordu).
+    # Aynı sorun satışta da vardı: sahip olunmayan lot için emir girilebiliyordu.
+    if order.order_type in ("LIMIT_BUY", "SCHEDULED_BUY"):
+        # Referans fiyat: limit emirde limit fiyatı, zamanlı emirde güncel piyasa fiyatı
+        # (zamanlı emirde fiyat bilinmediği için tahmini bloke uygulanır).
+        ref_price = float(order.target_price) if order.target_price is not None else _get_latest_db_price(db, stock.id)
+        if not ref_price:
+            raise HTTPException(status_code=400, detail="Hisse fiyatı bulunamadı, emir oluşturulamadı.")
+
+        required = float(order.quantity) * ref_price
+        reserved = _reserved_cash_for_pending_buys(db, current_user.id)
+        available = float(current_user.virtual_balance) - reserved
+
+        if required > available:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Yetersiz bakiye. Bu emir için {required:,.2f} TL gerekiyor; "
+                    f"kullanılabilir bakiyeniz {available:,.2f} TL "
+                    f"(bekleyen emirlerde bloke: {reserved:,.2f} TL)."
+                ),
+            )
+    else:  # LIMIT_SELL
+        position = db.query(models.Portfolio).filter_by(
+            user_id=current_user.id, stock_id=stock.id, is_bot_portfolio=False
+        ).first()
+        owned = float(position.quantity) if position else 0.0
+        reserved_qty = _reserved_shares_for_pending_sells(db, current_user.id, stock.id)
+        sellable = owned - reserved_qty
+
+        if float(order.quantity) > sellable:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Yetersiz hisse. {stock.symbol} için satılabilir adet: {sellable:g} "
+                    f"(sahip: {owned:g}, bekleyen satış emirlerinde bloke: {reserved_qty:g})."
+                ),
+            )
+    # ────────────────────────────────────────────────────────────────────────
 
     new_order = models.PendingOrder(
         user_id=current_user.id,

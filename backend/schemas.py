@@ -235,6 +235,10 @@ class PortfolioItemResponse(BaseModel):
 
 class PortfolioResponse(BaseModel):
     balance: float
+    # Bekleyen alış emirlerinde bloke edilen tutar ve emir verilebilir kalan bakiye.
+    # balance = reserved_balance + available_balance
+    reserved_balance: float = 0.0
+    available_balance: float = 0.0
     total_portfolio_value: float
     baseline_value: float
     profit_loss_pct: float
