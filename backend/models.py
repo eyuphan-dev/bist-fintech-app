@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, Date, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, BigInteger, String, Numeric, Boolean, DateTime, Date, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -53,6 +53,13 @@ class Stock(Base):
     # taban-tavan referans fiyatı kurallarını Yahoo bizden daha doğru yansıtıyor
     # (bkz. GUNDG örneği: kendi hesabımız -%18.9 derken gerçek taban -%9.96'ydı).
     previous_close = Column(Numeric(10, 2), nullable=True)
+    # Seansın resmi açılış/yüksek/düşük değerleri (Yahoo regularMarketOpen/DayHigh/DayLow).
+    # Kendi tik geçmişimizden türetmek yanlış sonuç veriyordu: tikler yalnızca scheduler
+    # çalıştığında yazılıyor, dolayısıyla "açılış" gerçekte ilk KAYDEDİLEN fiyat oluyordu
+    # (ör. backend 11:15'te yeniden başlarsa açılış 11:15 fiyatı görünüyordu).
+    open_price = Column(Numeric(10, 2), nullable=True)
+    day_high = Column(Numeric(10, 2), nullable=True)
+    day_low = Column(Numeric(10, 2), nullable=True)
 
     # Relationships
     prices = relationship("StockPrice", back_populates="stock", cascade="all, delete-orphan")
@@ -67,7 +74,10 @@ class StockPrice(Base):
     id = Column(Integer, primary_key=True, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
-    volume = Column(Integer, nullable=True)
+    # BigInteger şart: BIST'te yüksek hacimli hisselerde günlük lot adedi Postgres
+    # integer (int4) üst sınırını (2.147.483.647) aşıyor ve günlük geçmiş tazeleme
+    # 'integer out of range' ile patlıyordu.
+    volume = Column(BigInteger, nullable=True)
     recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     # Relationships
@@ -92,7 +102,10 @@ class StockPriceDaily(Base):
     high = Column(Numeric(12, 2), nullable=True)
     low = Column(Numeric(12, 2), nullable=True)
     close = Column(Numeric(12, 2), nullable=False)
-    volume = Column(Integer, nullable=True)
+    # BigInteger şart: BIST'te yüksek hacimli hisselerde günlük lot adedi Postgres
+    # integer (int4) üst sınırını (2.147.483.647) aşıyor ve günlük geçmiş tazeleme
+    # 'integer out of range' ile patlıyordu.
+    volume = Column(BigInteger, nullable=True)
 
     stock = relationship("Stock")
 

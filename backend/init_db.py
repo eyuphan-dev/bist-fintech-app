@@ -78,6 +78,9 @@ MIGRATIONS = {
         "non_compliance_reason": "TEXT",
         "sector": "TEXT",
         "previous_close": "NUMERIC(10, 2)",
+        "open_price": "NUMERIC(10, 2)",
+        "day_high": "NUMERIC(10, 2)",
+        "day_low": "NUMERIC(10, 2)",
     },
     "company_analysis": {
         "ev_ebitda": "NUMERIC(10, 2)",
@@ -139,6 +142,39 @@ def run_migrations():
                 if column_name not in existing_columns:
                     conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}"))
                     print(f"'{table_name}' tablosuna '{column_name}' kolonu eklendi.")
+        conn.commit()
+
+
+def migrate_volume_to_bigint():
+    """
+    stock_prices.volume ve stock_prices_daily.volume kolonlarını BIGINT'e yükseltir.
+
+    Neden gerekli: BIST'te yüksek hacimli hisselerde günlük lot adedi Postgres
+    integer (int4) üst sınırını (2.147.483.647) aşıyor ve günlük geçmiş tazeleme
+    "psycopg2.errors.NumericValueOutOfRange: integer out of range" ile patlıyordu.
+
+    Yalnızca Postgres'te çalışır: SQLite'ın INTEGER'ı zaten 64 bittir, orada
+    yapılacak bir şey yoktur. Kolon tipi değişikliği MIGRATIONS sözlüğüyle
+    yapılamaz (o yalnızca eksik kolon EKLER), bu yüzden ayrı ele alınır.
+    """
+    if engine.dialect.name != "postgresql":
+        return
+
+    inspector = inspect(engine)
+    with engine.connect() as conn:
+        for table_name in ("stock_prices", "stock_prices_daily"):
+            if not inspector.has_table(table_name):
+                continue
+            for col in inspector.get_columns(table_name):
+                if col["name"] != "volume":
+                    continue
+                # Zaten BIGINT ise dokunma (idempotent olmalı: her açılışta çalışıyor).
+                if "BIGINT" in str(col["type"]).upper():
+                    continue
+                conn.execute(text(
+                    f"ALTER TABLE {table_name} ALTER COLUMN volume TYPE BIGINT"
+                ))
+                print(f"'{table_name}.volume' kolonu BIGINT'e yükseltildi.")
         conn.commit()
 
 
@@ -246,6 +282,9 @@ def init_database():
     # TABLOLARI oluşturur, var olan bir tabloya sonradan eklenen kolonları eklemez —
     # bu yüzden production'daki (Postgres) var olan tablolar için de gereklidir.
     run_migrations()
+    # Kolon TİPİ değişiklikleri run_migrations kapsamında değildir (o yalnızca
+    # eksik kolon ekler), bu yüzden ayrı çağrılır.
+    migrate_volume_to_bigint()
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()

@@ -1,7 +1,7 @@
 import yfinance as yf
 from datetime import datetime, timedelta
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from yf_retry import call_with_retry
 
@@ -27,11 +27,18 @@ def _safe_previous_close(ticker: "yf.Ticker", symbol: str) -> Optional[float]:
     return None
 
 
-def fetch_current_price(symbol: str) -> Optional[Tuple[float, int, Optional[float]]]:
+def fetch_current_price(symbol: str) -> Optional[Dict[str, Any]]:
     """
-    Fetches the current price, volume and Yahoo'nun resmi önceki kapanış referansını
-    (previous_close) for a BIST stock from Yahoo Finance.
-    Returns: Tuple[price, volume, previous_close] or None
+    BIST hissesi için güncel fiyat, hacim, önceki kapanış ve SEANSIN açılış/
+    yüksek/düşük değerlerini döner.
+
+    Açılış/yüksek/düşük neden buradan geliyor: daha önce bu değerler kendi
+    kaydettiğimiz tik geçmişinden türetiliyordu ve yanlıştı — tikler yalnızca
+    scheduler çalışırken yazıldığı için "açılış" gerçekte ilk KAYDEDİLEN fiyat
+    oluyordu (backend seans ortasında yeniden başlarsa açılış o an oluyordu).
+    Gün içi barların tamamından hesaplayınca seansın gerçek değerleri elde edilir.
+
+    Returns: {'price','volume','previous_close','open','high','low'} veya None
     """
     yahoo_symbol = f"{symbol}.IS"
     try:
@@ -43,16 +50,32 @@ def fetch_current_price(symbol: str) -> Optional[Tuple[float, int, Optional[floa
         )
         if not history.empty:
             last_row = history.iloc[-1]
-            price = round(float(last_row["Close"]), 2)
-            volume = int(last_row["Volume"])
-            return price, volume, _safe_previous_close(ticker, symbol)
+            return {
+                "price": round(float(last_row["Close"]), 2),
+                "volume": int(last_row["Volume"]),
+                "previous_close": _safe_previous_close(ticker, symbol),
+                # Seansın tamamı üzerinden: ilk barın açılışı, tüm barların en yüksek/en düşüğü.
+                "open": round(float(history.iloc[0]["Open"]), 2),
+                "high": round(float(history["High"].max()), 2),
+                "low": round(float(history["Low"].min()), 2),
+            }
 
         # Fallback to info if history is empty (e.g. pre-market or post-market)
         info = call_with_retry(lambda: ticker.info, attempts=2, label=f"{symbol}.price_info")
         price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
         volume = info.get("regularMarketVolume") or info.get("volume") or 0
         if price:
-            return round(float(price), 2), int(volume), _safe_previous_close(ticker, symbol)
+            def _f(key):
+                v = info.get(key)
+                return round(float(v), 2) if v is not None else None
+            return {
+                "price": round(float(price), 2),
+                "volume": int(volume),
+                "previous_close": _safe_previous_close(ticker, symbol),
+                "open": _f("regularMarketOpen"),
+                "high": _f("regularMarketDayHigh"),
+                "low": _f("regularMarketDayLow"),
+            }
 
     except Exception as e:
         print(f"Error fetching current price for {symbol}: {str(e)}")

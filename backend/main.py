@@ -685,12 +685,27 @@ def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
     if change_pct is not None and abs(change_pct) > EXTREME_CHANGE_GUARD_PCT:
         change_pct = None
 
-    # Bugünün açılışı ve gün içi yüksek/düşük: bugüne ait gün-içi tiklerden.
+    # Seansın açılış/yüksek/düşük değerleri.
+    #
+    # Öncelik Yahoo'nun resmi değerlerindedir (stocks.open_price/day_high/day_low,
+    # scheduler tazeler). Kendi tiklerimizden türetmek YANLIŞ sonuç veriyordu:
+    # tikler yalnızca scheduler çalışırken yazıldığı için "açılış" gerçekte ilk
+    # KAYDEDİLEN fiyat oluyordu — backend seans ortasında yeniden başlatılırsa
+    # açılış o anki fiyat olarak görünüyordu.
+    #
+    # Kayıtlı değer yoksa (henüz tazelenmemiş eski kayıtlar) tik türevine düşülür.
     today_start = datetime.combine(today, datetime.min.time())
     today_ticks = [p for p in price_records if p.recorded_at >= today_start]
-    open_price = float(today_ticks[0].price) if today_ticks else None
-    day_high = max((float(p.price) for p in today_ticks), default=None)
-    day_low = min((float(p.price) for p in today_ticks), default=None)
+
+    open_price = float(stock.open_price) if stock.open_price is not None else (
+        float(today_ticks[0].price) if today_ticks else None
+    )
+    day_high = float(stock.day_high) if stock.day_high is not None else (
+        max((float(p.price) for p in today_ticks), default=None)
+    )
+    day_low = float(stock.day_low) if stock.day_low is not None else (
+        min((float(p.price) for p in today_ticks), default=None)
+    )
 
     # Calculate indicators
     df_data = {
