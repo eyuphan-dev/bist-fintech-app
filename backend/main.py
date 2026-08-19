@@ -25,7 +25,7 @@ from schemas import (
     TransactionItem, TransactionHistoryResponse,
     StockVoteRequest, StockVoteResponse, ChangePasswordRequest,
     DividendPositionItem, PortfolioDividendResponse,
-    BenchmarkPoint, PortfolioBenchmarkResponse,
+    BenchmarkPoint, PortfolioBenchmarkResponse, MarketQuoteItem,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -2579,6 +2579,65 @@ def get_user_transactions(
         win_rate=win_rate,
         items=items,
     )
+
+
+MARKET_QUOTE_LABELS = {
+    "USDTRY": "Dolar / TL",
+    "EURTRY": "Euro / TL",
+    "GRAMALTIN": "Gram Altın",
+    "XU100": "BIST 100",
+}
+
+
+@app.get("/api/market/quotes", response_model=List[MarketQuoteItem])
+def get_market_quotes(db: Session = Depends(get_db)):
+    """
+    Döviz kurları, gram altın ve BIST 100 — hisse yanında izlenen referans seriler.
+
+    Veriler günlük kapanışlardan gelir (index_history), scheduler tazeler.
+    Ücretli platformlarda paket içinde sunulan bu veri yfinance'ta ücretsiz
+    olduğu için burada da gösterilir.
+    """
+    items: List[MarketQuoteItem] = []
+
+    for symbol, label in MARKET_QUOTE_LABELS.items():
+        rows = (
+            db.query(models.IndexHistory)
+            .filter(models.IndexHistory.symbol == symbol)
+            .order_by(models.IndexHistory.trade_date.desc())
+            .limit(40)
+            .all()
+        )
+        if not rows:
+            continue
+
+        latest = rows[0]
+        price = float(latest.close)
+
+        # 1 günlük değişim: bir önceki İŞLEM GÜNÜ kapanışına göre (takvim günü değil) —
+        # hafta sonu/tatilde bir önceki takvim gününde kapanış olmadığı için
+        # tarih aritmetiği yerine listedeki bir sonraki kayıt kullanılır.
+        change_1d = None
+        if len(rows) > 1 and float(rows[1].close) > 0:
+            change_1d = round(((price - float(rows[1].close)) / float(rows[1].close)) * 100, 2)
+
+        # 30 günlük: 30 takvim günü öncesine en yakın (ondan önceki) kapanış.
+        change_30d = None
+        cutoff = latest.trade_date - timedelta(days=30)
+        older = [r for r in rows if r.trade_date <= cutoff]
+        if older and float(older[0].close) > 0:
+            change_30d = round(((price - float(older[0].close)) / float(older[0].close)) * 100, 2)
+
+        items.append(MarketQuoteItem(
+            symbol=symbol,
+            label=label,
+            price=price,
+            change_1d_pct=change_1d,
+            change_30d_pct=change_30d,
+            as_of=latest.trade_date,
+        ))
+
+    return items
 
 
 @app.get("/api/portfolio/benchmark", response_model=PortfolioBenchmarkResponse)

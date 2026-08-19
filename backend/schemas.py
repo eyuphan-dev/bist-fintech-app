@@ -332,6 +332,16 @@ class PortfolioDividendResponse(BaseModel):
     items: List[DividendPositionItem]
 
 
+class MarketQuoteItem(BaseModel):
+    """Döviz/altın referans serisi — son kapanış ve değişimler."""
+    symbol: str
+    label: str
+    price: float
+    change_1d_pct: Optional[float] = None
+    change_30d_pct: Optional[float] = None
+    as_of: Optional[date] = None
+
+
 class BenchmarkPoint(BaseModel):
     date: date
     portfolio_value: float

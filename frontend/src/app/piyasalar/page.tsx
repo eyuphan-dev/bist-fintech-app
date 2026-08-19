@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, RefreshCw, Star } from "lucide-react";
 import KatilimBadge from "../components/KatilimBadge";
+import MarketQuotesBar from "../components/MarketQuotesBar";
 import { useAuth, API_BASE } from "../context/AuthContext";
 
 interface Stock {
@@ -95,6 +96,8 @@ export default function PiyasalarPage() {
         <h1 className="text-xl font-bold text-white">Piyasalar</h1>
         <p className="text-xs text-gray-500 mt-1">BİST hisselerini inceleyin, Katılım Endeksi uygunluğunu görün.</p>
       </div>
+
+      <MarketQuotesBar />
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
