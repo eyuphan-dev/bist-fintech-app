@@ -72,11 +72,6 @@ MIGRATIONS = {
     "users": {
         "baseline_value": "NUMERIC(15, 2) DEFAULT 100000.00",
     },
-    "company_analysis": {
-        "dividend_yield": "NUMERIC(6, 2)",
-        "dividend_rate": "NUMERIC(10, 2)",
-        "last_dividend_date": "DATE",
-    },
     "stocks": {
         "is_katilim_compliant": "INTEGER DEFAULT 0",
         "purification_rate": "NUMERIC(5, 2) DEFAULT 0.00",
@@ -88,6 +83,13 @@ MIGRATIONS = {
         "day_low": "NUMERIC(10, 2)",
     },
     "company_analysis": {
+        # Temettü alanları (portföy temettü geliri projeksiyonu için).
+        # DİKKAT: bu alanlar MEVCUT company_analysis bloğunun içine yazılmalıdır —
+        # sözlüğe ikinci bir "company_analysis" anahtarı eklenirse Python yinelenen
+        # anahtarı sessizce ezer (sonraki kazanır) ve migration hiç çalışmaz.
+        "dividend_yield": "NUMERIC(6, 2)",
+        "dividend_rate": "NUMERIC(10, 2)",
+        "last_dividend_date": "DATE",
         "ev_ebitda": "NUMERIC(10, 2)",
         "roe": "NUMERIC(6, 2)",
         "gross_margin": "NUMERIC(6, 2)",
