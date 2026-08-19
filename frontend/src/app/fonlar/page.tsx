@@ -146,7 +146,21 @@ export default function FonlarPage() {
         </h2>
 
         {ipos.length === 0 ? (
-          <p className="text-xs text-gray-500 text-center py-6">Şu an listelenen bir halka arz bulunmuyor.</p>
+          // "Halka arz yok" demek yanıltıcı olurdu: veri kaynağımız olmadığı için
+          // liste her zaman boş. Kullanıcı gerçek durumu ve nereye bakacağını bilsin.
+          <div className="text-center py-6 space-y-2">
+            <p className="text-xs text-gray-500">
+              Halka arz takvimi için otomatik bir veri kaynağı henüz bağlı değil.
+            </p>
+            <a
+              href="https://www.kap.org.tr/tr/bildirim-sorgu"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-[11px] font-semibold text-[#F59E0B] hover:underline"
+            >
+              Güncel halka arzlar için KAP&apos;a bakın →
+            </a>
+          </div>
         ) : (
           <div className="space-y-3">
             {ipos.map((ipo) => (

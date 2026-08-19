@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  History, TrendingUp, TrendingDown, ArrowRight, Wallet, Target, Clock, RefreshCw,
+  History, TrendingUp, TrendingDown, ArrowRight, Wallet, Target, Clock, RefreshCw, Download,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
 
@@ -73,6 +73,33 @@ export default function TransactionsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // CSV ucu Authorization basligi gerektirdigi icin duz <a href> ile indirilemez;
+  // token ile fetch edilip blob olarak kaydedilir.
+  const [exporting, setExporting] = useState(false);
+  const exportCsv = async () => {
+    if (!token || exporting) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`${API_BASE}/portfolio/transactions/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `islem-gecmisi-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("CSV indirilemedi:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const visible = (data?.items ?? []).filter(
     (t) => filter === "ALL" || t.action_type === filter
@@ -180,8 +207,8 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          {/* Filtre */}
-          <div className="flex items-center gap-2">
+          {/* Filtre + disa aktarma */}
+          <div className="flex items-center gap-2 flex-wrap">
             {([
               ["ALL", "Tümü"],
               ["AL", "Alımlar"],
@@ -200,6 +227,17 @@ export default function TransactionsPage() {
                 {label}
               </button>
             ))}
+
+            <button
+              onClick={exportCsv}
+              disabled={exporting}
+              type="button"
+              title="İşlem geçmişini Excel'de açılabilir CSV olarak indir"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white hover:border-[#10B981]/40 transition disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? "Hazırlanıyor..." : "CSV indir"}
+            </button>
           </div>
 
           {/* İşlem tablosu */}

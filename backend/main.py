@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
@@ -2578,6 +2578,65 @@ def get_user_transactions(
         sell_count=sell_count,
         win_rate=win_rate,
         items=items,
+    )
+
+
+@app.get("/api/portfolio/transactions/export")
+def export_transactions_csv(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    İşlem geçmişini CSV olarak indirir (Excel'de açılabilir).
+
+    Kodlama olarak UTF-8 BOM kullanılır: Excel, BOM'suz UTF-8 dosyaları
+    Windows'ta ANSI varsayıp Türkçe karakterleri bozuyor ("Ç" -> "Ã‡").
+    Ayraç olarak noktalı virgül seçilir — Türkçe Windows yerel ayarında
+    Excel virgülü ondalık ayıracı sayar ve virgülle ayrılmış dosyayı tek
+    sütuna sıkıştırır.
+    """
+    import csv
+    import io as _io
+
+    rows = (
+        db.query(models.Transaction, models.Stock)
+        .join(models.Stock, models.Stock.id == models.Transaction.stock_id)
+        .filter(models.Transaction.user_id == current_user.id)
+        .order_by(models.Transaction.created_at.desc(), models.Transaction.id.desc())
+        .all()
+    )
+
+    buf = _io.StringIO()
+    writer = csv.writer(buf, delimiter=";")
+    writer.writerow([
+        "Tarih", "Hisse", "Sirket", "Islem", "Adet", "Fiyat (TL)",
+        "Tutar (TL)", "Ortalama Maliyet (TL)", "Gerceklesen K/Z (TL)", "Kaynak",
+    ])
+
+    def _tr_num(v):
+        """Türkçe Excel ondalık ayıracı virgüldür; nokta ile yazılan sayı metin sayılır."""
+        return "" if v is None else f"{float(v):.2f}".replace(".", ",")
+
+    for tx, stock in rows:
+        writer.writerow([
+            tx.created_at.strftime("%d.%m.%Y %H:%M") if tx.created_at else "",
+            stock.symbol,
+            stock.company_name,
+            tx.action_type,
+            _tr_num(tx.quantity),
+            _tr_num(tx.price),
+            _tr_num(tx.total_amount),
+            _tr_num(tx.average_cost_at_trade),
+            _tr_num(tx.realized_pnl),
+            "Bekleyen Emir" if tx.source == "LIMIT_ORDER" else "Manuel",
+        ])
+
+    content = "﻿" + buf.getvalue()
+    filename = f"islem-gecmisi-{date.today().isoformat()}.csv"
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
