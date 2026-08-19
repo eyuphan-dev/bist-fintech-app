@@ -561,6 +561,8 @@ def compare_stocks(symbols: str = "", db: Session = Depends(get_db)):
             altman_z_score=float(analysis.altman_z_score) if analysis and analysis.altman_z_score is not None else None,
             debt_to_equity=float(analysis.debt_to_equity) if analysis and analysis.debt_to_equity is not None else None,
             net_margin=float(analysis.net_margin) if analysis and analysis.net_margin is not None else None,
+            dividend_yield=float(analysis.dividend_yield) if analysis and analysis.dividend_yield is not None else None,
+            target_upside_pct=float(analysis.target_upside_pct) if analysis and analysis.target_upside_pct is not None else None,
         )
 
     # İstenen sırayı koru; bulunamayan semboller sessizce atlanır
@@ -574,6 +576,8 @@ SCREENER_SORT_FIELDS = {
     "roe": lambda item: item.roe,
     "piotroski_score": lambda item: item.piotroski_score,
     "current_price": lambda item: item.current_price,
+    "dividend_yield": lambda item: item.dividend_yield,
+    "target_upside_pct": lambda item: item.target_upside_pct,
 }
 
 
@@ -588,6 +592,7 @@ def get_screener(
     max_pb: Optional[float] = None,
     min_roe: Optional[float] = None,
     min_piotroski: Optional[int] = None,
+    min_dividend_yield: Optional[float] = None,
     sort_by: str = "price_change_pct",
     order: str = "desc",
 ):
@@ -635,6 +640,12 @@ def get_screener(
             continue
         if min_piotroski is not None and (piotroski_score is None or piotroski_score < min_piotroski):
             continue
+        # Temettü verimi filtresi: verisi olmayan hisse eşiği "sağlamıyor" kabul edilir
+        # (diğer filtrelerle aynı davranış) — aksi halde temettü ödemeyen şirketler
+        # "temettü verimi en az %5" aramasında listelenirdi.
+        _dy = float(analysis.dividend_yield) if (analysis and analysis.dividend_yield is not None) else None
+        if min_dividend_yield is not None and (_dy is None or _dy < min_dividend_yield):
+            continue
 
         items.append(ScreenerItemResponse(
             symbol=stock.symbol,
@@ -650,6 +661,8 @@ def get_screener(
             altman_z_score=float(analysis.altman_z_score) if analysis and analysis.altman_z_score is not None else None,
             debt_to_equity=float(analysis.debt_to_equity) if analysis and analysis.debt_to_equity is not None else None,
             net_margin=float(analysis.net_margin) if analysis and analysis.net_margin is not None else None,
+            dividend_yield=float(analysis.dividend_yield) if analysis and analysis.dividend_yield is not None else None,
+            target_upside_pct=float(analysis.target_upside_pct) if analysis and analysis.target_upside_pct is not None else None,
         ))
 
     # Sıralanan alanı olan/olmayanları ayırıp yalnızca doluları sıralıyoruz; None

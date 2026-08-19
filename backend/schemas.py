@@ -646,6 +646,8 @@ class ScreenerItemResponse(BaseModel):
     altman_z_score: Optional[float] = None
     debt_to_equity: Optional[float] = None
     net_margin: Optional[float] = None
+    dividend_yield: Optional[float] = None      # yıllık temettü verimi (%)
+    target_upside_pct: Optional[float] = None   # analist hedef fiyatına göre potansiyel (%)
 
 
 class WatchlistItemResponse(BaseModel):

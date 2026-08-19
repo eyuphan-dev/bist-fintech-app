@@ -19,6 +19,8 @@ interface CompareItem {
   altman_z_score: number | null;
   debt_to_equity: number | null;
   net_margin: number | null;
+  dividend_yield: number | null;
+  target_upside_pct: number | null;
 }
 
 interface StockOption {
@@ -49,6 +51,8 @@ const METRICS: {
   { key: "piotroski_score", label: "Piotroski", suffix: "/9", better: "high", hint: "Bilanço sağlık skoru (0-9)" },
   { key: "altman_z_score", label: "Altman Z", better: "high", hint: "İflas riski skoru — yüksek olan daha güvenli" },
   { key: "debt_to_equity", label: "Borç/Özkaynak", better: "low", hint: "Finansal kaldıraç" },
+  { key: "dividend_yield", label: "Temettü Verimi", suffix: "%", better: "high", hint: "Yıllık temettü / fiyat" },
+  { key: "target_upside_pct", label: "Analist Potansiyeli", suffix: "%", better: "high", hint: "Aracı kurum hedef fiyatına göre yükseliş potansiyeli" },
 ];
 
 export default function ComparePage() {

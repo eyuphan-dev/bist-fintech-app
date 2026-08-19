@@ -17,12 +17,14 @@ interface ScreenerItem {
   pb_ratio: number | null;
   roe: number | null;
   piotroski_score: number | null;
+  dividend_yield: number | null;
+  target_upside_pct: number | null;
   altman_z_score: number | null;
   debt_to_equity: number | null;
   net_margin: number | null;
 }
 
-type SortField = "price_change_pct" | "pe_ratio" | "pb_ratio" | "roe" | "piotroski_score" | "current_price";
+type SortField = "price_change_pct" | "pe_ratio" | "pb_ratio" | "roe" | "piotroski_score" | "current_price" | "dividend_yield" | "target_upside_pct";
 
 const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: "price_change_pct", label: "Günlük Değişim" },
@@ -30,6 +32,8 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: "pb_ratio", label: "PD/DD Oranı" },
   { value: "roe", label: "Özkaynak Kârlılığı (ROE)" },
   { value: "piotroski_score", label: "Piotroski Skoru" },
+  { value: "dividend_yield", label: "Temettü Verimi" },
+  { value: "target_upside_pct", label: "Analist Potansiyeli" },
   { value: "current_price", label: "Fiyat" },
 ];
 
@@ -42,6 +46,7 @@ const EMPTY_FILTERS = {
   maxPb: "",
   minRoe: "",
   minPiotroski: "",
+  minDividendYield: "",
 };
 
 export default function TarayiciPage() {
@@ -81,6 +86,7 @@ export default function TarayiciPage() {
       if (filters.maxPb) params.set("max_pb", filters.maxPb);
       if (filters.minRoe) params.set("min_roe", filters.minRoe);
       if (filters.minPiotroski) params.set("min_piotroski", filters.minPiotroski);
+      if (filters.minDividendYield) params.set("min_dividend_yield", filters.minDividendYield);
 
       const res = await fetch(`${API_BASE}/screener?${params.toString()}`);
       if (res.ok) setItems(await res.json());
@@ -110,7 +116,7 @@ export default function TarayiciPage() {
           <SlidersHorizontal className="w-5 h-5 text-[#10B981]" /> Hisse Tarayıcı
         </h1>
         <p className="text-xs text-gray-500 mt-1">
-          F/K, PD/DD, ROE, Piotroski skoru ve sektöre göre filtreleyip sıralayın.
+          F/K, PD/DD, ROE, Piotroski skoru, temettü verimi ve sektöre göre filtreleyip sıralayın.
         </p>
       </div>
 
@@ -159,6 +165,12 @@ export default function TarayiciPage() {
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Min. Piotroski (0-9)</label>
             <input type="number" min={0} max={9} placeholder="örn. 6" value={filters.minPiotroski} onChange={(e) => setFilters((f) => ({ ...f, minPiotroski: e.target.value }))}
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2 text-white text-xs outline-none" />
+          </div>
+
+          <div>
+            <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Min. Temettü Verimi (%)</label>
+            <input type="number" min={0} step="0.5" placeholder="örn. 3" value={filters.minDividendYield} onChange={(e) => setFilters((f) => ({ ...f, minDividendYield: e.target.value }))}
               className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2 text-white text-xs outline-none" />
           </div>
 
@@ -236,6 +248,7 @@ export default function TarayiciPage() {
                 <th className="px-3 py-2.5 font-semibold text-right">PD/DD</th>
                 <th className="px-3 py-2.5 font-semibold text-right">ROE</th>
                 <th className="px-3 py-2.5 font-semibold text-right hidden md:table-cell">Piotroski</th>
+                <th className="px-3 py-2.5 font-semibold text-right hidden md:table-cell">Temettü</th>
                 <th className="px-3 py-2.5 font-semibold hidden lg:table-cell">Katılım</th>
               </tr>
             </thead>
@@ -259,6 +272,7 @@ export default function TarayiciPage() {
                   <td className="px-3 py-2 text-right text-gray-300 tabular-nums">{fmt(item.pb_ratio)}</td>
                   <td className="px-3 py-2 text-right text-gray-300 tabular-nums">{fmt(item.roe, "%")}</td>
                   <td className="px-3 py-2 text-right text-gray-300 tabular-nums hidden md:table-cell">{fmt(item.piotroski_score, "/9")}</td>
+                  <td className="px-3 py-2 text-right tabular-nums hidden md:table-cell" style={{ color: item.dividend_yield ? "#F59E0B" : undefined }}>{fmt(item.dividend_yield, "%")}</td>
                   <td className="px-3 py-2 hidden lg:table-cell">
                     <KatilimBadge isCompliant={item.is_katilim_compliant} purificationRate={0} size="sm" />
                   </td>
