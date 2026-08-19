@@ -230,6 +230,62 @@ def refresh_market_data_job():
 # ---------------------------------------------------------------------------
 # MODÜL 1.6: Hisse Haberleri (Yahoo Finance) — 24 Saatlik Döngü
 # ---------------------------------------------------------------------------
+def refresh_deep_analysis_job(batch_size: int = 15):
+    """
+    Derin bilanço analizini (F/K, PD/DD, ROE, Piotroski, Altman Z, hedef fiyat...)
+    arka planda tazeler.
+
+    NEDEN EKLENDİ: calculate_deep_analysis hiçbir zamanlanmış işe bağlı değildi;
+    yalnızca kullanıcı bir hissenin analiz sekmesinde "Tazele" dediğinde
+    hesaplanıyordu. Sonuç: 43 aktif hissenin yalnızca 9'unda F/K verisi vardı,
+    karşılaştırma sayfası ve tarayıcı çoğu hissede "—" gösteriyordu.
+
+    Her çalıştırmada TÜM hisseler değil, en "bayat" `batch_size` kadarı işlenir:
+    hisse başına birkaç yfinance çağrısı (info + financials + balance_sheet +
+    recommendations) gerektiği için 43 hissenin tamamı tek seferde dakikalarca
+    sürer ve Yahoo tarafında hız limitine takılma riski doğurur. Öncelik sırası:
+    hiç analizi olmayanlar → en eski güncellenenler. Günlük çalışınca birkaç
+    günde tüm katalog tazelenmiş olur ve sürekli döner.
+    """
+    from analysis_engine import calculate_deep_analysis, AnalysisFetchError
+
+    db = SessionLocal()
+    try:
+        # Hiç kaydı olmayan veya en eski güncellenen hisseler önce gelsin.
+        # NULLS FIRST: analizi hiç hesaplanmamış olanlar en yüksek öncelikli.
+        rows = (
+            db.query(models.Stock)
+            .outerjoin(models.CompanyAnalysis, models.CompanyAnalysis.stock_id == models.Stock.id)
+            .filter(models.Stock.is_active == True)
+            .order_by(models.CompanyAnalysis.updated_at.asc().nullsfirst())
+            .limit(batch_size)
+            .all()
+        )
+
+        print(f"[Scheduler] Derin analiz tazeleniyor ({len(rows)} hisse)...")
+        ok = 0
+        for i, stock in enumerate(rows):
+            if i > 0:
+                time.sleep(1.0)  # Yahoo'ya art arda patlama istek göndermemek için
+            try:
+                if calculate_deep_analysis(db, stock.symbol):
+                    ok += 1
+            except AnalysisFetchError as e:
+                print(f"[Scheduler]   {stock.symbol}: veri çekilemedi ({e})")
+                db.rollback()
+            except Exception as e:
+                # Tek bir hissenin hatası tüm partiyi düşürmemeli.
+                print(f"[Scheduler]   {stock.symbol}: analiz hatası ({e})")
+                db.rollback()
+
+        print(f"[Scheduler] Derin analiz tazelendi: {ok}/{len(rows)} hisse.")
+    except Exception as e:
+        print(f"[Scheduler] Derin analiz işi hatası: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def refresh_stock_news_job():
     """
     Her aktif hisse için Yahoo Finance'dan son haberleri çeker ve stock_news
@@ -463,8 +519,23 @@ def start_scheduler():
         max_instances=1,
     )
 
+    # ── Görev 4: Derin Bilanço Analizi Tazeleme ──────────────────────────
+    # Her gün 02:00 UTC (Türkiye'de 05:00) — borsa kapalıyken, hisse başına
+    # birkaç yfinance çağrısı gerektiren ağır iş. Her çalıştırmada en bayat 15
+    # hisse işlenir; 43 hisselik katalog ~3 günde bir tam tur tazelenir.
+    scheduler.add_job(
+        refresh_deep_analysis_job,
+        "cron",
+        hour=2,
+        minute=0,
+        id="deep_analysis_sync",
+        max_instances=1,
+        coalesce=True,
+    )
+
     scheduler.start()
     print("APScheduler başlatıldı.")
+    print("  • deep_analysis_sync: Her gün 02:00 UTC (en bayat 15 hissenin bilanço analizi)")
     print("  • bist_updater     : Hafta içi 10:00–18:55, her 5 dakika")
     print("  • market_data_sync : Her gün 08:00 UTC (KAP bildirimleri + TEFAS fon fiyatları)")
     print("  • stock_news_sync  : Her gün 07:30 UTC (Hisse haberleri, 24 saatlik döngü)")

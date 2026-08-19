@@ -18,11 +18,12 @@ interface PendingOrder {
   executed_at: string | null;
 }
 
-const ORDER_TYPES = ["LIMIT_BUY", "LIMIT_SELL", "SCHEDULED_BUY"] as const;
+const ORDER_TYPES = ["LIMIT_BUY", "LIMIT_SELL", "STOP_LOSS_SELL", "SCHEDULED_BUY"] as const;
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
   LIMIT_BUY: "Limit Alış",
   LIMIT_SELL: "Limit Satış",
+  STOP_LOSS_SELL: "Zarar Kes",
   SCHEDULED_BUY: "Zamanlı Alış",
 };
 
@@ -185,7 +186,8 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
 
           <p className="text-[10px] text-gray-500 leading-relaxed">
             {orderType === "LIMIT_BUY" && "Fiyat bu değere veya altına düşerse otomatik alım yapılır."}
-            {orderType === "LIMIT_SELL" && "Fiyat bu değere veya üstüne çıkarsa otomatik satış yapılır."}
+            {orderType === "LIMIT_SELL" && "Fiyat bu değere veya üstüne çıkarsa otomatik satış yapılır (kâr al)."}
+            {orderType === "STOP_LOSS_SELL" && "Fiyat bu değere veya altına DÜŞERSE otomatik satış yapılır (zararı sınırlar). Aynı pozisyona hem kâr-al hem zarar-kes koyabilirsiniz; biri gerçekleşince diğeri otomatik iptal olur."}
             {orderType === "SCHEDULED_BUY" && "Seçilen zaman geldiğinde (borsa açıkken) piyasa fiyatından alım yapılır."}
             {" "}
             Kontroller yalnızca borsa açıkken (hafta içi 10:00-18:15) birkaç dakikada bir çalışır.

@@ -1616,14 +1616,25 @@ def _reserved_cash_for_pending_buys(db: Session, user_id: int, exclude_order_id:
 
 
 def _reserved_shares_for_pending_sells(
-    db: Session, user_id: int, stock_id: int, exclude_order_id: Optional[int] = None
+    db: Session, user_id: int, stock_id: int, order_type: str, exclude_order_id: Optional[int] = None
 ) -> float:
-    """Bir hisse için bekleyen satış emirlerinde bloke edilen toplam lot adedi."""
+    """
+    Bir hisse için bekleyen satış emirlerinde bloke edilen lot adedi — TÜRE GÖRE ayrı.
+
+    LIMIT_SELL (kâr-al) ve STOP_LOSS_SELL (zarar-kes) bilerek AYRI havuzlarda
+    sayılır: aynı pozisyona hem yukarıdan kâr-al hem aşağıdan zarar-kes koymak
+    standart risk yönetimi kurgusudur ve ikisi aynı havuzda blokelenirse bu
+    mümkün olmazdı. Biri tetiklendiğinde diğeri otomatik iptal edilir
+    (bkz. _cancel_sibling_sell_orders), böylece açıkta emir kalmaz.
+
+    Aynı TÜRDEN emirlerin toplamı ise sahip olunan lotu aşamaz — aksi halde
+    kullanıcı tek pozisyon için iki ayrı tam-lot kâr-al emri verebilirdi.
+    """
     query = db.query(func.coalesce(func.sum(models.PendingOrder.quantity), 0)).filter(
         models.PendingOrder.user_id == user_id,
         models.PendingOrder.stock_id == stock_id,
         models.PendingOrder.status == "PENDING",
-        models.PendingOrder.order_type == "LIMIT_SELL",
+        models.PendingOrder.order_type == order_type,
     )
     if exclude_order_id is not None:
         query = query.filter(models.PendingOrder.id != exclude_order_id)
@@ -1674,20 +1685,21 @@ def create_pending_order(
                     f"(bekleyen emirlerde bloke: {reserved:,.2f} TL)."
                 ),
             )
-    else:  # LIMIT_SELL
+    else:  # LIMIT_SELL (kâr-al) / STOP_LOSS_SELL (zarar-kes)
         position = db.query(models.Portfolio).filter_by(
             user_id=current_user.id, stock_id=stock.id, is_bot_portfolio=False
         ).first()
         owned = float(position.quantity) if position else 0.0
-        reserved_qty = _reserved_shares_for_pending_sells(db, current_user.id, stock.id)
+        reserved_qty = _reserved_shares_for_pending_sells(db, current_user.id, stock.id, order.order_type)
         sellable = owned - reserved_qty
 
         if float(order.quantity) > sellable:
+            tur = "zarar-kes" if order.order_type == "STOP_LOSS_SELL" else "kâr-al"
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Yetersiz hisse. {stock.symbol} için satılabilir adet: {sellable:g} "
-                    f"(sahip: {owned:g}, bekleyen satış emirlerinde bloke: {reserved_qty:g})."
+                    f"(sahip: {owned:g}, bekleyen {tur} emirlerinde bloke: {reserved_qty:g})."
                 ),
             )
     # ────────────────────────────────────────────────────────────────────────

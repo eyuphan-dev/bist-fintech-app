@@ -475,16 +475,17 @@ ORDER_TYPES = ("LIMIT_BUY", "LIMIT_SELL", "SCHEDULED_BUY")
 
 class PendingOrderCreate(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=10)
-    order_type: str = Field(..., pattern="^(LIMIT_BUY|LIMIT_SELL|SCHEDULED_BUY)$")
+    order_type: str = Field(..., pattern="^(LIMIT_BUY|LIMIT_SELL|SCHEDULED_BUY|STOP_LOSS_SELL)$")
     quantity: float = Field(..., gt=0, le=10_000_000, allow_inf_nan=False)
     target_price: Optional[float] = Field(None, gt=0, le=1_000_000, allow_inf_nan=False)
     execution_time: Optional[datetime] = None
 
     @model_validator(mode="after")
     def _validate_type_specific_fields(self):
-        if self.order_type in ("LIMIT_BUY", "LIMIT_SELL"):
+        # STOP_LOSS_SELL de fiyat şartlı bir emirdir: hedef fiyat zorunludur.
+        if self.order_type in ("LIMIT_BUY", "LIMIT_SELL", "STOP_LOSS_SELL"):
             if self.target_price is None:
-                raise ValueError("LIMIT_BUY / LIMIT_SELL emirleri için target_price zorunludur.")
+                raise ValueError("Fiyat şartlı emirler için target_price zorunludur.")
         elif self.order_type == "SCHEDULED_BUY":
             if self.execution_time is None:
                 raise ValueError("SCHEDULED_BUY emirleri için execution_time zorunludur.")

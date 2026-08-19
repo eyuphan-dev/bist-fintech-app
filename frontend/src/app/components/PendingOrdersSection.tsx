@@ -9,7 +9,7 @@ import { formatIstanbulDateTime } from "../lib/formatDate";
 interface PendingOrder {
   id: number;
   symbol: string;
-  order_type: "LIMIT_BUY" | "LIMIT_SELL" | "SCHEDULED_BUY";
+  order_type: "LIMIT_BUY" | "LIMIT_SELL" | "STOP_LOSS_SELL" | "SCHEDULED_BUY";
   quantity: number;
   target_price: number | null;
   execution_time: string | null;
@@ -22,6 +22,7 @@ interface PendingOrder {
 const ORDER_TYPE_LABELS: Record<string, string> = {
   LIMIT_BUY: "Limit Alış",
   LIMIT_SELL: "Limit Satış",
+  STOP_LOSS_SELL: "Zarar Kes",
   SCHEDULED_BUY: "Zamanlı Alış",
 };
 
