@@ -110,6 +110,27 @@ class StockPriceDaily(Base):
     stock = relationship("Stock")
 
 
+class IndexHistory(Base):
+    """
+    Piyasa endekslerinin (BIST 100 = XU100) günlük kapanış serisi.
+
+    Neden ayrı tablo: endeks bir hisse değildir; stocks tablosuna sahte bir
+    satır olarak eklemek onu tarayıcıda/listelerde/portföyde işlem yapılabilir
+    gibi gösterme riski taşır. Ayrıca endeks için katılım uygunluğu, bilanço
+    analizi gibi alanların hiçbiri anlamlı değildir.
+
+    Kullanıcının portföy getirisini endekse karşı kıyaslamak için kullanılır
+    (bkz. /api/portfolio/benchmark).
+    """
+    __tablename__ = "index_history"
+    __table_args__ = (UniqueConstraint("symbol", "trade_date", name="uq_index_symbol_date"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(20), nullable=False, index=True)   # 'XU100'
+    trade_date = Column(Date, nullable=False, index=True)
+    close = Column(Numeric(14, 2), nullable=False)
+
+
 class Portfolio(Base):
     __tablename__ = "portfolios"
 

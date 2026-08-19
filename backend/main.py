@@ -25,6 +25,7 @@ from schemas import (
     TransactionItem, TransactionHistoryResponse,
     StockVoteRequest, StockVoteResponse, ChangePasswordRequest,
     DividendPositionItem, PortfolioDividendResponse,
+    BenchmarkPoint, PortfolioBenchmarkResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -2577,6 +2578,87 @@ def get_user_transactions(
         sell_count=sell_count,
         win_rate=win_rate,
         items=items,
+    )
+
+
+@app.get("/api/portfolio/benchmark", response_model=PortfolioBenchmarkResponse)
+def get_portfolio_benchmark(
+    days: int = 90,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Portföy getirisini BIST 100 ile kıyaslar — "endeksi yenebiliyor muyum?".
+
+    Her iki seri de İLK ORTAK GÜNE 100 verilerek normalize edilir; aksi halde
+    ~10.000 puanlık endeksle 100.000 TL'lik portföyü aynı grafikte kıyaslamak
+    anlamsız olurdu.
+
+    Endeks kapanışları yalnızca işlem günlerinde vardır; portföy anlık görüntüsü
+    de hafta içi alındığı için tarihler genelde örtüşür. Örtüşmeyen günlerde
+    endeks için o tarihten ÖNCEKİ en yakın kapanış kullanılır (ileriye dönük
+    veri kullanmamak için — aksi halde henüz gerçekleşmemiş bir kapanışla
+    kıyaslama yapılmış olurdu).
+    """
+    cutoff = date.today() - timedelta(days=max(1, min(days, 365)))
+
+    snapshots = (
+        db.query(models.UserPerformanceHistory)
+        .filter(
+            models.UserPerformanceHistory.user_id == current_user.id,
+            models.UserPerformanceHistory.recorded_date >= cutoff,
+        )
+        .order_by(models.UserPerformanceHistory.recorded_date.asc())
+        .all()
+    )
+    if len(snapshots) < 2:
+        return PortfolioBenchmarkResponse(points=[])
+
+    index_rows = (
+        db.query(models.IndexHistory)
+        .filter(models.IndexHistory.symbol == "XU100", models.IndexHistory.trade_date >= cutoff - timedelta(days=10))
+        .order_by(models.IndexHistory.trade_date.asc())
+        .all()
+    )
+    index_pairs = [(r.trade_date, float(r.close)) for r in index_rows]
+
+    def index_close_on_or_before(d):
+        """O tarihteki ya da ondan önceki en yakın endeks kapanışı (ileriye bakmaz)."""
+        chosen = None
+        for td, close in index_pairs:
+            if td <= d:
+                chosen = close
+            else:
+                break
+        return chosen
+
+    base_portfolio = float(snapshots[0].total_portfolio_value)
+    base_index = index_close_on_or_before(snapshots[0].recorded_date)
+    if base_portfolio <= 0:
+        return PortfolioBenchmarkResponse(points=[])
+
+    points: list[BenchmarkPoint] = []
+    for snap in snapshots:
+        value = float(snap.total_portfolio_value)
+        idx_close = index_close_on_or_before(snap.recorded_date)
+        points.append(BenchmarkPoint(
+            date=snap.recorded_date,
+            portfolio_value=round(value, 2),
+            portfolio_index=round((value / base_portfolio) * 100, 2),
+            benchmark_index=round((idx_close / base_index) * 100, 2) if (idx_close and base_index) else None,
+        ))
+
+    portfolio_ret = round(((points[-1].portfolio_index - 100) / 100) * 100, 2)
+    bench_last = points[-1].benchmark_index
+    bench_ret = round(((bench_last - 100) / 100) * 100, 2) if bench_last is not None else None
+
+    return PortfolioBenchmarkResponse(
+        start_date=points[0].date,
+        end_date=points[-1].date,
+        portfolio_return_pct=portfolio_ret,
+        benchmark_return_pct=bench_ret,
+        excess_return_pct=round(portfolio_ret - bench_ret, 2) if bench_ret is not None else None,
+        points=points,
     )
 
 

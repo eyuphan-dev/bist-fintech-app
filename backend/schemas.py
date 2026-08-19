@@ -332,6 +332,29 @@ class PortfolioDividendResponse(BaseModel):
     items: List[DividendPositionItem]
 
 
+class BenchmarkPoint(BaseModel):
+    date: date
+    portfolio_value: float
+    portfolio_index: float          # ilk gün = 100 olacak sekilde normalize
+    benchmark_index: Optional[float] = None
+
+
+class PortfolioBenchmarkResponse(BaseModel):
+    """
+    Portföy getirisinin BIST 100 ile kıyaslaması.
+
+    İki seri de ilk güne 100 verilerek normalize edilir; aksi halde 80.000
+    puanlık endeksle 100.000 TL'lik portföyü aynı grafikte kıyaslamak
+    anlamsız olurdu. Böylece "endeksi yendim mi?" sorusu tek bakışta yanıtlanır.
+    """
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    portfolio_return_pct: Optional[float] = None
+    benchmark_return_pct: Optional[float] = None
+    excess_return_pct: Optional[float] = None    # portfoy - endeks (pozitifse endeks yenildi)
+    points: List[BenchmarkPoint]
+
+
 class BotPerformancePoint(BaseModel):
     date: date
     total_portfolio_value: float

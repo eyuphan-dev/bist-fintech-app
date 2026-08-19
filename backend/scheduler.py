@@ -23,7 +23,7 @@ from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
 from tefas_client import update_tefas_funds
 from analysis_engine import refresh_earnings_calendar
-from daily_history import refresh_daily_history
+from daily_history import refresh_daily_history, refresh_index_history
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +214,14 @@ def refresh_market_data_job():
             print(f"[Scheduler] Günlük geçmiş tazelendi: {updated} hisse güncellendi.")
         except Exception as e:
             print(f"[Scheduler] Günlük geçmiş tazeleme hatası: {e}")
+            db.rollback()
+
+        # BIST 100 endeks geçmişi — portföy/endeks kıyaslaması (benchmark) için.
+        print("[Scheduler] BIST 100 endeks geçmişi tazeleniyor...")
+        try:
+            refresh_index_history(db)
+        except Exception as e:
+            print(f"[Scheduler] Endeks geçmişi tazeleme hatası: {e}")
             db.rollback()
 
         print("[Scheduler] AI sinyal alarmları kontrol ediliyor...")

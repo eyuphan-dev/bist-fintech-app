@@ -76,3 +76,65 @@ def refresh_daily_history(db: Session, stock_codes: Optional[list] = None) -> in
 
     print(f"[DailyHistory] {updated} hisse için günlük geçmiş güncellendi.")
     return updated
+
+
+# ---------------------------------------------------------------------------
+# BIST 100 (XU100) endeks geçmişi — portföy/endeks kıyaslaması için
+# ---------------------------------------------------------------------------
+BENCHMARK_SYMBOL = "XU100"
+BENCHMARK_YAHOO = "XU100.IS"
+
+
+def refresh_index_history(db, period: str = "1y") -> int:
+    """
+    BIST 100 endeksinin günlük kapanışlarını çeker ve index_history'e yazar.
+
+    Kullanıcının portföy getirisini endekse karşı kıyaslamak için gerekir
+    ("endeksi yenebiliyor muyum?"). Endeks bir hisse olmadığı için stocks
+    tablosuna değil kendi tablosuna yazılır.
+
+    Idempotent: aynı (symbol, trade_date) için tekrar çalıştırılırsa kapanış
+    güncellenir, yeni satır açılmaz (UNIQUE kısıtı bunu garanti eder).
+    """
+    import yfinance as yf
+    import models
+    from yf_retry import call_with_retry
+
+    try:
+        hist = call_with_retry(
+            lambda: yf.Ticker(BENCHMARK_YAHOO).history(period=period, interval="1d"),
+            attempts=2, label="XU100.history",
+        )
+    except Exception as e:
+        print(f"[IndexHistory] XU100 verisi çekilemedi: {e}")
+        return 0
+
+    if hist is None or hist.empty:
+        print("[IndexHistory] XU100 için veri dönmedi.")
+        return 0
+
+    existing = {
+        row.trade_date: row
+        for row in db.query(models.IndexHistory).filter_by(symbol=BENCHMARK_SYMBOL).all()
+    }
+
+    written = 0
+    for idx, row in hist.iterrows():
+        try:
+            d = idx.date()
+            close = float(row["Close"])
+        except Exception:
+            continue
+        if close <= 0:
+            continue
+
+        current = existing.get(d)
+        if current:
+            current.close = close
+        else:
+            db.add(models.IndexHistory(symbol=BENCHMARK_SYMBOL, trade_date=d, close=close))
+        written += 1
+
+    db.commit()
+    print(f"[IndexHistory] XU100: {written} günlük kapanış işlendi.")
+    return written
