@@ -1,0 +1,312 @@
+================================================================================
+GECE RAPORU — 19/20 Ağustos 2026
+BIST Simülasyonu & AI Trader — sistem denetimi, hata ayıklama ve geliştirmeler
+================================================================================
+
+Canlı adres : https://borsa-trader.duckdns.org
+Toplam commit: 10 (hepsi deploy edildi ve canlıda doğrulandı)
+Son durum    : 12 sayfa + 15 API ucu → hepsi 200. Backend hata logu temiz.
+
+
+================================================================================
+1. SİSTEM DENETİMİ — BAŞLANGIÇ DURUMU
+================================================================================
+
+Kontrol edilenler ve sonuçları:
+
+  pm2 süreçleri ............ backend + frontend online, çökme yok
+  Backend hata logu ........ temiz
+  nginx proxy_cache ........ kapalı (önceki oturumdaki düzeltme kalıcı)
+  Disk / RAM ............... %34 / 1.3 GB — rahat
+  SSL sertifikası .......... 4 Kasım 2026'ya kadar geçerli
+  Port çakışması ........... yok (4000 backend, 3001 frontend, 3000 aruzor)
+  Veri tazeliği ............ 19 Ağustos 18:10 TR = o günün seans kapanışı, doğru
+
+FİYAT DOĞRULUĞU ÖLÇÜMÜ (senin sorduğun konu)
+
+  6 hissede bizim kayıt ile Yahoo referansı karşılaştırıldı:
+
+    THYAO  301.75 / 301.25   fark %0.17
+    ASELS  404.50 / 403.75   fark %0.19
+    GARAN  132.30 / 132.30   fark %0.00
+    FROTO   79.50 /  79.35   fark %0.19
+    EREGL   37.80 /  37.80   fark %0.00
+    BIMAS  416.75 / 416.50   fark %0.06
+
+  Sonuç: sapma en fazla %0.19. Bu, kapanışa ~5 dk kala aldığımız son bar ile
+  resmi kapanış arasındaki normal farktır. VERİ DOĞRU.
+
+GECİKME
+
+  Bizim yoklama    : seans boyunca 5 dakikada bir
+  Yahoo'nun verisi : BIST için yasal olarak 15 dakika gecikmeli
+  TOPLAM           : ~15-20 dakika
+
+  Bunu azaltmanın tek yolu lisanslı (ücretli) veri almaktır. Ücretsiz
+  kaynakla bu alt sınırdır — 5 dakikalık yoklamayı sıklaştırmak fayda
+  sağlamaz, çünkü kaynak zaten 15 dk gecikmeli.
+
+
+================================================================================
+2. BULUNAN VE DÜZELTİLEN HATALAR
+================================================================================
+
+[1] DERİN ANALİZ HİÇBİR ZAMANLANMIŞ İŞE BAĞLI DEĞİLDİ            (ciddi)
+
+    Bulgu : calculate_deep_analysis yalnızca kullanıcı bir hissenin analiz
+            sekmesinde elle "Tazele" dediğinde çalışıyordu. Scheduler'da
+            böyle bir iş hiç yoktu.
+    Etkisi: 43 aktif hissenin yalnızca 9'unda F/K verisi vardı. Karşılaştırma
+            sayfası ve tarayıcı çoğu hissede "—" gösteriyordu.
+    Çözüm : Günlük 02:00 UTC'de çalışan refresh_deep_analysis_job eklendi.
+            Her turda en "bayat" 15 hisse işlenir (hisse başına birkaç
+            yfinance çağrısı gerektiği için parti parti; ~3 günde tam tur).
+    Ayrıca: İş elle 3 kez tetiklenip katalog bu gece dolduruldu.
+
+    KAPSAM DEĞİŞİMİ:
+                        önce    sonra
+      Piotroski           ~9     42/43
+      Altman Z            ~9     42/43
+      F/K                  9     25/43
+      Temettü              0     24/43
+      Analist hedefi       ?     20/43
+
+    Not: Kalan boşluklar MEŞRU. Zarar eden şirkette F/K tanımsızdır, her
+    şirket temettü ödemez, her hissede analist takibi yoktur.
+
+[2] STOP-LOSS (ZARAR KES) EMRİ HİÇ YOKTU                          (ciddi)
+
+    Bulgu : LIMIT_SELL yalnızca "fiyat >= hedef" ile tetikleniyordu, yani
+            kâr-al. Zararı kesmek için "fiyat X'in altına düşerse sat"
+            emri hiç yoktu.
+    Etkisi: Borsayla ilgilenen biri için temel risk yönetimi aracı eksikti.
+    Çözüm : STOP_LOSS_SELL emir tipi eklendi (tetikleme: fiyat <= hedef).
+
+[3] TEMETTÜ MIGRATION'I HİÇ ÇALIŞMIYORDU                   (kendi hatam)
+
+    Bulgu : MIGRATIONS sözlüğüne ikinci bir "company_analysis" anahtarı
+            eklemiştim. Python yinelenen anahtarı SESSİZCE ezer (sonraki
+            kazanır), dolayısıyla temettü alanları listeden tamamen düşüyordu.
+    Etkisi: Kolonlar Postgres'te oluşmadı; /api/portfolio/dividends 500
+            döndü VE bilanço takvimi işi de aynı hatayla kırıldı.
+    Çözüm : Alanlar mevcut bloğun içine taşındı, tekrarı önlemek için uyarı
+            notu bırakıldı. Canlıda doğrulandı.
+    Ders  : Bu hata, her parçayı ayrı deploy edip canlıda doğruladığım için
+            dakikalar içinde yakalandı.
+
+[4] HER DEPLOY'DA SİTE 1-2 DAKİKA 500 DÖNÜYORDU                  (ciddi)
+
+    Bulgu : Deploy "rm -rf .next" yaparken eski frontend süreci hâlâ istek
+            karşılıyordu. Dizin altından silinince Next tüm sayfalarda
+            "Cannot find module .next/server/middleware-manifest.json" ile
+            500 dönüyordu — ve bu build bitene kadar sürüyordu.
+    İlk denemem: "rm -rf .next" kaldırıldı. YETMEDİ — next build çıktıyı
+            .next içine YERİNDE yazdığı için dosyalar yine altından değişiyor.
+    Kesin çözüm: Build artık NEXT_DIST_DIR=.next-build ile geçici dizine
+            yapılıyor, bitince .next ile yer değiştiriliyor (mv). Yıkıcı adım
+            dakikalar değil milisaniyeler sürüyor.
+    ÖLÇÜM : Deploy sırasında 50 istek atıldı → 50/50 başarılı, SIFIR KESİNTİ.
+            (Öncesinde aynı ölçümde sayfalar 500 dönüyordu.)
+    Bonus : Build başarısız olursa .next'e hiç dokunulmuyor, eski sürüm
+            ayakta kalıyor.
+
+[5] HALKA ARZ LİSTESİ YANILTICI MESAJ GÖSTERİYORDU                (küçük)
+
+    Bulgu : "Şu an listelenen bir halka arz bulunmuyor" yazıyordu. Gerçek
+            durum ise veri kaynağımızın hiç olmaması (detay için bölüm 5).
+    Çözüm : Durum açıkça yazıldı + KAP'a yönlendirme linki eklendi.
+
+
+================================================================================
+3. EKLENEN ÖZELLİKLER
+================================================================================
+
+Seçim ölçütü: rakip/ücretli platformların paketlerinde sunduğu ama veri
+kaynağımızda ÜCRETSİZ bulunan, borsayla ilgilenen birinin işini gerçekten
+kolaylaştıran özellikler.
+
+--- A. ZARAR KES (STOP-LOSS) EMRİ ---------------------------------------------
+
+  • Fiyat belirlediğin seviyenin ALTINA düşerse otomatik satar.
+  • Aynı pozisyona hem kâr-al hem zarar-kes koyabilirsin (standart risk
+    yönetimi kurgusu). Bu yüzden bloke TÜRE GÖRE ayrı hesaplanır; aynı
+    türden ikinci tam-lot emir ise reddedilir.
+  • OCO (one-cancels-other): biri gerçekleşince kardeşi otomatik iptal olur.
+    Aksi halde ileride "Yetersiz hisse" ile FAILED olup sana hata gibi
+    görünürdü.
+
+  Test edildi: tetikleme yönleri (fiyat yükselince kâr-al çalışır zarar-kes
+  çalışmaz, düşünce tersi), çift emir kurgusu, OCO iptali.
+
+--- B. PORTFÖY TEMETTÜ GELİRİ -------------------------------------------------
+
+  • Ana sayfada: beklenen yıllık/aylık temettü geliri, portföy verimi,
+    pozisyon bazında dağılım.
+  • MALİYETE GÖRE VERİM (yield on cost) ayrıca hesaplanır. Uzun vadeli
+    yatırımcı için asıl anlamlı olan budur: 100 TL'den alıp 300 TL olan
+    hissede güncel verim %2 iken senin maliyetine göre %6'dır.
+  • Tahmin olduğu ve temettünün garanti olmadığı arayüzde açıkça yazıyor.
+
+  Senin portföyünde şu an: GUNDG'den yıllık ~374 TL (aylık ~31 TL).
+
+--- C. PORTFÖY vs BIST 100 ("ENDEKSİ YENEBİLİYOR MUYUM?") ---------------------
+
+  • Portföy grafiği artık tek grafikte iki çizgi: senin portföyün + BIST 100.
+  • Her iki seri de ilk güne 100 verilerek normalize edilir; aksi halde
+    ~14.000 puanlık endeksle TL cinsinden portföyü aynı eksende kıyaslamak
+    anlamsız olurdu.
+  • "BIST 100'ü %X geride bıraktınız" rozeti.
+
+  ŞU ANKİ DURUMUN: portföy +%4.40, BIST 100 +%2.53 → endeksi %1.87 geride
+  bırakmışsın.
+
+  Teknik not: endeks bir hisse olmadığı için stocks tablosuna sahte satır
+  olarak eklenmedi (orada işlem yapılabilir gibi görünme riski var); kendi
+  index_history tablosuna yazılıyor.
+
+--- D. DÖVİZ, ALTIN VE ENDEKS GÖSTERGELERİ ------------------------------------
+
+  Piyasalar sayfasının üstünde şerit halinde:
+
+    Dolar / TL      47.95   1g +%0.08   30g +%1.63
+    Euro / TL       56.03   1g +%0.99   30g +%4.03
+    Gram Altın    7,049.70  1g +%4.84   30g +%15.99
+    BIST 100     14,128.00  1g -%0.03   30g +%1.05
+
+  • Gram altın türetilmiştir: ons altın × USD/TRY ÷ 31.1034768. Yalnızca
+    HER İKİ serinin de kapanışı olan günlerde hesaplanır — aksi halde eksik
+    günde yanlış kur eşleşmesiyle saçma bir gram fiyatı çıkardı.
+  • 1 günlük değişim TAKVİM gününe değil ÖNCEKİ İŞLEM GÜNÜNE göre hesaplanır
+    (hafta sonu/tatilde önceki takvim gününde kapanış yoktur).
+
+--- E. İŞLEM GEÇMİŞİ CSV DIŞA AKTARMA -----------------------------------------
+
+  • /islemlerim sayfasında "CSV indir" butonu.
+  • Excel'de Türkçe karakterler bozulmasın diye UTF-8 BOM kullanılıyor
+    (BOM'suz UTF-8'i Excel Windows'ta ANSI varsayıp "Ç"yi "Ã‡" yapıyor).
+  • Ayraç noktalı virgül: Türkçe Windows'ta Excel virgülü ondalık ayıracı
+    sayar ve virgüllü dosyayı tek sütuna sıkıştırır.
+  • Sayılar Türkçe ondalık virgülüyle yazılıyor, aksi halde Excel'de metin
+    olarak görünürdü.
+
+--- F. TEMETTÜ VERİSİNİN YAYILMASI --------------------------------------------
+
+  • Tarayıcı: "min. temettü verimi" filtresi + verime göre sıralama +
+    tabloda temettü sütunu.
+  • Karşılaştırma sayfası: Temettü Verimi ve Analist Potansiyeli satırları.
+  • Hisse detayı → Derin Bilanço Analizi: temettü verimi kartı.
+
+  Örnek (canlı veri, verim ≥ %2 olan 18 hisse var):
+    KTLEV %20.00 | FROTO %12.28 | ASELS %11.00 | TOASO %7.53 | ENKAI %7.51
+
+
+================================================================================
+4. road_map.md DURUMU
+================================================================================
+
+  #1 Katılım Endeksi rozeti & filtresi ......... TAMAM (zaten vardı)
+  #2 Halka Arz takvimi ......................... YAPILAMADI (bkz. bölüm 5)
+  #3 Aracı kurum hedef fiyatları & konsensüs ... TAMAM (zaten vardı; veri
+                                                  kapsamı bu gece 20/43'e çıktı)
+  #4 Sektörel ısı haritası ..................... TAMAM (zaten vardı)
+  #5 Bilanço & KAP takvimi ..................... TAMAM (zaten vardı)
+  #6 Topluluk duygu durumu / anket ............. TAMAM (önceki oturumda eklendi)
+  #7 Kişiye özel bildirim & alarm .............. TAMAM (zaten vardı)
+
+  7 maddenin 6'sı tamam. Kalan tek madde #2 ve nedeni aşağıda.
+
+
+================================================================================
+5. YAPILAMAYANLAR VE NEDENLERİ (dürüst bölüm)
+================================================================================
+
+[A] HALKA ARZ TAKVİMİ (road_map #2)
+
+    Durum : ipos tablosunu dolduran HİÇBİR kod yok. Model, endpoint ve
+            arayüz yazılmış ama veri kaynağı hiç yazılmamış — tablo
+            baştan beri boş.
+    Denedim: KAP'ta halka arz için 3 farklı API ucu denendi, hepsi 404.
+    Yapısal engel: KAP istemcimiz ZATEN LİSTEDE OLAN hisselerin bildirimlerini
+            çekiyor. Halka arz ise henüz listede olmayan şirketlerle ilgili,
+            dolayısıyla o kaynaktan hiçbir zaman gelmez.
+    Karar : Endpoint tahmin etmeye devam etmek yerine durumu dürüstçe
+            belirtmeyi seçtim. Arayüz artık "veri kaynağı bağlı değil" deyip
+            KAP'a yönlendiriyor. Çözüm için KAP'ın halka arz sayfasını
+            kazımak (scraping) gerekir — kırılgan bir yol, ayrı bir iş.
+
+[B] DERİNLİK / ARACI KURUM DAĞILIMI (AKD)
+
+    Değişen bir şey yok: BIST veri lisansı gerektiriyor, ücretsiz kaynağı
+    yok. Midas bunun için aylık ~1200 TL alıyor. Uydurma veri koymak
+    seçenek değil.
+
+[C] GERÇEK ZAMANLI (GECİKMESİZ) FİYAT
+
+    Yasal olarak lisans gerektirir. Ücretsiz kaynakta 15 dk gecikme alt
+    sınırdır.
+
+[D] FRONTEND RSC HATALARI
+
+    Frontend log'unda açılış anında React Server Components manifest
+    hataları görünüyor. İSTEKLERDE TEKRARLAMIYOR (test ettim), sayfalar
+    sağlam. Kök nedenini bulamadım — "çözüldü" diyemem, açık madde olarak
+    bırakıyorum.
+
+
+================================================================================
+6. AÇIKTA KALAN / DİKKAT EDİLECEK MADDELER
+================================================================================
+
+  • Sunucudaki .env (proxy bilgileri) ve nginx konfigü git'te DEĞİL.
+    nginx'inki README'de yazılı; aaPanel bir gün sıfırlarsa elle geri
+    konmalı. start.sh de aynı durumda.
+
+  • Derin analiz işi her gece 15 hisse işliyor. Bu gece elle 3 tur
+    çalıştırdım, katalog dolu. Bundan sonra kendi kendine dönecek.
+
+  • Temettü verisi 24/43 hissede var. Bu bir eksiklik değil — kalanlar
+    temettü ödemeyen şirketler.
+
+  • THYAO'da benim test oyum (Düşer) hâlâ duruyor. İstersen sayfadan
+    değiştir.
+
+  • Günlük 09:00 oturum sıfırlaması duruyor. İstersen haftalığa
+    çevirebiliriz (native uygulama düşünüyorsan zaten gerekecek).
+
+
+================================================================================
+7. COMMIT LİSTESİ
+================================================================================
+
+  deadb05  feat: zarar-kes (stop-loss) emri + derin analiz zamanlanmis tazeleme
+  7f4e686  feat: portfoy temettu geliri projeksiyonu
+  eb1fcfa  fix: temettu migration'i yinelenen sozluk anahtari yuzunden calismiyordu
+  ba2f777  feat: portfoy vs BIST 100 kiyaslamasi
+  dadd325  feat: doviz kurlari, gram altin ve BIST 100 gostergeleri
+  6868b20  feat: islem gecmisi CSV disa aktarma + halka arz bos durumu duzeltildi
+  1173766  fix: her deploy'da site 1-2 dk 500 donuyordu (ilk deneme)
+  9b909f4  feat: temettu verimi ve analist potansiyeli tarayici + karsilastirmaya
+  c3d8965  fix: sifir kesintili deploy (build gecici dizine, atomik takas)
+  1b7ec6d  feat: hisse detayinda temettu verimi karti
+
+
+================================================================================
+8. SON DOĞRULAMA
+================================================================================
+
+  Sayfalar (12) : / /piyasalar /tarayici /bot /karsilastir /heatmap /takvim
+                  /fonlar /favoriler /islemlerim /ayarlar /hisse/THYAO
+                  → HEPSİ 200
+
+  API ucu (15)  : /stocks /screener /leaderboard /market/status /market/quotes
+                  /portfolio /portfolio/analytics /portfolio/benchmark
+                  /portfolio/dividends /portfolio/transactions
+                  /portfolio/transactions/export /orders /notifications
+                  /user/bot /auth/me
+                  → HEPSİ 200
+
+  Sunucu        : pm2 online, backend hata logu temiz, disk %34, RAM 1.3/2 GB
+  Scheduler     : 5 iş kayıtlı (yeni deep_analysis_sync dahil)
+  Deploy        : sıfır kesinti (50/50 istek başarılı)
+
+================================================================================
