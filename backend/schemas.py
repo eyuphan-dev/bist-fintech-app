@@ -304,6 +304,34 @@ class TransactionHistoryResponse(BaseModel):
     items: List[TransactionItem]
 
 
+class DividendPositionItem(BaseModel):
+    symbol: str
+    company_name: str
+    quantity: float
+    current_value: float
+    dividend_yield: Optional[float] = None      # yıllık verim (%)
+    annual_income: Optional[float] = None       # bu pozisyondan beklenen yıllık temettü (TL)
+    yield_on_cost: Optional[float] = None       # maliyete göre verim (%) — asıl önemli olan bu
+    last_dividend_date: Optional[date] = None
+
+
+class PortfolioDividendResponse(BaseModel):
+    """
+    Portföyün beklenen yıllık temettü geliri projeksiyonu.
+
+    Şirketlerin gelecekte aynı temettüyü ödeyeceği garanti DEĞİLDİR; bu yalnızca
+    son bilinen verim üzerinden bir tahmindir. Bu yüzden alan adları "beklenen"
+    olarak isimlendirilmiştir ve UI'da uyarı gösterilir.
+    """
+    total_annual_income: float
+    monthly_average: float
+    portfolio_value: float
+    portfolio_yield: Optional[float] = None      # toplam gelir / portföy değeri (%)
+    covered_positions: int                        # temettü verisi olan pozisyon sayısı
+    total_positions: int
+    items: List[DividendPositionItem]
+
+
 class BotPerformancePoint(BaseModel):
     date: date
     total_portfolio_value: float

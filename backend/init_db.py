@@ -72,6 +72,11 @@ MIGRATIONS = {
     "users": {
         "baseline_value": "NUMERIC(15, 2) DEFAULT 100000.00",
     },
+    "company_analysis": {
+        "dividend_yield": "NUMERIC(6, 2)",
+        "dividend_rate": "NUMERIC(10, 2)",
+        "last_dividend_date": "DATE",
+    },
     "stocks": {
         "is_katilim_compliant": "INTEGER DEFAULT 0",
         "purification_rate": "NUMERIC(5, 2) DEFAULT 0.00",

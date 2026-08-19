@@ -347,6 +347,11 @@ class CompanyAnalysis(Base):
     analyst_buy_count = Column(Integer, nullable=True)
     analyst_hold_count = Column(Integer, nullable=True)
     analyst_sell_count = Column(Integer, nullable=True)
+    # Temettü: yfinance dividendYield (oransal) yüzdeye çevrilerek saklanır.
+    # Portföy temettü geliri projeksiyonu ve hisse kartlarındaki verim rozeti bunu kullanır.
+    dividend_yield = Column(Numeric(6, 2), nullable=True)      # yıllık temettü verimi (%)
+    dividend_rate = Column(Numeric(10, 2), nullable=True)      # hisse başına yıllık temettü (TL)
+    last_dividend_date = Column(Date, nullable=True)           # son temettü ödeme/kayıt tarihi
 
     # Bilanço Takvimi: bir sonraki çeyreklik bilanço açıklama tarihi (yfinance tahmini)
     next_earnings_date = Column(Date, nullable=True)

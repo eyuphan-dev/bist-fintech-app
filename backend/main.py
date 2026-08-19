@@ -24,6 +24,7 @@ from schemas import (
     PortfolioAnalyticsResponse, SectorAllocationItem, PositionWeightItem,
     TransactionItem, TransactionHistoryResponse,
     StockVoteRequest, StockVoteResponse, ChangePasswordRequest,
+    DividendPositionItem, PortfolioDividendResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -2575,6 +2576,78 @@ def get_user_transactions(
         buy_count=buy_count,
         sell_count=sell_count,
         win_rate=win_rate,
+        items=items,
+    )
+
+
+@app.get("/api/portfolio/dividends", response_model=PortfolioDividendResponse)
+def get_portfolio_dividends(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Portföyün beklenen yıllık temettü geliri.
+
+    Ücretli platformların öne çıkardığı bir özelliktir; verisi yfinance'ta
+    ücretsiz olduğu için burada da sunulur (company_analysis.dividend_yield,
+    derin analiz işi tarafından doldurulur).
+
+    "Maliyete göre verim" (yield on cost) ayrıca hesaplanır: uzun vadeli
+    yatırımcı için asıl anlamlı olan, hisseyi BUGÜN alsa elde edeceği verim
+    değil, KENDİ maliyetine göre elde ettiği verimdir. 100 TL'den alınan ve
+    şimdi 300 TL olan bir hissede güncel verim %2 iken maliyete göre %6'dır.
+    """
+    positions = (
+        db.query(models.Portfolio, models.Stock, models.CompanyAnalysis)
+        .join(models.Stock, models.Stock.id == models.Portfolio.stock_id)
+        .outerjoin(models.CompanyAnalysis, models.CompanyAnalysis.stock_id == models.Stock.id)
+        .filter(models.Portfolio.user_id == current_user.id, models.Portfolio.is_bot_portfolio == False)
+        .all()
+    )
+
+    items: list[DividendPositionItem] = []
+    total_income = 0.0
+    portfolio_value = 0.0
+    covered = 0
+
+    for pos, stock, analysis in positions:
+        qty = float(pos.quantity)
+        price = _get_latest_db_price(db, stock.id) or float(pos.average_cost)
+        value = qty * price
+        portfolio_value += value
+
+        dy = float(analysis.dividend_yield) if (analysis and analysis.dividend_yield is not None) else None
+        income = None
+        yoc = None
+        if dy and dy > 0:
+            covered += 1
+            income = round(value * dy / 100, 2)
+            total_income += income
+            cost_basis = qty * float(pos.average_cost)
+            if cost_basis > 0:
+                yoc = round((income / cost_basis) * 100, 2)
+
+        items.append(DividendPositionItem(
+            symbol=stock.symbol,
+            company_name=stock.company_name,
+            quantity=qty,
+            current_value=round(value, 2),
+            dividend_yield=dy,
+            annual_income=income,
+            yield_on_cost=yoc,
+            last_dividend_date=analysis.last_dividend_date if analysis else None,
+        ))
+
+    # Geliri en yüksek pozisyon üstte — kullanıcı temettüsünün nereden geldiğini görsün.
+    items.sort(key=lambda x: x.annual_income or 0, reverse=True)
+
+    return PortfolioDividendResponse(
+        total_annual_income=round(total_income, 2),
+        monthly_average=round(total_income / 12, 2),
+        portfolio_value=round(portfolio_value, 2),
+        portfolio_yield=round((total_income / portfolio_value) * 100, 2) if portfolio_value > 0 else None,
+        covered_positions=covered,
+        total_positions=len(positions),
         items=items,
     )
 

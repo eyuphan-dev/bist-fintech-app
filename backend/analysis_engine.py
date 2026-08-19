@@ -390,6 +390,22 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
     analysis.altman_zone = altman_zone
     analysis.debt_to_equity = debt_to_equity
     analysis.net_fx_position = net_fx_position
+    # Temettü: yfinance dividendYield oransal gelir (0.05 = %5); yüzdeye çevrilir.
+    # Bazı sembollerde alan yüzde olarak (5.0) gelebildiği için 1'den büyük
+    # değerler zaten yüzde kabul edilir — aksi halde %500 gibi saçma bir verim çıkardı.
+    _dy = _safe_float(info.get("dividendYield"))
+    if _dy is not None and _dy > 0:
+        analysis.dividend_yield = round(_dy * 100, 2) if _dy <= 1 else round(_dy, 2)
+    else:
+        analysis.dividend_yield = None
+    analysis.dividend_rate = _safe_float(info.get("dividendRate"))
+    _ldd = info.get("lastDividendDate")
+    if _ldd:
+        try:
+            from datetime import datetime as _dt
+            analysis.last_dividend_date = _dt.utcfromtimestamp(int(_ldd)).date()
+        except Exception:
+            analysis.last_dividend_date = None
     analysis.target_mean_price = analyst_consensus["target_mean_price"]
     analysis.target_high_price = analyst_consensus["target_high_price"]
     analysis.target_low_price = analyst_consensus["target_low_price"]
