@@ -18,6 +18,7 @@ interface CompanyAnalysis {
   roe: number | null;
   gross_margin: number | null;
   net_margin: number | null;
+  dividend_yield: number | null;
   fx_exposure_text: string | null;
   interest_sensitivity_text: string | null;
   altman_z_score: number | null;
@@ -438,6 +439,17 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
               <span className="text-[9px] text-gray-500 uppercase font-bold">Net Marj</span>
               <p className="text-sm font-bold text-white tabular-nums mt-0.5">
                 {analysis.net_margin !== null ? `%${analysis.net_margin.toFixed(1)}` : "N/A"}
+              </p>
+            </div>
+            <div className="bg-[#151921] border border-[#242B35] rounded-lg p-2.5 text-center">
+              <span className="text-[9px] text-gray-500 uppercase font-bold">Temettü Verimi</span>
+              <p
+                className="text-sm font-bold tabular-nums mt-0.5"
+                style={{ color: analysis.dividend_yield ? "#F59E0B" : "#F8FAFC" }}
+              >
+                {analysis.dividend_yield !== null && analysis.dividend_yield !== undefined
+                  ? `%${analysis.dividend_yield.toFixed(2)}`
+                  : "N/A"}
               </p>
             </div>
           </div>

@@ -136,6 +136,8 @@ class CompanyAnalysisResponse(BaseModel):
     analyst_buy_count: Optional[int] = None
     analyst_hold_count: Optional[int] = None
     analyst_sell_count: Optional[int] = None
+    dividend_yield: Optional[float] = None
+    dividend_rate: Optional[float] = None
     updated_at: Optional[datetime]
 
     class Config:
