@@ -28,17 +28,22 @@ jobs:
 
             cd /opt/borsa/frontend
             npm install --no-audit --no-fund
-            # DİKKAT: burada "rm -rf .next" YAPILMAZ.
-            # Eski frontend süreci hâlâ istek karşılarken .next silinince
-            # "Cannot find module .next/server/middleware-manifest.json" ile
-            # TÜM sayfalar build boyunca (1-2 dk) 500 dönüyordu. next build
-            # çıktıyı zaten yerinde tazeler; eski sürüm build bitene kadar
-            # ayakta kalır ve kesinti yalnızca restart anına (~1 sn) iner.
+
+            # Sıfır kesintili build: çıktı önce geçici bir dizine derlenir,
+            # sonra .next ile YER DEĞİŞTİRİLİR.
             #
-            # Not: .next temizliği başta "eski arayüz görünüyor" sorunu için
-            # eklenmişti; o sorunun gerçek nedeni aaPanel'in global nginx
-            # proxy_cache'i olduğu tespit edilip kapatıldı (bkz. README).
-            npm run build
+            # Neden: build doğrudan .next içine yazarken eski frontend süreci
+            # hâlâ istek karşılıyordu ve altından değişen dosyalar yüzünden
+            # TÜM sayfalar build boyunca (1-2 dk) 500 dönüyordu
+            # ("Cannot find module .next/server/middleware-manifest.json").
+            # Artık yıkıcı adım iki mv işlemi (milisaniye); kesinti yalnızca
+            # pm2 restart anına (~1 sn) iniyor.
+            rm -rf .next-build .next-old
+            NEXT_DIST_DIR=.next-build npm run build
+            # Build başarısızsa .next'e dokunulmaz, eski sürüm ayakta kalır.
+            mv .next .next-old
+            mv .next-build .next
             pm2 restart borsa-frontend
+            rm -rf .next-old
 
             pm2 save
