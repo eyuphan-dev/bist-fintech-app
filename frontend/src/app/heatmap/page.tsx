@@ -196,7 +196,7 @@ export default function HeatmapPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setView("heatmap")}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-3 md:py-2 rounded-lg text-xs font-semibold border transition ${
               view === "heatmap"
                 ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
                 : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
@@ -206,7 +206,7 @@ export default function HeatmapPage() {
           </button>
           <button
             onClick={() => setView("table")}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-3 md:py-2 rounded-lg text-xs font-semibold border transition ${
               view === "table"
                 ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
                 : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"

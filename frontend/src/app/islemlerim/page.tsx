@@ -217,7 +217,7 @@ export default function TransactionsPage() {
               <button
                 key={key}
                 onClick={() => setFilter(key)}
-                className={`px-3.5 py-2.5 md:py-1.5 rounded-lg text-[11px] font-semibold transition ${
+                className={`px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold transition ${
                   filter === key
                     ? "bg-[#10B981] text-[#0B0E14]"
                     : "bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white"
@@ -233,7 +233,7 @@ export default function TransactionsPage() {
               disabled={exporting}
               type="button"
               title="İşlem geçmişini Excel'de açılabilir CSV olarak indir"
-              className="ml-auto flex items-center gap-1.5 px-3.5 py-2.5 md:py-1.5 rounded-lg text-[11px] font-semibold bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white hover:border-[#10B981]/40 transition disabled:opacity-50"
+              className="ml-auto flex items-center gap-1.5 px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white hover:border-[#10B981]/40 transition disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
               {exporting ? "Hazırlanıyor..." : "CSV indir"}
