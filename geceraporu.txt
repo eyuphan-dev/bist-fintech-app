@@ -309,4 +309,81 @@ kolaylaştıran özellikler.
   Scheduler     : 5 iş kayıtlı (yeni deep_analysis_sync dahil)
   Deploy        : sıfır kesinti (50/50 istek başarılı)
 
+
+================================================================================
+9. MOBİL UYUM DENETİMİ (ek çalışma)
+================================================================================
+
+YÖNTEM
+
+  Playwright ile 5 gerçek cihaz genişliğinde 12 sayfa otomatik ölçüldü
+  (toplam 60 kombinasyon). Göz kararı değil, tarayıcıda hesaplanan
+  gerçek piksel değerleri:
+
+    iPhone SE      375 x 667
+    iPhone 14 Pro  393 x 852
+    Galaxy S20     360 x 800
+    iPad Mini      768 x 1024
+    Masaüstü      1280 x 800
+
+  Ölçülenler: yatay kaydırma, viewport'u aşan öğeler, 44px altı dokunma
+  hedefleri, 16px altı form alanları (iOS'ta odaklanma zoom'u tetikler).
+
+BULUNAN VE DÜZELTİLEN
+
+  [1] /karsilastir TÜM telefon genişliklerinde yatay kayıyordu   (gerçek hata)
+
+      Sayfa 568px genişliğe çıkıyordu (viewport 360-393px). Sebep hisse
+      seçme <select>'i: seçenek metinleri uzun ("THYAO — Türk Hava Yolları
+      A.O.") ve flex öğesinin varsayılan min-width:auto değeri select'in
+      bu içeriğin altına inmesini engelliyordu.
+
+      Bu, yorum formunda düzelttiğimle AYNI hata sınıfı — flex öğelerinde
+      min-w-0 unutulması. Düzeltildi.
+
+      Not: Raporda "taşan <nav>/<div>/<a>" olarak görünenler bunun
+      SONUCUYDU; body 568px'e genişleyince inset-x-0 olan alt gezinme
+      çubuğu da o genişliğe yayılıyordu. Tek kök neden, tek düzeltme.
+
+  [2] 44px altı dokunma hedefleri
+
+      En dikkat çekici: /piyasalar'da her hisse kartının favori yıldızı
+      16x16'ydı — 43 hisse = 43 küçük hedef. Sık kullanılan bir kontrol.
+
+      Düzeltilenler (ikon boyutları aynı kaldı, yalnızca dokunma alanı
+      büyütüldü; görsel değişiklik yok):
+
+        /piyasalar favori yıldızı ............ 16x16 -> 44x44
+        /takvim KAP bağlantı ikonu (31 adet) . 16x16 -> 44x44
+        /hisse yıldız + bildirim butonları ... 34x34 -> 44x44
+        Global arama kutusu .................. 35px  -> 44px
+        Bildirim zili ........................ 34x34 -> 44x44
+        Logo bağlantısı ...................... 24x24 -> 44px
+        /tarayici filtre alanları + sıralama . 36px  -> 44px
+        /tarayici Uygula / Temizle ........... 32px  -> 44px
+        /heatmap Harita-Tablo geçişi ......... 34px  -> 44px
+        /islemlerim filtre + CSV butonları ... 29px  -> 44px
+
+      Hepsi md: kırılımıyla masaüstünde eski kompakt ölçüsünde kalır.
+
+SONUÇ (nihai ölçüm)
+
+    yatay kaydırma ....... 0
+    viewport taşması ..... 0
+    16px altı input ...... 0
+    sayfa hatası ......... 0
+
+BİLİNÇLİ BIRAKILANLAR
+
+  • Footer'daki yasal metin linkleri (17px): satır içi metin bağlantısı,
+    düşük kullanım sıklığı, tüm sitelerde standart.
+  • Tablo içindeki hisse kodu bağlantıları (ASELS, CELHA...): satır içi
+    metin; satırın tamamı zaten tıklanabilir.
+  • KatilimBadge (38 örnek, 21px): gerçekten tıklanabilir bir öğe
+    (açıklama balonu açıyor, yani <button> doğru semantik) ama liste
+    kartlarında 38 kez yüksekliği artırmak kart yoğunluğunu bozardı;
+    genişliği 181px olduğu için yatayda isabet zor değil.
+  • ApexCharts'ın kendi grafik açıklama öğeleri: kütüphane içi, bizim
+    kontrolümüzde değil.
+
 ================================================================================
