@@ -52,6 +52,8 @@ export default function TransactionsPage() {
   const [data, setData] = useState<TransactionHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const load = useCallback(async () => {
     if (!token) {
@@ -59,7 +61,10 @@ export default function TransactionsPage() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/portfolio/transactions?limit=200`, {
+      const params = new URLSearchParams({ limit: "200" });
+      if (startDate) params.set("start_date", startDate);
+      if (endDate) params.set("end_date", endDate);
+      const res = await fetch(`${API_BASE}/portfolio/transactions?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) setData(await res.json());
@@ -68,7 +73,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, startDate, endDate]);
 
   useEffect(() => {
     load();
@@ -81,7 +86,10 @@ export default function TransactionsPage() {
     if (!token || exporting) return;
     setExporting(true);
     try {
-      const res = await fetch(`${API_BASE}/portfolio/transactions/export`, {
+      const params = new URLSearchParams();
+      if (startDate) params.set("start_date", startDate);
+      if (endDate) params.set("end_date", endDate);
+      const res = await fetch(`${API_BASE}/portfolio/transactions/export?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(String(res.status));
@@ -205,6 +213,33 @@ export default function TransactionsPage() {
               <p className="text-lg font-bold text-white tabular-nums">{fmtTL(data.total_sell_amount)} TL</p>
               <p className="text-[10px] text-gray-600 mt-0.5">{data.sell_count} işlem</p>
             </div>
+          </div>
+
+          {/* Tarih araligi */}
+          <div className="flex items-center gap-2 flex-wrap text-[11px]">
+            <span className="text-gray-500 font-semibold">Tarih:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-[#151921] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 md:py-1.5 text-white outline-none"
+            />
+            <span className="text-gray-600">—</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-[#151921] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 md:py-1.5 text-white outline-none"
+            />
+            {(startDate || endDate) && (
+              <button
+                onClick={() => { setStartDate(""); setEndDate(""); }}
+                type="button"
+                className="text-gray-500 hover:text-[#F43F5E] font-semibold py-2 md:py-0 px-1"
+              >
+                Temizle
+              </button>
+            )}
           </div>
 
           {/* Filtre + disa aktarma */}

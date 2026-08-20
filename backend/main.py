@@ -2595,6 +2595,8 @@ def get_user_portfolio_performance(
 @app.get("/api/portfolio/transactions", response_model=TransactionHistoryResponse)
 def get_user_transactions(
     limit: int = 100,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -2613,6 +2615,17 @@ def get_user_transactions(
         .join(models.Stock, models.Stock.id == models.Transaction.stock_id)
         .filter(models.Transaction.user_id == current_user.id)
     )
+    # Tarih aralığı filtresi. end_date GÜN SONUNA kadar dahil edilir: kullanıcı
+    # "31 Mart"ı seçtiğinde 31 Mart'taki işlemleri de görmek ister, oysa
+    # created_at <= 2026-03-31 00:00 o günü tamamen dışarıda bırakırdı.
+    if start_date:
+        base_query = base_query.filter(
+            models.Transaction.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
+    if end_date:
+        base_query = base_query.filter(
+            models.Transaction.created_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+        )
 
     # id.desc() ikincil sıralama olarak şart: aynı saniye içinde yapılan iki işlemde
     # created_at eşitlenebiliyor ve tek başına ORDER BY created_at deterministik
@@ -2624,8 +2637,19 @@ def get_user_transactions(
         .all()
     )
 
-    # --- Özet: tüm geçmiş üzerinden tek sorguda toplanır ---
-    all_tx = db.query(models.Transaction).filter_by(user_id=current_user.id).all()
+    # --- Özet: SEÇİLİ ARALIĞIN tamamı üzerinden (limit'ten bağımsız) ---
+    # Not: tarih filtresi verildiğinde özet de o aralığı yansıtır; aksi halde
+    # "Mart ayı" seçen kullanıcıya tüm zamanların kârı gösterilirdi.
+    summary_query = db.query(models.Transaction).filter(models.Transaction.user_id == current_user.id)
+    if start_date:
+        summary_query = summary_query.filter(
+            models.Transaction.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
+    if end_date:
+        summary_query = summary_query.filter(
+            models.Transaction.created_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+        )
+    all_tx = summary_query.all()
 
     total_realized = 0.0
     total_buy = 0.0
@@ -2688,6 +2712,8 @@ def get_user_transactions(
 
 @app.get("/api/portfolio/transactions/export")
 def export_transactions_csv(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -2703,13 +2729,18 @@ def export_transactions_csv(
     import csv
     import io as _io
 
-    rows = (
+    query = (
         db.query(models.Transaction, models.Stock)
         .join(models.Stock, models.Stock.id == models.Transaction.stock_id)
         .filter(models.Transaction.user_id == current_user.id)
-        .order_by(models.Transaction.created_at.desc(), models.Transaction.id.desc())
-        .all()
     )
+    # Ekrandaki tarih aralığı neyse CSV de onu indirmeli; aksi halde kullanıcı
+    # "Mart" filtresiyle bakarken tüm geçmişi indirmiş olurdu.
+    if start_date:
+        query = query.filter(models.Transaction.created_at >= datetime.combine(start_date, datetime.min.time()))
+    if end_date:
+        query = query.filter(models.Transaction.created_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
+    rows = query.order_by(models.Transaction.created_at.desc(), models.Transaction.id.desc()).all()
 
     buf = _io.StringIO()
     writer = csv.writer(buf, delimiter=";")
