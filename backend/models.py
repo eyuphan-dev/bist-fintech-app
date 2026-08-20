@@ -671,7 +671,13 @@ class Watchlist(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    # Kullanıcının kendi hedef fiyatı ve notu — "bunu 120 TL'den almayı düşünüyorum,
+    # bilanço sonrası tekrar bak" gibi. Alarm sisteminden (StockNotificationPreference)
+    # ayrıdır: burası bildirim üretmez, yalnızca kullanıcının kendi takip notudur.
+    target_price = Column(Numeric(10, 2), nullable=True)
+    note = Column(String(280), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User")
     stock = relationship("Stock")

@@ -14,10 +14,60 @@ interface WatchlistItem {
   is_katilim_compliant: boolean;
   purification_rate: number;
   added_at: string;
+  target_price: number | null;
+  note: string | null;
+  distance_to_target_pct: number | null;
 }
 
 export default function FavorilerPage() {
   const { token, refreshTrigger } = useAuth();
+  // Hedef fiyat / not düzenlemesi — hangi sembol açık ve taslak değerler.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draftTarget, setDraftTarget] = useState("");
+  const [draftNote, setDraftNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const openEditor = (item: WatchlistItem) => {
+    setEditing(item.symbol);
+    setDraftTarget(item.target_price !== null ? String(item.target_price) : "");
+    setDraftNote(item.note ?? "");
+  };
+
+  const saveEditor = async (symbol: string) => {
+    if (!token || saving) return;
+    setSaving(true);
+    try {
+      const hasTarget = draftTarget.trim() !== "";
+      const hasNote = draftNote.trim() !== "";
+      const res = await fetch(`${API_BASE}/watchlist/${symbol}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          // Boş bırakmak "temizle" demektir; API'de null göndermek "değiştirme"
+          // anlamına geldiği için ayrı bayrak kullanılır.
+          target_price: hasTarget ? Number(draftTarget) : null,
+          clear_target: !hasTarget,
+          note: hasNote ? draftNote : null,
+          clear_note: !hasNote,
+        }),
+      });
+      if (res.ok) {
+        const updated: WatchlistItem = await res.json();
+        setItems((prev) =>
+          prev.map((x) => (x.symbol === symbol
+            ? { ...x, target_price: updated.target_price, note: updated.note,
+                distance_to_target_pct: updated.distance_to_target_pct }
+            : x))
+        );
+        setEditing(null);
+      }
+    } catch (err) {
+      console.error("Hedef fiyat kaydedilemedi:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -131,6 +181,81 @@ export default function FavorilerPage() {
 
                 <KatilimBadge isCompliant={item.is_katilim_compliant} purificationRate={item.purification_rate} size="sm" />
               </Link>
+
+              {/* Hedef fiyat & not */}
+              {editing === item.symbol ? (
+                <div className="space-y-2 border-t border-[#242B35] pt-3">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={draftTarget}
+                    onChange={(e) => setDraftTarget(e.target.value)}
+                    placeholder="Hedef fiyat (TL)"
+                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
+                  />
+                  <input
+                    type="text"
+                    maxLength={280}
+                    value={draftNote}
+                    onChange={(e) => setDraftNote(e.target.value)}
+                    placeholder="Not (örn. bilanço sonrası tekrar bak)"
+                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveEditor(item.symbol)}
+                      disabled={saving}
+                      type="button"
+                      className="flex-1 bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-[11px] py-2.5 rounded-lg transition disabled:opacity-50"
+                    >
+                      {saving ? "Kaydediliyor..." : "Kaydet"}
+                    </button>
+                    <button
+                      onClick={() => setEditing(null)}
+                      type="button"
+                      className="px-3 py-2.5 rounded-lg text-[11px] font-semibold bg-[#0B0E14] border border-[#242B35] text-gray-400 hover:text-white transition"
+                    >
+                      Vazgeç
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="border-t border-[#242B35] pt-2.5 space-y-1">
+                  {item.target_price !== null ? (
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-500">Hedefim</span>
+                      <span className="tabular-nums">
+                        <span className="font-bold text-white">{item.target_price} TL</span>
+                        {item.distance_to_target_pct !== null && (
+                          <span
+                            className="ml-1.5 text-[10px]"
+                            style={{ color: item.distance_to_target_pct > 0 ? "#10B981" : "#F43F5E" }}
+                            title={item.distance_to_target_pct > 0
+                              ? "Hedef güncel fiyatın üstünde"
+                              : "Güncel fiyat hedefi geçti"}
+                          >
+                            {item.distance_to_target_pct > 0 ? "+" : ""}
+                            %{item.distance_to_target_pct}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-gray-600">Hedef fiyat belirlenmedi.</p>
+                  )}
+                  {item.note && (
+                    <p className="text-[10px] text-gray-400 italic break-words">&ldquo;{item.note}&rdquo;</p>
+                  )}
+                  <button
+                    onClick={() => openEditor(item)}
+                    type="button"
+                    className="text-[10px] font-semibold text-[#F59E0B] hover:underline py-2 md:py-0"
+                  >
+                    {item.target_price !== null || item.note ? "Düzenle" : "Hedef fiyat / not ekle"}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

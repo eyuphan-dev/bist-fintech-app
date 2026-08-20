@@ -72,6 +72,11 @@ MIGRATIONS = {
     "users": {
         "baseline_value": "NUMERIC(15, 2) DEFAULT 100000.00",
     },
+    "watchlist": {
+        "target_price": "NUMERIC(10, 2)",
+        "note": "VARCHAR(280)",
+        "updated_at": "TIMESTAMP",
+    },
     "stocks": {
         "is_katilim_compliant": "INTEGER DEFAULT 0",
         "purification_rate": "NUMERIC(5, 2) DEFAULT 0.00",

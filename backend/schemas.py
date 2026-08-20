@@ -755,11 +755,25 @@ class WatchlistItemResponse(BaseModel):
     price_change_pct: Optional[float] = None
     is_katilim_compliant: bool
     purification_rate: float
+    target_price: Optional[float] = None
+    note: Optional[str] = None
+    # Güncel fiyatın hedefe uzaklığı (%). Hedef yoksa None.
+    distance_to_target_pct: Optional[float] = None
     added_at: datetime
 
     @field_serializer("added_at")
     def _serialize_added_at(self, value: datetime) -> Optional[str]:
         return _utc_iso(value)
+
+
+class WatchlistUpdateRequest(BaseModel):
+    """İzleme listesi kaydına hedef fiyat / not yazar. Alan gönderilmezse değişmez."""
+    target_price: Optional[float] = Field(None, gt=0, le=1_000_000, allow_inf_nan=False)
+    note: Optional[str] = Field(None, max_length=280)
+    # Hedefi/notu TEMİZLEMEK için: alanı null göndermek "değiştirme" demek olduğu
+    # için ayrı bir bayrak gerekiyor.
+    clear_target: bool = False
+    clear_note: bool = False
 
 
 class BotSessionResponse(BaseModel):

@@ -27,7 +27,7 @@ from schemas import (
     DividendPositionItem, PortfolioDividendResponse,
     BenchmarkPoint, PortfolioBenchmarkResponse, MarketQuoteItem,
     FinancialPeriodItem, FinancialStatementsResponse, PortfolioRiskResponse,
-    TechnicalSignalItem, SectorSummaryItem, StockSectorComparison,
+    TechnicalSignalItem, SectorSummaryItem, StockSectorComparison, WatchlistUpdateRequest,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -2078,8 +2078,69 @@ def get_watchlist(
             is_katilim_compliant=bool(stock.is_katilim_compliant),
             purification_rate=float(stock.purification_rate or 0.0),
             added_at=row.created_at,
+            target_price=float(row.target_price) if row.target_price is not None else None,
+            note=row.note,
+            # Hedefe uzaklık: pozitifse hedef güncel fiyatın ÜSTÜNDE (yükselmesi
+            # bekleniyor), negatifse altında.
+            distance_to_target_pct=(
+                round(((float(row.target_price) - current_price) / current_price) * 100, 2)
+                if (row.target_price is not None and current_price > 0) else None
+            ),
         ))
     return items
+
+
+@app.patch("/api/watchlist/{symbol}", response_model=WatchlistItemResponse)
+def update_watchlist_item(
+    symbol: str,
+    payload: WatchlistUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    İzleme listesi kaydına hedef fiyat / not yazar.
+
+    Kullanıcının kendi takip notudur; alarm sisteminden (StockNotificationPreference)
+    AYRIDIR ve bildirim üretmez. Gönderilmeyen alan değiştirilmez; temizlemek için
+    clear_target / clear_note bayrakları kullanılır (null göndermek "değiştirme"
+    anlamına geldiği için ayrı bir sinyal gerekiyor).
+    """
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    row = db.query(models.Watchlist).filter_by(user_id=current_user.id, stock_id=stock.id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Bu hisse izleme listenizde değil.")
+
+    if payload.clear_target:
+        row.target_price = None
+    elif payload.target_price is not None:
+        row.target_price = payload.target_price
+
+    if payload.clear_note:
+        row.note = None
+    elif payload.note is not None:
+        row.note = payload.note.strip() or None
+
+    db.commit()
+
+    current_price = _get_latest_db_price(db, stock.id) or 0.0
+    return WatchlistItemResponse(
+        symbol=stock.symbol,
+        company_name=stock.company_name,
+        current_price=round(current_price, 2),
+        price_change_pct=None,
+        is_katilim_compliant=bool(stock.is_katilim_compliant),
+        purification_rate=float(stock.purification_rate or 0.0),
+        added_at=row.created_at,
+        target_price=float(row.target_price) if row.target_price is not None else None,
+        note=row.note,
+        distance_to_target_pct=(
+            round(((float(row.target_price) - current_price) / current_price) * 100, 2)
+            if (row.target_price is not None and current_price > 0) else None
+        ),
+    )
 
 
 @app.post("/api/watchlist/{symbol}", status_code=status.HTTP_201_CREATED)
