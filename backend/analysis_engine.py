@@ -390,15 +390,28 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
     analysis.altman_zone = altman_zone
     analysis.debt_to_equity = debt_to_equity
     analysis.net_fx_position = net_fx_position
-    # Temettü: yfinance dividendYield oransal gelir (0.05 = %5); yüzdeye çevrilir.
-    # Bazı sembollerde alan yüzde olarak (5.0) gelebildiği için 1'den büyük
-    # değerler zaten yüzde kabul edilir — aksi halde %500 gibi saçma bir verim çıkardı.
-    _dy = _safe_float(info.get("dividendYield"))
-    if _dy is not None and _dy > 0:
-        analysis.dividend_yield = round(_dy * 100, 2) if _dy <= 1 else round(_dy, 2)
+    # Temettü verimi.
+    #
+    # ÖNEMLİ: yfinance'in dividendYield alanı BIST sembollerinde ZATEN YÜZDE
+    # cinsindendir (ASELS -> 0.11 = %0.11, FROTO -> 12.21 = %12.21). Daha önce
+    # "1'den küçükse orandır, 100 ile çarp" sezgisi kullanılıyordu ve bu tam da
+    # DÜŞÜK verimli hisseleri bozuyordu: ASELS %0.11 yerine %11, KTLEV %0.18
+    # yerine %20 görünüyordu (100 kat hata).
+    #
+    # Bu yüzden verim artık öncelikle KENDİMİZ hesaplanır: hisse başına yıllık
+    # temettü / fiyat. İkisi de tek anlamlı sayılardır, yoruma açık değildir.
+    # Yalnızca bunlar yoksa dividendYield'e (yüzde olarak) düşülür.
+    _rate = _safe_float(info.get("dividendRate"))
+    _price_for_yield = _safe_float(info.get("regularMarketPrice")) or _safe_float(info.get("previousClose"))
+    _reported = _safe_float(info.get("dividendYield"))
+
+    if _rate and _price_for_yield and _price_for_yield > 0:
+        analysis.dividend_yield = round((_rate / _price_for_yield) * 100, 2)
+    elif _reported and _reported > 0:
+        analysis.dividend_yield = round(_reported, 2)
     else:
         analysis.dividend_yield = None
-    analysis.dividend_rate = _safe_float(info.get("dividendRate"))
+    analysis.dividend_rate = _rate
     _ldd = info.get("lastDividendDate")
     if _ldd:
         try:
