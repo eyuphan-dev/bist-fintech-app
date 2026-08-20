@@ -148,6 +148,37 @@ export default function PortfolioAnalytics({ refreshKey }: { refreshKey?: number
         </div>
       )}
 
+      {/* Pozisyon ağırlıkları — hangi hisse portföyün yüzde kaçı.
+          Sektör dağılımı "hangi alanlara yayıldım" sorusunu, bu ise "tek bir
+          hisseye ne kadar bağımlıyım" sorusunu yanıtlar; ikisi farklı risktir. */}
+      {data.positions.length > 0 && (
+        <div className="space-y-2.5">
+          <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
+            <PieChart className="w-3 h-3" /> Pozisyon Ağırlıkları
+          </h4>
+          <div className="space-y-1.5">
+            {data.positions.slice(0, 8).map((p) => (
+              <div key={p.symbol} className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-white w-14 shrink-0">{p.symbol}</span>
+                <div className="flex-1 h-2 rounded-full bg-[#0B0E14] overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${p.pct}%`,
+                      // %30 üzeri tek pozisyon yoğunlaşma riskidir; renkle uyarılır.
+                      backgroundColor: p.pct >= 30 ? "#F43F5E" : p.pct >= 15 ? "#F59E0B" : "#10B981",
+                    }}
+                  />
+                </div>
+                <span className="text-[11px] tabular-nums text-gray-400 w-11 text-right shrink-0">
+                  %{p.pct.toFixed(1)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Sektör dağılımı */}
       <div className="space-y-2.5">
         <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
