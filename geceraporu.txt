@@ -386,4 +386,137 @@ BİLİNÇLİ BIRAKILANLAR
   • ApexCharts'ın kendi grafik açıklama öğeleri: kütüphane içi, bizim
     kontrolümüzde değil.
 
+
+================================================================================
+10. İKİNCİ GECE — PERFORMANS, VERİ DOĞRULAMA VE PRO ÖZELLİKLER
+================================================================================
+
+Görev: genel optimizasyon, rakip araştırması, veri doğrulama, ücretli
+platformlardaki özelliklerin ücretsiz karşılıklarını ekleme.
+
+--- A. RAKİP ARAŞTIRMASI (internetten) ---------------------------------------
+
+  Midas Pro ...... 1.200 TL/ay. İçerik: derin piyasa analizi, AKD (alış-satış
+                   yapan kurumlar), yüksek seviye teknik analiz.
+  Fintables ...... finansal tablolar, oran analizi, Excel'e aktarma, Radar
+                   (tarayıcı), ekonomik takvim, alarmlar, KAP haberleri.
+  Matriks Prime .. anlık veri, FORMASYON ANALİZİ (tüm enstrümanları tarayıp
+                   listeleme), portföy optimizasyonu, backtest.
+
+  Bizde ZATEN olanlar: oran analizi, CSV dışa aktarma, tarayıcı, alarmlar,
+  izleme listesi, KAP haberleri, DCA backtest.
+
+  Yapılamayan: AKD ve gerçek zamanlı veri — ikisi de BIST lisansı gerektiriyor.
+
+--- B. PERFORMANS -------------------------------------------------------------
+
+  Ölçüm: 12 sayfa Playwright ile (393px mobil + 4x yavaş CPU), 21 API ucu
+  3'er kez.
+
+  Sonuç: uygulama zaten HAFİF — 46 KB yük, ilk boyama ~490 ms, 22 istek.
+
+  [1] /stocks/{symbol}/kap-disclosures 854 ms sürüyordu (diğerlerinin ~5 katı).
+      Sebep: uç her istekte KAP'a CANLI HTTP çağrısı yapıyordu. Oysa KAP
+      taraması zaten gece işiyle kap_notifications tablosuna yazılıyor
+      (406 kayıt) — kap_client'ın kendi yorumu da ağır taramanın istek
+      döngüsü DIŞINDA tutulması gerektiğini söylüyor.
+      Hisse detay sayfası her açılışta bu ucu çağırıyordu.
+      SONUÇ: 854 ms -> 170 ms.
+
+  [2] Eksik veritabanı indeksleri:
+      - stock_prices(stock_id, recorded_at DESC) — en büyük tablo (53 bin
+        satır), EN SIK sorgu deseni bu; stock_id'de indeks HİÇ YOKTU.
+      - kap_notifications(symbol, publish_date DESC)
+      - index_history(symbol, trade_date DESC)
+
+  [3] Sinyal taraması 2,6 sn sürüyordu -> 30 dk önbellek -> 0,16 sn.
+
+--- C. VERİ DOĞRULAMA — 100 KAT HATA BULUNDU ---------------------------------
+
+  Senin isteğin üzerine veriler internetteki kaynaklarla karşılaştırıldı.
+
+  BULGU: ASELS'in temettü verimi uygulamada %11.00 görünüyordu. Gerçek
+  değer ~%0.10 (şirketin 2026 kararı: hisse başına brüt 0,4276 TL / ~402 TL
+  fiyat). 100 KAT HATA.
+
+  Sebep BENİM KENDİ KODUMDU: dividendYield için "1'den küçükse orandır,
+  100 ile çarp" sezgisi kullanmıştım. Ham veriyle doğrulandı ki yfinance'in
+  bu alanı BIST'te ZATEN YÜZDE:
+
+    hisse   divYield   divRate/fiyat   bizim gösterdiğimiz
+    ASELS      0.11        %0.11            %11.00  (yanlış)
+    KTLEV      0.19        %0.18            %20.00  (yanlış)
+    FROTO     12.21       %12.17            %12.28  (doğru)
+    TOASO      7.41        %7.38             %7.53  (doğru)
+
+  Sezgi tam da DÜŞÜK verimli hisseleri bozuyordu; yüksek verimliler doğru
+  kaldığı için ilk bakışta fark edilmiyordu.
+
+  ÇÖZÜM: sezgi tamamen kaldırıldı. Verim artık temettü/fiyat olarak KENDİMİZ
+  hesaplanıyor — ikisi de tek anlamlı sayılar. Tüm katalog yeniden
+  hesaplandı; 6 hissede internetteki değerlerle BİREBİR uyuştu.
+
+  Diğer doğrulamalar: fiyatlar (sapma ≤ %0.19) ve F/K oranları (ASELS 51.34
+  vs kaynaklarda 42-51.57; GARAN 4.6 vs 4.41) DOĞRU çıktı.
+
+--- D. EKLENEN PRO ÖZELLİKLER -------------------------------------------------
+
+  1. ÇEYREKLİK FİNANSAL TABLOLAR            (Fintables ücretli)
+     Gelir tablosu + bilanço + nakit akışı, son 6 çeyrek. Büyüme oranları
+     YILLIK (YoY) hesaplanır — çeyrekler mevsimsellik taşıdığı için Ç1'i Ç4
+     ile kıyaslamak yanıltıcı olurdu.
+
+  2. PORTFÖY RİSK METRİKLERİ                (Matriks "portföy optimizasyonu")
+     Yıllık oynaklık, maksimum düşüş, beta, en iyi/kötü gün, artıda kapanan
+     gün oranı, risk etiketi.
+     FAİZSİZ FİNANS: klasik Sharpe oranı risksiz FAİZ oranı kullanır;
+     road_map.md bunu yasakladığı için getiri/oynaklık oranı hesaplandı.
+
+  3. TEKNİK SİNYAL TARAMASI                 (Matriks "formasyon analizi")
+     Altın/ölüm kesişimi, RSI aşırı bölgeler, hacim patlaması, 52 hafta
+     kırılımı. Yeni /sinyaller sayfası.
+     KRİTİK: sinyaller yalnızca koşul O GÜN oluştuysa üretilir. "SMA50 >
+     SMA200" kesişimden sonra aylarca doğru kalır; doğrudan raporlamak aylar
+     önceki bir kesişimi her gün yeni sinyal gibi göstermek olurdu.
+     Test edildi: 30 gün sonra aynı seri tarandığında TEKRARLANMIYOR.
+
+  4. SEKTÖR ANALİZİ                         (sektör karşılaştırma ekranı)
+     Sektör bazlı F/K, PD/DD, ROE, temettü + hissenin sektöre göre konumu.
+     ORTALAMA DEĞİL MEDYAN: sektör başına 3-5 hisse var; test edildi ki
+     F/K'ları 4-5-6-200 olan bir sektörde ortalama 53,75 medyan 5,5 çıkıyor.
+
+  5. TEMETTÜ ÖDEME GEÇMİŞİ VE TRENDİ
+     FROTO 23 yıl "Artıyor", TOASO "Değişken", GARAN düzenli artış.
+     Yıl bazında toplanır (bir yılda birden fazla taksit olabilir) ve
+     devam eden yıl trend hesabına GİRMEZ (yanlış "azalıyor" üretirdi).
+
+  6. HİSSE KÜNYESİ
+     52 hafta yüksek/düşük + fiyatın bant içindeki konumu, piyasa değeri,
+     ortalama günlük hacim.
+
+  7. İZLEME LİSTESİNE HEDEF FİYAT VE NOT
+     Kısmi güncelleme semantiği: gönderilmeyen alan değişmez; temizleme
+     ayrı bayrakla yapılır (null göndermek "değiştirme" demek olduğu için).
+
+  8. İŞLEM GEÇMİŞİNDE TARİH ARALIĞI (CSV dahil)
+     Bitiş tarihi gün sonuna kadar dahil; özet de seçili aralığı yansıtır.
+
+  9. POZİSYON AĞIRLIKLARI
+     Backend'den geliyordu ama arayüzde hiç gösterilmiyordu. %30 üzeri
+     pozisyonlar kırmızı (yoğunlaşma riski).
+
+--- E. LİSTEDEN ÇIKARILAN --------------------------------------------------
+
+  EKONOMİK TAKVİM (TCMB faiz kararı, enflasyon): Fintables'ta ücretli bir
+  özellik ve teknik olarak yapılabilirdi. Ancak road_map.md bu projede faiz
+  mantığını açıkça yasaklıyor; faiz kararı takvimi göstermek bu ilkeyle
+  çelişirdi. Bilinçli olarak yapılmadı.
+
+--- F. KENDİ HATAM ------------------------------------------------------------
+
+  Bir commit'te build hatası olduğu hâlde push ettim: komut zincirim grep'in
+  çıkış kodunu kullandığı için hatayı yuttu. Atomik takaslı deploy sayesinde
+  sunucuda build başarısız olunca .next'e dokunulmadı ve CANLI SÜRÜM
+  ETKİLENMEDİ. Bir sonraki commit'te düzeltildi.
+
 ================================================================================
