@@ -15,11 +15,22 @@ kesişim sinyalleri, koşulun BUGÜN doğru ve BİR ÖNCEKİ GÜN yanlış olmas
 göre üretilir.
 """
 
-from typing import Any, Dict, List, Optional
+import threading
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 import models
+
+# --- Tarama sonucu önbelleği -------------------------------------------------
+# Tarama TÜM hisselerin tüm günlük barlarını (50k+ satır) okuyup Python'da
+# hesaplıyor; ölçümde ~2.6 sn sürüyordu ve her sayfa açılışında tekrarlanması
+# hem yavaş hem gereksizdi. Sinyaller GÜNLÜK barlardan üretildiği için gün
+# içinde değişmez; 30 dakikalık önbellek fazlasıyla taze kalır.
+_CACHE_TTL_SECONDS = 1800
+_cache_lock = threading.Lock()
+_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 
 
 def _sma(values: List[float], period: int) -> Optional[float]:
@@ -107,13 +118,19 @@ def _detect_for_stock(symbol: str, company: str, bars: List[Any]) -> List[Dict[s
     return out
 
 
-def scan_signals(db: Session, limit_per_stock: int = 300) -> List[Dict[str, Any]]:
+def scan_signals(db: Session, limit_per_stock: int = 300, use_cache: bool = True) -> List[Dict[str, Any]]:
     """
     Tüm aktif hisseleri tarar ve bugün oluşan teknik sinyalleri döner.
 
     Tek sorguda tüm barlar çekilip Python'da gruplanır; hisse başına ayrı
     sorgu atmak 43 sorgu demek olurdu.
     """
+    if use_cache:
+        with _cache_lock:
+            entry = _cache.get("all")
+            if entry and (time.time() - entry[0]) < _CACHE_TTL_SECONDS:
+                return entry[1]
+
     stocks = db.query(models.Stock).filter_by(is_active=True).all()
     if not stocks:
         return []
@@ -140,4 +157,8 @@ def scan_signals(db: Session, limit_per_stock: int = 300) -> List[Dict[str, Any]
     # AL sinyalleri üstte, sonra DİKKAT, sonra SAT; kendi içinde sembole göre.
     order = {"AL": 0, "DIKKAT": 1, "SAT": 2}
     results.sort(key=lambda x: (order.get(x["direction"], 3), x["symbol"]))
+
+    if use_cache:
+        with _cache_lock:
+            _cache["all"] = (time.time(), results)
     return results
