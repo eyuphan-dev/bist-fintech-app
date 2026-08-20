@@ -334,6 +334,16 @@ class PortfolioDividendResponse(BaseModel):
     items: List[DividendPositionItem]
 
 
+class TechnicalSignalItem(BaseModel):
+    symbol: str
+    company_name: str
+    signal_type: str        # GOLDEN_CROSS, RSI_OVERSOLD, VOLUME_SPIKE, ...
+    direction: str          # AL | SAT | DIKKAT
+    title: str
+    detail: str
+    price: float
+
+
 class PortfolioRiskResponse(BaseModel):
     """
     Portföy risk metrikleri (Matriks Prime'ın "portföy optimizasyonu" karşılığı).

@@ -27,6 +27,7 @@ from schemas import (
     DividendPositionItem, PortfolioDividendResponse,
     BenchmarkPoint, PortfolioBenchmarkResponse, MarketQuoteItem,
     FinancialPeriodItem, FinancialStatementsResponse, PortfolioRiskResponse,
+    TechnicalSignalItem,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -2893,6 +2894,24 @@ def get_portfolio_benchmark(
         excess_return_pct=round(portfolio_ret - bench_ret, 2) if bench_ret is not None else None,
         points=points,
     )
+
+
+@app.get("/api/signals", response_model=List[TechnicalSignalItem])
+def get_technical_signals(db: Session = Depends(get_db)):
+    """
+    Bugün oluşan teknik sinyaller (altın/ölüm kesişimi, RSI aşırı bölgeler,
+    hacim patlaması, 52 hafta zirve/dip kırılımı).
+
+    Ücretli terminallerin "formasyon/tarama analizi" özelliğinin karşılığıdır;
+    hesaplar kendi günlük bar tablomuzdan yapılır.
+
+    Kesişim sinyalleri yalnızca koşul BUGÜN oluştuysa üretilir — "SMA50 >
+    SMA200" koşulu kesişimden sonra aylarca doğru kalacağı için doğrudan
+    raporlamak, aylar önceki bir kesişimi her gün yeni sinyal gibi göstermek
+    olurdu (bkz. signals.py).
+    """
+    from signals import scan_signals
+    return [TechnicalSignalItem(**s) for s in scan_signals(db)]
 
 
 TRADING_DAYS_PER_YEAR = 252  # BIST'te yaklaşık işlem günü sayısı
