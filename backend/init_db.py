@@ -152,6 +152,45 @@ def run_migrations():
         conn.commit()
 
 
+                                                                    # noqa: E302
+# Sorgu planında fark yaratan, model tanımlarında bulunmayan ek indeksler.
+# (ad, tablo, kolonlar) — CREATE INDEX IF NOT EXISTS ile idempotent uygulanır.
+PERFORMANCE_INDEXES = [
+    # stock_prices en büyük tablo (50k+ satır) ve EN SIK sorgu şu desende:
+    #   filter_by(stock_id=X).order_by(recorded_at.desc()).first()
+    # stock_id'de indeks YOKTU; yalnızca recorded_at vardı. Bileşik indeks hem
+    # filtreyi hem sıralamayı tek geçişte karşılar. Bu sorgu her sayfa
+    # yüklemesinde her hisse için çalıştığı için etkisi doğrudan hissedilir.
+    ("ix_stock_prices_stock_recorded", "stock_prices", "stock_id, recorded_at DESC"),
+    # KAP bildirimleri artık canlı çekim yerine bu tablodan sembole göre
+    # servis ediliyor (bkz. get_kap_disclosures) — sembol indekslenmeliydi.
+    ("ix_kap_notifications_symbol_date", "kap_notifications", "symbol, publish_date DESC"),
+    # index_history: sembol + tarih ile sorgulanıyor (benchmark, döviz/altın).
+    ("ix_index_history_symbol_date", "index_history", "symbol, trade_date DESC"),
+]
+
+
+def create_performance_indexes():
+    """
+    Model tanımlarında olmayan ama sorgu planında fark yaratan indeksleri oluşturur.
+
+    create_all() yalnızca model üzerinde tanımlı indeksleri kurar; buradakiler
+    bileşik (composite) ve sıralama yönü belirtilen indeksler olduğu için ayrı
+    ele alınır. IF NOT EXISTS sayesinde her açılışta güvenle çalışır.
+    """
+    inspector = inspect(engine)
+    with engine.connect() as conn:
+        for name, table, columns in PERFORMANCE_INDEXES:
+            if not inspector.has_table(table):
+                continue
+            try:
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({columns})"))
+            except Exception as e:
+                # Tek bir indeksin başarısız olması açılışı engellememeli.
+                print(f"[Index] '{name}' oluşturulamadı: {e}")
+        conn.commit()
+
+
 def migrate_volume_to_bigint():
     """
     stock_prices.volume ve stock_prices_daily.volume kolonlarını BIGINT'e yükseltir.
@@ -293,6 +332,8 @@ def init_database():
     # eksik kolon ekler), bu yüzden ayrı çağrılır.
     migrate_volume_to_bigint()
     Base.metadata.create_all(bind=engine)
+    # Indeksler tablolar olustuktan SONRA kurulmali.
+    create_performance_indexes()
 
     db = SessionLocal()
     try:

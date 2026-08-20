@@ -862,15 +862,43 @@ def get_kap_disclosures(symbol: str, db: Session = Depends(get_db)):
     stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
     if not stock:
         raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
-    
-    disclosures = fetch_kap_disclosures(symbol.upper())
-    kap_url = get_kap_search_url(symbol.upper())
-    
+
+    # ÖNCE VERİTABANI. Bu uç eskiden her istekte KAP'a canlı HTTP çağrısı yapıyordu
+    # ve ~850 ms sürüyordu (diğer uçların 5 katı); hisse detay sayfası her açılışta
+    # bunu çağırdığı için sayfanın en yavaş parçasıydı. KAP taraması zaten
+    # scheduler'daki refresh_market_data_job tarafından günlük yapılıp
+    # kap_notifications tablosuna yazılıyor — bu modülün kendi yorumu da ağır KAP
+    # taramasının istek döngüsü DIŞINDA tutulması gerektiğini söylüyor.
+    rows = (
+        db.query(models.KapNotification)
+        .filter(models.KapNotification.symbol == symbol.upper())
+        .order_by(models.KapNotification.publish_date.desc())
+        .limit(8)
+        .all()
+    )
+
+    disclosures = [
+        {
+            "title": r.title,
+            "date": r.publish_date.strftime("%d.%m.%Y %H:%M") if r.publish_date else "",
+            "date_raw": r.publish_date.isoformat() if r.publish_date else "",
+            "type": (r.summary or "")[:80],
+            "company": stock.company_name,
+            "url": r.kap_url or "",
+        }
+        for r in rows
+    ]
+
+    # Veritabanında hiç kayıt yoksa (yeni eklenen hisse / scheduler henüz o sembole
+    # ulaşmamış) canlı çekime düşülür — nadir durum, sürekli maliyet oluşturmaz.
+    if not disclosures:
+        disclosures = fetch_kap_disclosures(symbol.upper())
+
     return {
         "symbol": symbol.upper(),
         "company_name": stock.company_name,
-        "kap_url": kap_url,
-        "disclosures": disclosures
+        "kap_url": get_kap_search_url(symbol.upper()),
+        "disclosures": disclosures,
     }
 
 
