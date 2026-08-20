@@ -386,6 +386,45 @@ class CompanyAnalysis(Base):
 # ---------------------------------------------------------------------------
 # MODÜL 3.5: Yabancı Takas Oranı Anlık Görüntüleri (Foreign Holding Trend)
 # ---------------------------------------------------------------------------
+class FinancialStatement(Base):
+    """
+    Çeyreklik finansal tablo özeti (gelir tablosu + bilanço + nakit akışı).
+
+    Ücretli platformların (Fintables vb.) öne çıkardığı "finansal tablolar"
+    özelliğinin karşılığı; veri yfinance'ta ücretsiz olduğu için burada da
+    sunulur. Şirket başına genelde son 6 çeyrek gelir.
+
+    Neden CompanyAnalysis'e değil ayrı tabloya: CompanyAnalysis hisse başına
+    TEK satırdır (anlık oranlar), burada ise dönem başına bir satır tutulur.
+    """
+    __tablename__ = "financial_statements"
+    __table_args__ = (UniqueConstraint("stock_id", "period_end", name="uq_financial_stock_period"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
+    period_end = Column(Date, nullable=False, index=True)
+
+    # Gelir tablosu (TL)
+    revenue = Column(Numeric(20, 2), nullable=True)
+    gross_profit = Column(Numeric(20, 2), nullable=True)
+    operating_income = Column(Numeric(20, 2), nullable=True)
+    ebitda = Column(Numeric(20, 2), nullable=True)
+    net_income = Column(Numeric(20, 2), nullable=True)
+
+    # Bilanço (TL)
+    total_assets = Column(Numeric(20, 2), nullable=True)
+    total_equity = Column(Numeric(20, 2), nullable=True)
+    total_debt = Column(Numeric(20, 2), nullable=True)
+
+    # Nakit akışı (TL)
+    operating_cashflow = Column(Numeric(20, 2), nullable=True)
+    free_cashflow = Column(Numeric(20, 2), nullable=True)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    stock = relationship("Stock")
+
+
 class ForeignHoldingSnapshot(Base):
     """
     Her derin analiz tazelemesinde yfinance'tan alınan kurumsal/yabancı sahiplik

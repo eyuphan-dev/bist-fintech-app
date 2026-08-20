@@ -295,6 +295,14 @@ def refresh_deep_analysis_job(batch_size: int = 15):
                 db.rollback()
 
         print(f"[Scheduler] Derin analiz tazelendi: {ok}/{len(rows)} hisse.")
+
+        # Çeyreklik finansal tablolar — aynı gece işinde, ayrı parti hâlinde.
+        try:
+            from financials import refresh_financials_batch
+            refresh_financials_batch(db, batch_size=8)
+        except Exception as e:
+            print(f"[Scheduler] Finansal tablo tazeleme hatası: {e}")
+            db.rollback()
     except Exception as e:
         print(f"[Scheduler] Derin analiz işi hatası: {e}")
         db.rollback()

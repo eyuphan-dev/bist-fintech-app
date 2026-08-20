@@ -26,6 +26,7 @@ from schemas import (
     StockVoteRequest, StockVoteResponse, ChangePasswordRequest,
     DividendPositionItem, PortfolioDividendResponse,
     BenchmarkPoint, PortfolioBenchmarkResponse, MarketQuoteItem,
+    FinancialPeriodItem, FinancialStatementsResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -2678,6 +2679,79 @@ def export_transactions_csv(
         content=content.encode("utf-8"),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/stocks/{symbol}/financials", response_model=FinancialStatementsResponse)
+def get_stock_financials(symbol: str, db: Session = Depends(get_db)):
+    """
+    Hissenin çeyreklik finansal tabloları (gelir tablosu + bilanço + nakit akışı).
+
+    Ücretli platformların paket içinde sunduğu "finansal tablolar" özelliğinin
+    karşılığıdır. Veriler financials.py tarafından gece işinde doldurulur.
+
+    Büyüme oranları bir önceki YILIN AYNI ÇEYREĞİNE göre hesaplanır (yıllık
+    bazda, YoY): çeyrekler mevsimsellik taşıdığı için Q1'i Q4 ile kıyaslamak
+    yanıltıcı olurdu (ör. perakendede yılbaşı çeyreği doğal olarak yüksektir).
+    """
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    rows = (
+        db.query(models.FinancialStatement)
+        .filter(models.FinancialStatement.stock_id == stock.id)
+        .order_by(models.FinancialStatement.period_end.desc())
+        .all()
+    )
+
+    # Yıllık karşılaştırma için dönem sonuna göre indeks.
+    by_period = {r.period_end: r for r in rows}
+
+    def _f(v):
+        return float(v) if v is not None else None
+
+    def _yoy(current, prev):
+        """Yıllık büyüme (%). Önceki dönem sıfır/negatifse yüzde anlamsızdır."""
+        if current is None or prev is None or prev <= 0:
+            return None
+        return round(((current - prev) / prev) * 100, 2)
+
+    periods: List[FinancialPeriodItem] = []
+    for r in rows:
+        # Geçen yılın aynı çeyreği: ~365 gün önce, en yakın kayıt (±20 gün).
+        target = r.period_end - timedelta(days=365)
+        prev_row = None
+        best_gap = 21
+        for p, cand in by_period.items():
+            gap = abs((p - target).days)
+            if gap < best_gap:
+                best_gap, prev_row = gap, cand
+
+        revenue, net_income = _f(r.revenue), _f(r.net_income)
+        quarter = (r.period_end.month - 1) // 3 + 1
+
+        periods.append(FinancialPeriodItem(
+            period_end=r.period_end,
+            period_label=f"{r.period_end.year}/Ç{quarter}",
+            revenue=revenue,
+            gross_profit=_f(r.gross_profit),
+            operating_income=_f(r.operating_income),
+            ebitda=_f(r.ebitda),
+            net_income=net_income,
+            total_assets=_f(r.total_assets),
+            total_equity=_f(r.total_equity),
+            total_debt=_f(r.total_debt),
+            operating_cashflow=_f(r.operating_cashflow),
+            revenue_yoy_pct=_yoy(revenue, _f(prev_row.revenue) if prev_row else None),
+            net_income_yoy_pct=_yoy(net_income, _f(prev_row.net_income) if prev_row else None),
+            net_margin_pct=round((net_income / revenue) * 100, 2) if (revenue and revenue > 0 and net_income is not None) else None,
+        ))
+
+    return FinancialStatementsResponse(
+        symbol=stock.symbol,
+        company_name=stock.company_name,
+        periods=periods,
     )
 
 

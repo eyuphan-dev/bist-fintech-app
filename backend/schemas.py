@@ -334,6 +334,33 @@ class PortfolioDividendResponse(BaseModel):
     items: List[DividendPositionItem]
 
 
+class FinancialPeriodItem(BaseModel):
+    """Tek bir çeyreğin finansal özeti (tutarlar TL)."""
+    period_end: date
+    period_label: str                     # "2026/Q1" gibi okunur etiket
+    revenue: Optional[float] = None
+    gross_profit: Optional[float] = None
+    operating_income: Optional[float] = None
+    ebitda: Optional[float] = None
+    net_income: Optional[float] = None
+    total_assets: Optional[float] = None
+    total_equity: Optional[float] = None
+    total_debt: Optional[float] = None
+    operating_cashflow: Optional[float] = None
+    # Bir önceki YILIN aynı çeyreğine göre büyüme (%). Çeyrekler mevsimsellik
+    # taşıdığı için önceki çeyrekle değil, geçen yılın aynı çeyreğiyle kıyaslanır.
+    revenue_yoy_pct: Optional[float] = None
+    net_income_yoy_pct: Optional[float] = None
+    net_margin_pct: Optional[float] = None
+
+
+class FinancialStatementsResponse(BaseModel):
+    symbol: str
+    company_name: str
+    currency: str = "TRY"
+    periods: List[FinancialPeriodItem]
+
+
 class MarketQuoteItem(BaseModel):
     """Döviz/altın referans serisi — son kapanış ve değişimler."""
     symbol: str
