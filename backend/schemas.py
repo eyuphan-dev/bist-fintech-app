@@ -338,6 +338,25 @@ class PortfolioDividendResponse(BaseModel):
     items: List[DividendPositionItem]
 
 
+class DividendPaymentItem(BaseModel):
+    pay_date: date
+    amount: float                       # hisse başına brüt TL
+    year: int
+
+
+class DividendHistoryResponse(BaseModel):
+    symbol: str
+    company_name: str
+    payments: List[DividendPaymentItem]
+    # Yıl bazında toplam ödeme — bir yılda birden fazla taksit olabildiği için
+    # tek tek ödemeye bakmak "temettü arttı mı?" sorusunu yanıtlamaz.
+    yearly_totals: Dict[str, float] = {}
+    years_paid: int = 0
+    last_payment_date: Optional[date] = None
+    average_last_3y: Optional[float] = None
+    trend: Optional[str] = None         # "Artıyor" / "Azalıyor" / "Değişken"
+
+
 class SectorSummaryItem(BaseModel):
     """
     Sektör bazlı özet. Oranlarda ORTALAMA değil MEDYAN kullanılır: sektör

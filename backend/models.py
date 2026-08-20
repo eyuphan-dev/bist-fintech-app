@@ -432,6 +432,25 @@ class FinancialStatement(Base):
     stock = relationship("Stock")
 
 
+class DividendHistory(Base):
+    """
+    Hisse başına geçmiş temettü ödemeleri (tarih + hisse başına brüt tutar).
+
+    Katılım finansı odaklı bu uygulamada temettü merkezi bir kavram olduğu için
+    yalnızca güncel verim değil ödeme GEÇMİŞİ de tutulur: kullanıcı şirketin
+    temettüyü düzenli ödeyip ödemediğini ve tutarın büyüyüp büyümediğini görür.
+    """
+    __tablename__ = "dividend_history"
+    __table_args__ = (UniqueConstraint("stock_id", "pay_date", name="uq_dividend_stock_date"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
+    pay_date = Column(Date, nullable=False, index=True)
+    amount = Column(Numeric(12, 6), nullable=False)   # hisse başına brüt TL
+
+    stock = relationship("Stock")
+
+
 class ForeignHoldingSnapshot(Base):
     """
     Her derin analiz tazelemesinde yfinance'tan alınan kurumsal/yabancı sahiplik

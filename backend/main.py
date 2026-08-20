@@ -28,6 +28,7 @@ from schemas import (
     BenchmarkPoint, PortfolioBenchmarkResponse, MarketQuoteItem,
     FinancialPeriodItem, FinancialStatementsResponse, PortfolioRiskResponse,
     TechnicalSignalItem, SectorSummaryItem, StockSectorComparison, WatchlistUpdateRequest,
+    DividendPaymentItem, DividendHistoryResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -3009,6 +3010,69 @@ def _sector_rows(db: Session) -> Dict[str, Dict[str, Any]]:
             if analysis.market_cap is not None:
                 b["mcap"] += float(analysis.market_cap)
     return buckets
+
+
+@app.get("/api/stocks/{symbol}/dividend-history", response_model=DividendHistoryResponse)
+def get_dividend_history(symbol: str, db: Session = Depends(get_db)):
+    """
+    Hissenin geçmiş temettü ödemeleri ve yıllık trendi.
+
+    Katılım finansı odaklı bu uygulamada temettü merkezi bir kavram; kullanıcı
+    şirketin düzenli ödeyip ödemediğini ve tutarın büyüyüp büyümediğini görür.
+
+    YIL BAZINDA TOPLANIR: bir şirket aynı yıl birden fazla taksit ödeyebilir
+    (ör. FROTO), tek tek ödemelere bakmak "temettü arttı mı?" sorusunu
+    yanıtlamaz.
+    """
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    rows = (
+        db.query(models.DividendHistory)
+        .filter(models.DividendHistory.stock_id == stock.id)
+        .order_by(models.DividendHistory.pay_date.desc())
+        .all()
+    )
+
+    payments = [
+        DividendPaymentItem(pay_date=r.pay_date, amount=float(r.amount), year=r.pay_date.year)
+        for r in rows
+    ]
+
+    yearly: Dict[str, float] = {}
+    for p in payments:
+        yearly[str(p.year)] = round(yearly.get(str(p.year), 0.0) + p.amount, 4)
+
+    # Trend: son 3 tam yılın toplamları karşılaştırılır. İçinde bulunulan yıl
+    # HARİÇ tutulur — yıl daha bitmediği için düşük görünüp yanlış "azalıyor"
+    # sonucu üretirdi.
+    current_year = date.today().year
+    complete_years = sorted((y for y in yearly if int(y) < current_year), reverse=True)[:3]
+    trend = None
+    avg3 = None
+    if complete_years:
+        vals = [yearly[y] for y in complete_years]
+        avg3 = round(sum(vals) / len(vals), 4)
+    if len(complete_years) >= 3:
+        newest, middle, oldest = yearly[complete_years[0]], yearly[complete_years[1]], yearly[complete_years[2]]
+        if newest > middle > oldest:
+            trend = "Artıyor"
+        elif newest < middle < oldest:
+            trend = "Azalıyor"
+        else:
+            trend = "Değişken"
+
+    return DividendHistoryResponse(
+        symbol=stock.symbol,
+        company_name=stock.company_name,
+        payments=payments[:40],
+        yearly_totals=yearly,
+        years_paid=len(yearly),
+        last_payment_date=payments[0].pay_date if payments else None,
+        average_last_3y=avg3,
+        trend=trend,
+    )
 
 
 @app.get("/api/sectors", response_model=List[SectorSummaryItem])

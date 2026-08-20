@@ -11,6 +11,7 @@ import {
 import KatilimBadge from "../../components/KatilimBadge";
 import DerinAnalizTab from "../../components/DerinAnalizTab";
 import FinancialStatementsPanel from "../../components/FinancialStatementsPanel";
+import DividendHistoryPanel from "../../components/DividendHistoryPanel";
 import InsiderTrackerBadge from "../../components/InsiderTrackerBadge";
 import DividendCalculatorWidget from "../../components/DividendCalculatorWidget";
 import DcaBacktestWidget from "../../components/DcaBacktestWidget";
@@ -619,6 +620,8 @@ export default function StockDetailPage() {
           {section === "pro" && (
             <div className="space-y-4">
               <FinancialStatementsPanel symbol={symbol} />
+
+              <DividendHistoryPanel symbol={symbol} />
 
               <DerinAnalizTab symbol={symbol} currentPrice={stockDetail.current_price} />
             </div>

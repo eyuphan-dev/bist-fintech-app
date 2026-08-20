@@ -156,9 +156,67 @@ def refresh_financials_batch(db: Session, batch_size: int = 8) -> int:
             if n:
                 total += 1
                 print(f"[Financials]   {stock.symbol}: {n} dönem")
+            # Temettü geçmişi aynı turda çekilir — ek bir zamanlanmış iş
+            # gerektirmeyecek kadar hafif (tek yfinance çağrısı).
+            refresh_dividend_history(db, stock.symbol)
         except Exception as e:
             print(f"[Financials]   {stock.symbol}: hata ({e})")
             db.rollback()
 
     print(f"[Financials] Tamamlandı: {total}/{len(rows)} hisse.")
     return total
+
+
+# ---------------------------------------------------------------------------
+# Temettü ödeme geçmişi
+# ---------------------------------------------------------------------------
+def refresh_dividend_history(db: Session, symbol: str) -> int:
+    """
+    Hissenin geçmiş temettü ödemelerini çeker.
+
+    Idempotent: aynı (stock_id, pay_date) tekrar gelirse tutar güncellenir.
+    yfinance temettüleri fiyat düzeltmesi uygulanmış olarak döndürebilir; bu
+    yüzden geçmiş kayıtlar da her tazelemede güncellenir, salt eklenmez.
+    """
+    import yfinance as yf
+
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper()).first()
+    if not stock:
+        return 0
+
+    try:
+        series = call_with_retry(
+            lambda: yf.Ticker(f"{symbol.upper()}.IS").dividends,
+            attempts=2, label=f"{symbol}.dividends",
+        )
+    except Exception as e:
+        print(f"[Dividends] {symbol}: çekilemedi ({e})")
+        return 0
+
+    if series is None or len(series) == 0:
+        return 0
+
+    existing = {
+        r.pay_date: r
+        for r in db.query(models.DividendHistory).filter_by(stock_id=stock.id).all()
+    }
+
+    written = 0
+    for idx, value in series.items():
+        try:
+            d = idx.date()
+            amount = float(value)
+        except Exception:
+            continue
+        if amount <= 0:
+            continue
+
+        row = existing.get(d)
+        if row:
+            row.amount = amount
+        else:
+            db.add(models.DividendHistory(stock_id=stock.id, pay_date=d, amount=amount))
+        written += 1
+
+    db.commit()
+    return written
