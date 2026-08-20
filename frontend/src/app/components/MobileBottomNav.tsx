@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Wallet, TrendingUp, Bot, PiggyBank, Flame, Menu, X, Star, History,
-  Settings, SlidersHorizontal, GitCompareArrows, CalendarDays, LogOut, Radar,
+  Settings, SlidersHorizontal, GitCompareArrows, CalendarDays, LogOut, Radar, Layers,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -28,6 +28,7 @@ const MENU_GROUPS: {
     links: [
       { href: "/tarayici", label: "Tarayıcı", icon: SlidersHorizontal },
       { href: "/sinyaller", label: "Teknik Sinyaller", icon: Radar },
+      { href: "/sektorler", label: "Sektör Analizi", icon: Layers },
       { href: "/karsilastir", label: "Hisse Karşılaştır", icon: GitCompareArrows },
       { href: "/heatmap", label: "Isı Haritası", icon: Flame },
       { href: "/takvim", label: "Bilanço & KAP Takvimi", icon: CalendarDays },

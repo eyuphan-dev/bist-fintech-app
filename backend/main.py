@@ -27,7 +27,7 @@ from schemas import (
     DividendPositionItem, PortfolioDividendResponse,
     BenchmarkPoint, PortfolioBenchmarkResponse, MarketQuoteItem,
     FinancialPeriodItem, FinancialStatementsResponse, PortfolioRiskResponse,
-    TechnicalSignalItem,
+    TechnicalSignalItem, SectorSummaryItem, StockSectorComparison,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -2893,6 +2893,132 @@ def get_portfolio_benchmark(
         benchmark_return_pct=bench_ret,
         excess_return_pct=round(portfolio_ret - bench_ret, 2) if bench_ret is not None else None,
         points=points,
+    )
+
+
+def _median(values: List[float]) -> Optional[float]:
+    """
+    Medyan. Sektör başına yalnızca 3-5 hisse olduğu için ORTALAMA kullanmak
+    tek bir aykırı değerle (ör. F/K 107) tüm sektörü çarpıtır; medyan bu
+    çarpıklığa dayanıklıdır.
+    """
+    clean = sorted(v for v in values if v is not None)
+    if not clean:
+        return None
+    mid = len(clean) // 2
+    if len(clean) % 2:
+        return round(clean[mid], 2)
+    return round((clean[mid - 1] + clean[mid]) / 2, 2)
+
+
+def _sector_rows(db: Session) -> Dict[str, Dict[str, Any]]:
+    """Sektör -> toplanmış ham değerler. Hem /api/sectors hem hisse kıyası kullanır."""
+    rows = (
+        db.query(models.Stock, models.CompanyAnalysis)
+        .outerjoin(models.CompanyAnalysis, models.CompanyAnalysis.stock_id == models.Stock.id)
+        .filter(models.Stock.is_active == True, models.Stock.sector.isnot(None))
+        .all()
+    )
+    price_map = _bulk_price_and_change(db, [s.id for s, _ in rows])
+
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for stock, analysis in rows:
+        b = buckets.setdefault(stock.sector, {
+            "pe": [], "pb": [], "roe": [], "dy": [], "chg": [],
+            "mcap": 0.0, "count": 0, "katilim": 0,
+        })
+        b["count"] += 1
+        if stock.is_katilim_compliant:
+            b["katilim"] += 1
+
+        _, change = price_map.get(stock.id, (0.0, None))
+        if change is not None:
+            b["chg"].append(change)
+
+        if analysis:
+            # F/K negatif olamaz (zarar eden şirkette anlamsızdır) — negatifleri ele.
+            if analysis.pe_ratio is not None and float(analysis.pe_ratio) > 0:
+                b["pe"].append(float(analysis.pe_ratio))
+            if analysis.pb_ratio is not None and float(analysis.pb_ratio) > 0:
+                b["pb"].append(float(analysis.pb_ratio))
+            if analysis.roe is not None:
+                b["roe"].append(float(analysis.roe))
+            if analysis.dividend_yield is not None:
+                b["dy"].append(float(analysis.dividend_yield))
+            if analysis.market_cap is not None:
+                b["mcap"] += float(analysis.market_cap)
+    return buckets
+
+
+@app.get("/api/sectors", response_model=List[SectorSummaryItem])
+def get_sector_summary(db: Session = Depends(get_db)):
+    """
+    Sektör bazlı değerleme özeti — hangi sektör ucuz, hangisi pahalı.
+
+    Tamamen kendi verimizden hesaplanır (stocks + company_analysis), ek veri
+    kaynağı gerekmez. Ücretli platformların "sektör karşılaştırma" ekranının
+    karşılığıdır.
+    """
+    buckets = _sector_rows(db)
+    items = [
+        SectorSummaryItem(
+            sector=sector,
+            stock_count=b["count"],
+            median_pe=_median(b["pe"]),
+            median_pb=_median(b["pb"]),
+            median_roe=_median(b["roe"]),
+            median_dividend_yield=_median(b["dy"]),
+            avg_change_pct=round(sum(b["chg"]) / len(b["chg"]), 2) if b["chg"] else None,
+            total_market_cap=round(b["mcap"], 2) if b["mcap"] else None,
+            katilim_compliant_count=b["katilim"],
+        )
+        for sector, b in buckets.items()
+    ]
+    # Hisse sayısı çok olan sektörler üstte — istatistik orada daha anlamlı.
+    items.sort(key=lambda x: (-x.stock_count, x.sector))
+    return items
+
+
+@app.get("/api/stocks/{symbol}/sector-comparison", response_model=StockSectorComparison)
+def get_stock_sector_comparison(symbol: str, db: Session = Depends(get_db)):
+    """Hissenin kendi sektör medyanlarına göre konumu."""
+    stock = db.query(models.Stock).filter_by(symbol=symbol.upper(), is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+    if not stock.sector:
+        return StockSectorComparison()
+
+    analysis = db.query(models.CompanyAnalysis).filter_by(stock_id=stock.id).first()
+    b = _sector_rows(db).get(stock.sector)
+    if not b:
+        return StockSectorComparison(sector=stock.sector)
+
+    pe = float(analysis.pe_ratio) if (analysis and analysis.pe_ratio is not None) else None
+    med_pe = _median(b["pe"])
+
+    verdict = None
+    # Yorum yalnızca sektörde yeterli örneklem varsa verilir; 3 hisseden az
+    # olan bir sektörde "medyan" tek bir hisse demek olabilir.
+    if pe and med_pe and b["count"] >= 3:
+        if pe < med_pe * 0.8:
+            verdict = "F/K sektör medyanının belirgin altında — sektörüne göre ucuz görünüyor."
+        elif pe > med_pe * 1.2:
+            verdict = "F/K sektör medyanının belirgin üstünde — sektörüne göre pahalı görünüyor."
+        else:
+            verdict = "F/K sektör medyanına yakın."
+
+    return StockSectorComparison(
+        sector=stock.sector,
+        stock_count=b["count"],
+        pe_ratio=pe,
+        sector_median_pe=med_pe,
+        pb_ratio=float(analysis.pb_ratio) if (analysis and analysis.pb_ratio is not None) else None,
+        sector_median_pb=_median(b["pb"]),
+        roe=float(analysis.roe) if (analysis and analysis.roe is not None) else None,
+        sector_median_roe=_median(b["roe"]),
+        dividend_yield=float(analysis.dividend_yield) if (analysis and analysis.dividend_yield is not None) else None,
+        sector_median_dividend_yield=_median(b["dy"]),
+        verdict=verdict,
     )
 
 

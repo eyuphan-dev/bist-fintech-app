@@ -338,6 +338,38 @@ class PortfolioDividendResponse(BaseModel):
     items: List[DividendPositionItem]
 
 
+class SectorSummaryItem(BaseModel):
+    """
+    Sektör bazlı özet. Oranlarda ORTALAMA değil MEDYAN kullanılır: sektör
+    başına 3-5 hisse olduğu için tek bir aykırı değer (ör. F/K 107) ortalamayı
+    tamamen bozar; medyan bu çarpıklığa dayanıklıdır.
+    """
+    sector: str
+    stock_count: int
+    median_pe: Optional[float] = None
+    median_pb: Optional[float] = None
+    median_roe: Optional[float] = None
+    median_dividend_yield: Optional[float] = None
+    avg_change_pct: Optional[float] = None      # bugünkü ortalama fiyat değişimi
+    total_market_cap: Optional[float] = None
+    katilim_compliant_count: int = 0
+
+
+class StockSectorComparison(BaseModel):
+    """Bir hissenin kendi sektör medyanına göre konumu."""
+    sector: Optional[str] = None
+    stock_count: int = 0
+    pe_ratio: Optional[float] = None
+    sector_median_pe: Optional[float] = None
+    pb_ratio: Optional[float] = None
+    sector_median_pb: Optional[float] = None
+    roe: Optional[float] = None
+    sector_median_roe: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    sector_median_dividend_yield: Optional[float] = None
+    verdict: Optional[str] = None               # "Sektöre göre ucuz" vb.
+
+
 class TechnicalSignalItem(BaseModel):
     symbol: str
     company_name: str
