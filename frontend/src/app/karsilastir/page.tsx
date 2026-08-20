@@ -166,7 +166,11 @@ export default function ComparePage() {
                 <select
                   value={picker}
                   onChange={(e) => addStock(e.target.value)}
-                  className="flex-1 bg-[#0B0E14] border border-[#242B35] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-[#F59E0B]/50 transition"
+                  // min-w-0 şart: seçenek metinleri uzun ("THYAO — Türk Hava Yolları A.O.")
+                  // ve flex öğesinin varsayılan min-width:auto değeri select'in bu içeriğin
+                  // altına inmesini engelliyordu. Telefonda sayfa 568px'e genişleyip
+                  // TÜM sayfayı yatay kaydırılabilir hale getiriyordu.
+                  className="flex-1 min-w-0 bg-[#0B0E14] border border-[#242B35] rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-[#F59E0B]/50 transition"
                 >
                   <option value="">Karşılaştırmaya hisse ekle...</option>
                   {available.map((s) => (

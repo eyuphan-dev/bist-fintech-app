@@ -140,7 +140,8 @@ export default function GlobalStockSearch() {
           onKeyDown={handleKeyDown}
           placeholder="Hisse ara..."
           aria-label="Hisse ara"
-          className="w-full bg-[#151921] border border-[#242B35] focus:border-[#10B981]/50 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-gray-500 outline-none transition"
+          // Mobilde min 44px dokunma yuksekligi (py-3), masaustunde kompakt kalir.
+          className="w-full bg-[#151921] border border-[#242B35] focus:border-[#10B981]/50 rounded-lg pl-8 pr-7 py-3 md:py-1.5 text-xs text-white placeholder-gray-500 outline-none transition"
         />
         {query && (
           <button

@@ -96,7 +96,7 @@ export default function NotificationBell() {
     <div className="relative" ref={containerRef}>
       <button
         onClick={handleToggle}
-        className="relative bg-[#151921] border border-[#242B35] hover:bg-[#242B35] p-2 rounded-lg text-gray-400 hover:text-white transition"
+        className="relative bg-[#151921] border border-[#242B35] hover:bg-[#242B35] p-2 rounded-lg text-gray-400 hover:text-white transition min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center"
         title="Bildirimler"
       >
         <Bell className="w-4 h-4" />
