@@ -19,6 +19,10 @@ interface CompanyAnalysis {
   gross_margin: number | null;
   net_margin: number | null;
   dividend_yield: number | null;
+  fifty_two_week_high: number | null;
+  fifty_two_week_low: number | null;
+  market_cap: number | null;
+  average_volume: number | null;
   fx_exposure_text: string | null;
   interest_sensitivity_text: string | null;
   altman_z_score: number | null;
@@ -453,6 +457,65 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
               </p>
             </div>
           </div>
+
+          {/* Hisse künyesi: 52 hafta bandı, piyasa değeri, ortalama hacim */}
+          {(analysis.fifty_two_week_high || analysis.market_cap || analysis.average_volume) && (
+            <div className="bg-[#151921] border border-[#242B35] rounded-lg p-3 space-y-2.5">
+              <p className="text-[9px] text-gray-500 uppercase font-bold">Hisse Künyesi</p>
+
+              {analysis.fifty_two_week_high !== null && analysis.fifty_two_week_low !== null && (() => {
+                const lo = analysis.fifty_two_week_low as number;
+                const hi = analysis.fifty_two_week_high as number;
+                // Fiyatın 52 haftalık bandın neresinde olduğu — dipte mi zirvede mi?
+                const pos = hi > lo ? Math.min(100, Math.max(0, ((currentPrice - lo) / (hi - lo)) * 100)) : 50;
+                return (
+                  <div>
+                    <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                      <span>52 Hafta Düşük</span>
+                      <span>52 Hafta Yüksek</span>
+                    </div>
+                    <div className="relative h-1.5 rounded-full bg-[#0B0E14] border border-[#242B35]">
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[#10B981] border border-[#0B0E14]"
+                        style={{ left: `calc(${pos}% - 4px)` }}
+                        title={`Bandın %${pos.toFixed(0)} noktasında`}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-300 tabular-nums mt-1">
+                      <span>{lo.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}</span>
+                      <span className="text-[#10B981] font-semibold">
+                        %{pos.toFixed(0)} noktasında
+                      </span>
+                      <span>{hi.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div>
+                  <p className="text-[9px] text-gray-500 uppercase font-bold">Piyasa Değeri</p>
+                  <p className="text-xs font-bold text-white tabular-nums mt-0.5">
+                    {analysis.market_cap
+                      ? analysis.market_cap >= 1e9
+                        ? `${(analysis.market_cap / 1e9).toLocaleString("tr-TR", { maximumFractionDigits: 2 })} mlr TL`
+                        : `${(analysis.market_cap / 1e6).toLocaleString("tr-TR", { maximumFractionDigits: 0 })} mn TL`
+                      : "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-gray-500 uppercase font-bold">Ort. Günlük Hacim</p>
+                  <p className="text-xs font-bold text-white tabular-nums mt-0.5">
+                    {analysis.average_volume
+                      ? analysis.average_volume >= 1e6
+                        ? `${(analysis.average_volume / 1e6).toLocaleString("tr-TR", { maximumFractionDigits: 1 })} mn lot`
+                        : `${(analysis.average_volume / 1e3).toLocaleString("tr-TR", { maximumFractionDigits: 0 })} bin lot`
+                      : "N/A"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Borç/Özkaynak & Net Döviz Pozisyonu */}
           <div className="grid grid-cols-2 gap-3">

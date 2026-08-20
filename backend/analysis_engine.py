@@ -401,6 +401,13 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
     # Bu yüzden verim artık öncelikle KENDİMİZ hesaplanır: hisse başına yıllık
     # temettü / fiyat. İkisi de tek anlamlı sayılardır, yoruma açık değildir.
     # Yalnızca bunlar yoksa dividendYield'e (yüzde olarak) düşülür.
+    # Hisse künyesi
+    analysis.fifty_two_week_high = _safe_float(info.get("fiftyTwoWeekHigh"))
+    analysis.fifty_two_week_low = _safe_float(info.get("fiftyTwoWeekLow"))
+    analysis.market_cap = _safe_float(info.get("marketCap"))
+    _avg_vol = info.get("averageVolume") or info.get("averageVolume10days")
+    analysis.average_volume = int(_avg_vol) if _avg_vol else None
+
     _rate = _safe_float(info.get("dividendRate"))
     _price_for_yield = _safe_float(info.get("regularMarketPrice")) or _safe_float(info.get("previousClose"))
     _reported = _safe_float(info.get("dividendYield"))

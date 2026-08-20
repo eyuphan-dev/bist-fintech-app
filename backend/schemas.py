@@ -138,6 +138,10 @@ class CompanyAnalysisResponse(BaseModel):
     analyst_sell_count: Optional[int] = None
     dividend_yield: Optional[float] = None
     dividend_rate: Optional[float] = None
+    fifty_two_week_high: Optional[float] = None
+    fifty_two_week_low: Optional[float] = None
+    market_cap: Optional[float] = None
+    average_volume: Optional[int] = None
     updated_at: Optional[datetime]
 
     class Config:

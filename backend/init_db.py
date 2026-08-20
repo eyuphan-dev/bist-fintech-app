@@ -87,6 +87,10 @@ MIGRATIONS = {
         # DİKKAT: bu alanlar MEVCUT company_analysis bloğunun içine yazılmalıdır —
         # sözlüğe ikinci bir "company_analysis" anahtarı eklenirse Python yinelenen
         # anahtarı sessizce ezer (sonraki kazanır) ve migration hiç çalışmaz.
+        "fifty_two_week_high": "NUMERIC(12, 2)",
+        "fifty_two_week_low": "NUMERIC(12, 2)",
+        "market_cap": "NUMERIC(20, 2)",
+        "average_volume": "BIGINT",
         "dividend_yield": "NUMERIC(6, 2)",
         "dividend_rate": "NUMERIC(10, 2)",
         "last_dividend_date": "DATE",

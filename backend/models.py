@@ -370,6 +370,13 @@ class CompanyAnalysis(Base):
     analyst_sell_count = Column(Integer, nullable=True)
     # Temettü: yfinance dividendYield (oransal) yüzdeye çevrilerek saklanır.
     # Portföy temettü geliri projeksiyonu ve hisse kartlarındaki verim rozeti bunu kullanır.
+    # Hisse künyesi: 52 hafta bandı, piyasa değeri, ortalama hacim.
+    # CompanyAnalysis'te tutulur çünkü bunlar zamanla DEĞİŞEN değerlerdir ve
+    # gece analiz işiyle birlikte tazelenir (Stock tablosu ise sabit katalogdur).
+    fifty_two_week_high = Column(Numeric(12, 2), nullable=True)
+    fifty_two_week_low = Column(Numeric(12, 2), nullable=True)
+    market_cap = Column(Numeric(20, 2), nullable=True)
+    average_volume = Column(BigInteger, nullable=True)
     dividend_yield = Column(Numeric(6, 2), nullable=True)      # yıllık temettü verimi (%)
     dividend_rate = Column(Numeric(10, 2), nullable=True)      # hisse başına yıllık temettü (TL)
     last_dividend_date = Column(Date, nullable=True)           # son temettü ödeme/kayıt tarihi
