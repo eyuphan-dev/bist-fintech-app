@@ -127,7 +127,7 @@ export default function TarayiciPage() {
             <select
               value={filters.sector}
               onChange={(e) => setFilters((f) => ({ ...f, sector: e.target.value }))}
-              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2 text-white text-xs outline-none"
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none"
             >
               <option value="">Tümü</option>
               {sectors.map((s) => (
@@ -159,19 +159,19 @@ export default function TarayiciPage() {
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Min. ROE (%)</label>
             <input type="number" placeholder="örn. 15" value={filters.minRoe} onChange={(e) => setFilters((f) => ({ ...f, minRoe: e.target.value }))}
-              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2 text-white text-xs outline-none" />
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
           </div>
 
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Min. Piotroski (0-9)</label>
             <input type="number" min={0} max={9} placeholder="örn. 6" value={filters.minPiotroski} onChange={(e) => setFilters((f) => ({ ...f, minPiotroski: e.target.value }))}
-              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2 text-white text-xs outline-none" />
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
           </div>
 
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Min. Temettü Verimi (%)</label>
             <input type="number" min={0} step="0.5" placeholder="örn. 3" value={filters.minDividendYield} onChange={(e) => setFilters((f) => ({ ...f, minDividendYield: e.target.value }))}
-              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2 text-white text-xs outline-none" />
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
           </div>
 
           <div className="flex items-end">

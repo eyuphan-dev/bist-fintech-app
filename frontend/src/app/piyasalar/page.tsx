@@ -139,7 +139,10 @@ export default function PiyasalarPage() {
                 <button
                   onClick={(e) => toggleWatch(e, stock.symbol)}
                   title={watchedSymbols.has(stock.symbol) ? "Favorilerden çıkar" : "Favorilere ekle"}
-                  className={`absolute top-3 right-3 transition ${
+                  // İkon 16x16 kalır ama dokunma alanı 44x44'e çıkarılır (-m ile
+                  // görsel konum korunur). Liste kartlarında sık kullanılan bir
+                  // kontrol olduğu için parmakla ıskalanması can sıkıcıydı.
+                  className={`absolute top-3 right-3 -m-3 p-3 min-w-[44px] min-h-[44px] flex items-start justify-end transition ${
                     watchedSymbols.has(stock.symbol) ? "text-[#F59E0B]" : "text-gray-600 hover:text-[#F59E0B]"
                   }`}
                 >

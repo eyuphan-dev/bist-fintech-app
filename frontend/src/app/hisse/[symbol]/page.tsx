@@ -352,7 +352,7 @@ export default function StockDetailPage() {
               onClick={toggleWatch}
               disabled={watchLoading}
               title={isWatched ? "Favorilerden çıkar" : "Favorilere ekle"}
-              className={`bg-[#151921] border border-[#242B35] hover:border-[#F59E0B]/40 p-2 rounded-lg transition disabled:opacity-50 ${
+              className={`bg-[#151921] border border-[#242B35] hover:border-[#F59E0B]/40 p-2 rounded-lg transition disabled:opacity-50 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center ${
                 isWatched ? "text-[#F59E0B]" : "text-gray-400 hover:text-[#F59E0B]"
               }`}
             >
@@ -363,7 +363,7 @@ export default function StockDetailPage() {
             <button
               onClick={() => setShowNotificationModal(true)}
               title="Bildirim Oluştur"
-              className="bg-[#151921] border border-[#242B35] hover:border-[#F59E0B]/40 hover:text-[#F59E0B] text-gray-400 p-2 rounded-lg transition"
+              className="bg-[#151921] border border-[#242B35] hover:border-[#F59E0B]/40 hover:text-[#F59E0B] text-gray-400 p-2 rounded-lg transition min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center"
             >
               <Bell className="w-4 h-4" />
             </button>
