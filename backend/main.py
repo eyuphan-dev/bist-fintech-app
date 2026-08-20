@@ -26,7 +26,7 @@ from schemas import (
     StockVoteRequest, StockVoteResponse, ChangePasswordRequest,
     DividendPositionItem, PortfolioDividendResponse,
     BenchmarkPoint, PortfolioBenchmarkResponse, MarketQuoteItem,
-    FinancialPeriodItem, FinancialStatementsResponse,
+    FinancialPeriodItem, FinancialStatementsResponse, PortfolioRiskResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
@@ -2892,6 +2892,136 @@ def get_portfolio_benchmark(
         benchmark_return_pct=bench_ret,
         excess_return_pct=round(portfolio_ret - bench_ret, 2) if bench_ret is not None else None,
         points=points,
+    )
+
+
+TRADING_DAYS_PER_YEAR = 252  # BIST'te yaklaşık işlem günü sayısı
+
+
+@app.get("/api/portfolio/risk", response_model=PortfolioRiskResponse)
+def get_portfolio_risk(
+    days: int = 180,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Portföyün risk profili: volatilite, maksimum düşüş, beta, getiri/risk oranı.
+
+    Ücretli terminallerin "portföy optimizasyonu" başlığı altında sunduğu
+    ölçülerin karşılığıdır; hepsi kendi gün sonu portföy değerlerimizden
+    (user_performance_history) hesaplanır, ek veri kaynağı gerekmez.
+
+    FAİZSİZ FİNANS: Klasik Sharpe oranı risksiz FAİZ oranını girdi alır.
+    road_map.md bu projede faiz mantığını yasakladığı için Sharpe yerine
+    getiri/volatilite oranı hesaplanır — "birim risk başına ne kadar getiri"
+    sorusunu faiz kullanmadan yanıtlar.
+    """
+    cutoff = date.today() - timedelta(days=max(30, min(days, 730)))
+    snaps = (
+        db.query(models.UserPerformanceHistory)
+        .filter(
+            models.UserPerformanceHistory.user_id == current_user.id,
+            models.UserPerformanceHistory.recorded_date >= cutoff,
+        )
+        .order_by(models.UserPerformanceHistory.recorded_date.asc())
+        .all()
+    )
+
+    # Anlamlı bir volatilite için en az birkaç haftalık veri gerekir; 10 günün
+    # altında hesaplanan değer istatistiksel olarak gürültüden ibarettir.
+    if len(snaps) < 10:
+        return PortfolioRiskResponse(
+            day_count=len(snaps),
+            message="Risk ölçümü için en az 10 günlük portföy geçmişi gerekir. "
+                    "Gün sonu değerleriniz hafta içi her akşam kaydediliyor.",
+        )
+
+    values = [float(s.total_portfolio_value) for s in snaps]
+    dates = [s.recorded_date for s in snaps]
+
+    # Günlük getiriler
+    rets, ret_dates = [], []
+    for i in range(1, len(values)):
+        if values[i - 1] > 0:
+            rets.append((values[i] - values[i - 1]) / values[i - 1])
+            ret_dates.append(dates[i])
+    if len(rets) < 5:
+        return PortfolioRiskResponse(day_count=len(snaps), message="Yeterli getiri verisi yok.")
+
+    n = len(rets)
+    mean_ret = sum(rets) / n
+    variance = sum((r - mean_ret) ** 2 for r in rets) / (n - 1) if n > 1 else 0.0
+    daily_vol = variance ** 0.5
+
+    annual_vol = daily_vol * (TRADING_DAYS_PER_YEAR ** 0.5) * 100
+    # Toplam getiriyi yıllıklandır (bileşik).
+    total_growth = values[-1] / values[0] if values[0] > 0 else 1.0
+    span_days = max(1, (dates[-1] - dates[0]).days)
+    annual_ret = ((total_growth ** (365.0 / span_days)) - 1) * 100 if total_growth > 0 else None
+
+    # Maksimum düşüş: zirveden sonraki en derin dip.
+    peak, max_dd, max_dd_date = values[0], 0.0, dates[0]
+    for i, v in enumerate(values):
+        if v > peak:
+            peak = v
+        elif peak > 0:
+            dd = (v - peak) / peak * 100
+            if dd < max_dd:
+                max_dd, max_dd_date = dd, dates[i]
+
+    # Beta: portföy getirilerinin BIST 100 getirilerine duyarlılığı.
+    beta = None
+    idx_rows = (
+        db.query(models.IndexHistory)
+        .filter(models.IndexHistory.symbol == "XU100", models.IndexHistory.trade_date >= cutoff)
+        .order_by(models.IndexHistory.trade_date.asc())
+        .all()
+    )
+    idx_by_date = {r.trade_date: float(r.close) for r in idx_rows}
+    paired_p, paired_i = [], []
+    prev_idx_date = None
+    for i, d in enumerate(ret_dates):
+        if d in idx_by_date and prev_idx_date and prev_idx_date in idx_by_date:
+            prev_close = idx_by_date[prev_idx_date]
+            if prev_close > 0:
+                paired_p.append(rets[i])
+                paired_i.append((idx_by_date[d] - prev_close) / prev_close)
+        if d in idx_by_date:
+            prev_idx_date = d
+
+    if len(paired_p) >= 10:
+        mp = sum(paired_p) / len(paired_p)
+        mi = sum(paired_i) / len(paired_i)
+        cov = sum((paired_p[k] - mp) * (paired_i[k] - mi) for k in range(len(paired_p)))
+        var_i = sum((x - mi) ** 2 for x in paired_i)
+        if var_i > 0:
+            beta = round(cov / var_i, 2)
+
+    ratio = round(annual_ret / annual_vol, 2) if (annual_ret is not None and annual_vol > 0) else None
+
+    # Eşikler BIST'in tipik oynaklığına göre: tek hisse yıllık %40+ volatilite
+    # görebilir; dengeli bir portföyde %25 altı sakin sayılır.
+    if annual_vol < 25:
+        risk_label = "Düşük"
+    elif annual_vol < 45:
+        risk_label = "Orta"
+    else:
+        risk_label = "Yüksek"
+
+    positives = sum(1 for r in rets if r > 0)
+
+    return PortfolioRiskResponse(
+        day_count=len(snaps),
+        annualized_return_pct=round(annual_ret, 2) if annual_ret is not None else None,
+        annualized_volatility_pct=round(annual_vol, 2),
+        max_drawdown_pct=round(max_dd, 2),
+        max_drawdown_date=max_dd_date if max_dd < 0 else None,
+        return_risk_ratio=ratio,
+        beta_vs_index=beta,
+        best_day_pct=round(max(rets) * 100, 2),
+        worst_day_pct=round(min(rets) * 100, 2),
+        positive_day_ratio=round(positives / n * 100, 2),
+        risk_label=risk_label,
     )
 
 

@@ -12,6 +12,7 @@ import BalanceUpdateModal from "./components/BalanceUpdateModal";
 import PendingOrdersSection from "./components/PendingOrdersSection";
 import PortfolioAnalytics from "./components/PortfolioAnalytics";
 import DividendIncomePanel from "./components/DividendIncomePanel";
+import PortfolioRiskPanel from "./components/PortfolioRiskPanel";
 import PortfolioPerformanceChart from "./components/PortfolioPerformanceChart";
 import { useAuth, API_BASE } from "./context/AuthContext";
 
@@ -306,6 +307,8 @@ export default function Home() {
               <PortfolioPerformanceChart refreshKey={refreshTrigger} />
 
               <PortfolioAnalytics refreshKey={refreshTrigger} />
+
+              <PortfolioRiskPanel refreshKey={refreshTrigger} />
 
               <DividendIncomePanel refreshKey={refreshTrigger} />
 

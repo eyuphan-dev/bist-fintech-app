@@ -334,6 +334,29 @@ class PortfolioDividendResponse(BaseModel):
     items: List[DividendPositionItem]
 
 
+class PortfolioRiskResponse(BaseModel):
+    """
+    Portföy risk metrikleri (Matriks Prime'ın "portföy optimizasyonu" karşılığı).
+
+    NOT — FAİZSİZ FİNANS KURALI: klasik Sharpe oranı risksiz FAİZ oranı
+    kullanır. road_map.md bu projede faiz mantığını yasakladığı için Sharpe
+    yerine `return_risk_ratio` hesaplanır: yıllık getiri / yıllık volatilite.
+    Aynı soruyu (birim risk başına ne kadar getiri) faiz kullanmadan yanıtlar.
+    """
+    day_count: int                                  # hesaba giren gün sayısı
+    annualized_return_pct: Optional[float] = None
+    annualized_volatility_pct: Optional[float] = None   # yıllıklandırılmış std sapma
+    max_drawdown_pct: Optional[float] = None            # zirveden dibe en büyük düşüş
+    max_drawdown_date: Optional[date] = None
+    return_risk_ratio: Optional[float] = None
+    beta_vs_index: Optional[float] = None               # BIST 100'e göre duyarlılık
+    best_day_pct: Optional[float] = None
+    worst_day_pct: Optional[float] = None
+    positive_day_ratio: Optional[float] = None          # kaç gün artıda kapandı (%)
+    risk_label: Optional[str] = None                    # "Düşük" / "Orta" / "Yüksek"
+    message: Optional[str] = None                       # veri yetersizse açıklama
+
+
 class FinancialPeriodItem(BaseModel):
     """Tek bir çeyreğin finansal özeti (tutarlar TL)."""
     period_end: date
