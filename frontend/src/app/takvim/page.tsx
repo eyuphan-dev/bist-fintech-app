@@ -151,7 +151,8 @@ export default function TakvimPage() {
                       href={item.kap_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-gray-500 hover:text-white shrink-0"
+                      // İkon 16x16 kalır, dokunma alanı 44x44 (-m ile görsel konum korunur).
+                      className="text-gray-500 hover:text-white shrink-0 -m-3 p-3 min-w-[44px] min-h-[44px] flex items-center justify-center"
                       title="KAP'ta görüntüle"
                     >
                       <ExternalLink className="w-4 h-4" />
