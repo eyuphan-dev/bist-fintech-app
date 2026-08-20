@@ -95,7 +95,36 @@ function RefreshFeedback({ feedback }: { feedback: { type: "success" | "error"; 
   );
 }
 
+interface SectorComparison {
+  sector: string | null;
+  stock_count: number;
+  pe_ratio: number | null;
+  sector_median_pe: number | null;
+  pb_ratio: number | null;
+  sector_median_pb: number | null;
+  roe: number | null;
+  sector_median_roe: number | null;
+  dividend_yield: number | null;
+  sector_median_dividend_yield: number | null;
+  verdict: string | null;
+}
+
 export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabProps) {
+  const [sectorCmp, setSectorCmp] = useState<SectorComparison | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/stocks/${symbol}/sector-comparison`);
+        if (res.ok && !cancelled) setSectorCmp(await res.json());
+      } catch (err) {
+        console.error("Sektör kıyası alınamadı:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [symbol]);
+
   const [data, setData] = useState<StockProData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -514,6 +543,48 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Sektöre göre konum — "bu hisse sektörüne göre ucuz mu?" */}
+          {sectorCmp?.sector && sectorCmp.stock_count >= 3 && (
+            <div className="bg-[#151921] border border-[#242B35] rounded-lg p-3 space-y-2">
+              <p className="text-[9px] text-gray-500 uppercase font-bold">
+                Sektör Karşılaştırması · {sectorCmp.sector} ({sectorCmp.stock_count} hisse)
+              </p>
+              <div className="space-y-1.5">
+                {[
+                  { label: "F/K", own: sectorCmp.pe_ratio, med: sectorCmp.sector_median_pe, lowerBetter: true },
+                  { label: "PD/DD", own: sectorCmp.pb_ratio, med: sectorCmp.sector_median_pb, lowerBetter: true },
+                  { label: "ROE", own: sectorCmp.roe, med: sectorCmp.sector_median_roe, lowerBetter: false, suffix: "%" },
+                  { label: "Temettü", own: sectorCmp.dividend_yield, med: sectorCmp.sector_median_dividend_yield, lowerBetter: false, suffix: "%" },
+                ].map((r) => {
+                  if (r.own === null || r.med === null) return null;
+                  const better = r.lowerBetter ? r.own < r.med : r.own > r.med;
+                  return (
+                    <div key={r.label} className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-400">{r.label}</span>
+                      <div className="flex items-center gap-2 tabular-nums">
+                        <span className="font-bold" style={{ color: better ? "#10B981" : "#8A99AD" }}>
+                          {r.own.toFixed(2)}{r.suffix ?? ""}
+                        </span>
+                        <span className="text-gray-600 text-[10px]">
+                          sektör: {r.med.toFixed(2)}{r.suffix ?? ""}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {sectorCmp.verdict && (
+                <p className="text-[10px] text-gray-500 border-t border-[#242B35] pt-2">
+                  {sectorCmp.verdict}
+                </p>
+              )}
+              <p className="text-[9px] text-gray-600">
+                Sektör değerleri medyandır (ortalama değil) — az sayıda hissede tek bir
+                aykırı değer ortalamayı bozar.
+              </p>
             </div>
           )}
 
