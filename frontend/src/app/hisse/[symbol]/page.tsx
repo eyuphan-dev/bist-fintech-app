@@ -617,9 +617,11 @@ export default function StockDetailPage() {
           )}
 
           {section === "pro" && (
-            <FinancialStatementsPanel symbol={symbol} />
+            <div className="space-y-4">
+              <FinancialStatementsPanel symbol={symbol} />
 
               <DerinAnalizTab symbol={symbol} currentPrice={stockDetail.current_price} />
+            </div>
           )}
 
           {section === "hesaplayici" && (
