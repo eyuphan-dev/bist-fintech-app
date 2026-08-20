@@ -213,14 +213,14 @@ export default function TarayiciPage() {
             {activeFilterCount > 0 && (
               <button
                 onClick={() => setFilters(EMPTY_FILTERS)}
-                className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#F43F5E] transition"
+                className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#F43F5E] transition py-3 md:py-0 px-1"
               >
                 <X className="w-3 h-3" /> Filtreleri Temizle ({activeFilterCount})
               </button>
             )}
             <button
               onClick={fetchScreener}
-              className="bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition"
+              className="bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-3 md:py-2 rounded-lg transition"
             >
               Uygula
             </button>
