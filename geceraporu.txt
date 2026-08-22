@@ -520,3 +520,85 @@ platformlardaki özelliklerin ücretsiz karşılıklarını ekleme.
   ETKİLENMEDİ. Bir sonraki commit'te düzeltildi.
 
 ================================================================================
+
+================================================================================
+11. iOS / APPLE PWA DESTEGI
+================================================================================
+
+SORU: "Apple'da PWA oluyor mu?"
+CEVAP: Hayir, olmuyordu. Uc ayri kirik nokta vardi.
+
+--- BULUNAN HATALAR ---
+
+1) apple-mobile-web-app-capable ETIKETI HIC URETILMIYORDU  (en kritik)
+   Next.js 16, layout'taki `appleWebApp.capable: true` ayari icin yalnizca
+   standartlasmis <meta name="mobile-web-app-capable"> etiketini basiyor.
+   iOS Safari bu adi TANIMIYOR; hala sadece apple- onekli olani okuyor.
+   Sonuc: iPhone'da "Ana Ekrana Ekle" ile eklenen simge tam ekran degil,
+   adres cubuklu normal bir Safari sekmesi olarak aciliyordu.
+   metadata.other ile denendi, Next o anahtari yok sayiyor. Cozum: etiket
+   layout.tsx icinde dogrudan yazildi (React 19 <meta>'yi <head>'e tasiyor).
+
+2) viewport-fit=cover YOKTU -> TUM safe-area DOLGULARI ETKISIZDI
+   env(safe-area-inset-*) degerleri viewport-fit=cover olmadan iOS'ta HER ZAMAN
+   0 doner. MobileBottomNav'da zaten yazili olan safe-area dolgusu bu yuzden
+   hicbir ise yaramiyordu; alt gezinme cubugu iPhone'un home-indicator cizgisinin
+   altinda kaliyordu. Ayrica status bar "black-translucent" oldugu icin ust
+   kisimda da NavBar saatin/pilin arkasinda kaliyordu.
+   Cozum: viewportFit "cover" + NavBar header'ina padding-top safe-area +
+   giris ekraninda (navbar yokken) centik yuksekliginde ayrac.
+
+3) CacheGuard KENDI SERVICE WORKER'IMIZI DA OLDURURDU
+   Bilesen her ziyarette ISTISNASIZ tum service worker kayitlarini siliyordu
+   (eskiden projede hic SW olmadigi icin dogru bir davranisti). Yeni SW
+   eklenseydi ayni saniyede iptal edilirdi. Hedefi daraltildi: artik yalnizca
+   BIZE AIT OLMAYAN kayitlar silinir.
+
+--- EKLENENLER ---
+  * public/sw.js       : Bilinctli olarak DAR kapsamli service worker.
+                         - Sayfa gezinmeleri : SADECE AG (bayat HTML imkansiz)
+                         - /api/*            : HIC DOKUNULMAZ
+                         - /_next/static/*   : onbellek oncelikli (adinda hash
+                           var, bayatlamasi teknik olarak imkansiz)
+                         Onbellek 160 kayitla sinirlanir; aksi halde her deploy
+                         yeni hash'ler ekleyip kullanicinin cihazinda olu dosya
+                         biriktirirdi.
+                         ACIL DURDURMA: dosyayi sunucudan silmek yeterli.
+  * public/offline.html: Baglanti yokken gosterilen, disa hic bagimliligi
+                         olmayan sayfa. Baglanti gelince kendini yeniler.
+  * InstallPrompt.tsx  : iOS'ta beforeinstallprompt olayi HIC tetiklenmez;
+                         Safari kullanicisina Paylas > Ana Ekrana Ekle adimlari
+                         anlatilir. Diger tarayicilarda gercek kurulum butonu.
+                         iPadOS 13+ kendini Mac gibi tanittigi icin dokunmatik
+                         nokta sayisiyla ayirt edilir. CriOS/FxiOS/EdgiOS'ta
+                         gosterilmez (o tarayicilar ana ekrana ekleyemez).
+
+--- DIGER OPTIMIZASYONLAR ---
+  * body: yatay modda centigin sol/sag dolgusu, overscroll-behavior-y none
+    (ana ekran uygulamasinda tum arayuzun lastik gibi esnemesi engellendi),
+    -webkit-text-size-adjust 100% (iOS yatay modda yaziyi kendiliginden
+    buyutup tasarimi bozuyordu).
+  * Tum tiklanabilir ogelerde -webkit-tap-highlight-color transparent ve
+    touch-action manipulation -> gri tiklama kutusu ve ~300ms cift dokunus
+    gecikmesi kalkti.
+  * next.config.ts: sw.js / manifest / offline.html icin no-store. Eski bir
+    sw.js onbellege takilirsa sunucudan duzeltmesi IMKANSIZ hale gelir
+    (nginx proxy_cache olayinin cok daha kalici versiyonu).
+  * manifest: id, scope, display_override, categories eklendi.
+    orientation "portrait" -> "any": tablo/grafik agirlikli sayfalar tablette
+    yatay modda cok daha kullanisli, portrait Android'de donmeyi kilitliyordu.
+  * InstallPrompt konumu yardim butonuyla cakisiyordu (buton 5.5-8.25rem
+    araligini kapliyor), kart 9.75rem'e alindi.
+
+--- DOGRULAMA (Playwright, uretim build'i) ---
+  service worker kayitli ve sayfayi kontrol ediyor        GECTI
+  API yaniti onbellekte YOK (0 kayit)                     GECTI
+  onbellekte yalnizca hash'li statik + offline.html       GECTI
+  cevrimdisi geri donus sayfasi calisiyor                 GECTI
+  yatay kaydirma yok: iPhone SE / 14 Pro / Pro Max /
+                      iPad Mini / Galaxy S8               GECTI
+  5 kritik iOS meta etiketi head'de                       GECTI
+
+NOT: iOS'ta ana ekrana eklenen uygulama, Safari'den AYRI bir depolama alani
+kullanir. Bu yuzden Safari'de giris yapmis olsaniz bile PWA'yi ilk actiginizda
+bir kez daha giris yapmaniz gerekir. Bu bir hata degil, iOS'un tasarimi.

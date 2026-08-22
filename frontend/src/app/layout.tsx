@@ -7,6 +7,7 @@ import Footer from "./components/Footer";
 import OnboardingHelpModal from "./components/OnboardingHelpModal";
 import MobileBottomNav from "./components/MobileBottomNav";
 import CacheGuard from "./components/CacheGuard";
+import InstallPrompt from "./components/InstallPrompt";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -42,6 +43,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   colorScheme: "dark",
   themeColor: "#0B0E14",
+  // iOS'ta ZORUNLU: viewport-fit=cover olmadan env(safe-area-inset-*) değerleri
+  // her zaman 0 döner. Bu yüzden alt gezinme çubuğundaki safe-area dolgusu da
+  // bu satır eklenene kadar hiçbir işe yaramıyordu. Ayrıca statusBarStyle
+  // "black-translucent" olduğu için içerik çentiğin altına uzanır; üst/alt
+  // dolgular NavBar ve MobileBottomNav içinde safe-area ile telafi edilir.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -52,6 +59,18 @@ export default function RootLayout({
   return (
     <html lang="tr" suppressHydrationWarning>
       <body className={`${outfit.variable} antialiased bg-[#0B0E14]`} suppressHydrationWarning>
+        {/*
+          iOS'ta TAM EKRAN İÇİN ZORUNLU ETİKET.
+          Next.js 16, `appleWebApp.capable: true` için yalnızca standartlaşmış
+          <meta name="mobile-web-app-capable"> etiketini üretiyor; iOS Safari ise
+          bu adı TANIMIYOR, hâlâ sadece apple- önekli olanı okuyor. Etiket
+          olmadan ana ekrana eklenen simge tam ekran açılmaz, adres çubuklu bir
+          Safari sekmesi olarak açılır ve status-bar ayarı da yok sayılır.
+          metadata.other ile denendi, Next o anahtarı yok sayıyor. React 19
+          <meta> öğelerini nerede render edilirse edilsin <head> içine taşıdığı
+          için burada doğrudan yazılır.
+        */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <AuthProvider>
           <CacheGuard />
           <div className="min-h-screen flex flex-col">
@@ -60,6 +79,7 @@ export default function RootLayout({
             <Footer />
           </div>
           <MobileBottomNav />
+          <InstallPrompt />
           <OnboardingHelpModal />
         </AuthProvider>
       </body>

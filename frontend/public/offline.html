@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0B0E14" />
+<title>Çevrimdışısınız — BIST Simülasyonu</title>
+<style>
+  /* Bu sayfa ağ yokken gösterildiği için tamamen kendi kendine yeter:
+     dış yazı tipi, betik veya görsel yüklemez. */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(2rem + env(safe-area-inset-top)) 1.5rem calc(2rem + env(safe-area-inset-bottom));
+    background: #0B0E14;
+    color: #F3F4F6;
+    font-family: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    text-align: center;
+    -webkit-font-smoothing: antialiased;
+  }
+  .card { max-width: 22rem; }
+  .dot {
+    width: 3rem; height: 3rem; margin: 0 auto 1.25rem;
+    border-radius: 999px;
+    background: #151921;
+    border: 1px solid #242B35;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+  }
+  h1 { font-size: 1.125rem; margin: 0 0 .5rem; font-weight: 700; }
+  p { font-size: .8125rem; line-height: 1.6; color: #8A99AD; margin: 0 0 1.5rem; }
+  button {
+    width: 100%; min-height: 48px; padding: 0 1.25rem;
+    border: 0; border-radius: .75rem;
+    background: #10B981; color: #0B0E14;
+    font-family: inherit; font-size: 1rem; font-weight: 700;
+    cursor: pointer;
+  }
+  button:active { background: #059669; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="dot">📉</div>
+    <h1>İnternet bağlantısı yok</h1>
+    <p>
+      Borsa verileri canlı olarak sunucudan çekildiği için bu uygulama çevrimdışı
+      çalışamaz. Bağlantınız geri geldiğinde kaldığınız yerden devam edebilirsiniz.
+    </p>
+    <button type="button" onclick="location.reload()">Tekrar dene</button>
+  </div>
+  <script>
+    // Bağlantı geri geldiği anda kullanıcı butona basmak zorunda kalmasın.
+    addEventListener("online", function () { location.reload(); });
+  </script>
+</body>
+</html>

@@ -59,6 +59,32 @@ body {
   color: var(--foreground);
   font-family: 'Outfit', sans-serif;
   overflow-x: hidden;
+
+  /* iOS yatay moddayken çentik ekranın SOLUNDA/SAĞINDA kalır; bu dolgu olmadan
+     içeriğin bir kısmı çentiğin arkasında kaybolur. Dikey modda değer 0'dır. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+
+  /* Ana ekrana eklenmiş uygulamada sayfa sonuna gelince tüm arayüzün lastik
+     gibi esnemesini engeller — yerel uygulama hissini bozan tek şeydi. */
+  overscroll-behavior-y: none;
+
+  /* iOS yatay moda dönünce yazıları kendiliğinden büyütür; tasarım bozulur. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Dokunmatik cihazlarda tıklanan her öğede beliren gri kutu kaldırılır ve
+   çift dokunuşla yakınlaştırma beklemesi (~300ms gecikme) devre dışı bırakılır.
+   Sonuç: butonlar anında tepki veriyormuş gibi hissettirir. */
+a,
+button,
+[role="button"],
+input,
+select,
+textarea,
+label {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 /* Custom glowing effects */

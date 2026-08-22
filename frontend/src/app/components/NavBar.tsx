@@ -76,7 +76,11 @@ export default function NavBar() {
     setUserOpen(false);
   }, [pathname]);
 
-  if (!token) return null; // Giriş ekranında navbar gösterilmez
+  // Giriş ekranında navbar gösterilmez. Yine de çentik yüksekliğinde bir ayraç
+  // bırakılır: statusBarStyle "black-translucent" olduğu için iOS'ta içerik
+  // durum çubuğunun ALTINA uzanır ve navbar olmadığı için giriş formunun üstü
+  // saatin/pilin arkasında kalırdı.
+  if (!token) return <div aria-hidden style={{ height: "env(safe-area-inset-top)" }} />;
 
   const handleLogout = () => {
     logout();
@@ -93,8 +97,13 @@ export default function NavBar() {
       active ? "text-[#10B981]" : "text-gray-300 hover:text-white hover:bg-[#0B0E14]"
     }`;
 
+  // Safe-area dolgusu header'IN İÇİNDE uygulanır: böylece çubuğun arka planı
+  // durum çubuğunun arkasını da boyar, içerik ise çentiğin altından başlar.
   return (
-    <header className="border-b border-[#242B35] bg-[#0B0E14]/90 sticky top-0 z-30 backdrop-blur">
+    <header
+      className="border-b border-[#242B35] bg-[#0B0E14]/90 sticky top-0 z-30 backdrop-blur"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2 shrink-0 min-h-[44px] md:min-h-0 -ml-1 pl-1 pr-1 md:ml-0 md:px-0">
           <LineChart className="w-6 h-6 text-[#10B981]" />

@@ -13,6 +13,22 @@ const nextConfig: NextConfig = {
   // yer değiştiriyor (mv). Böylece yıkıcı adım dakikalar değil milisaniyeler
   // sürüyor ve kesinti yalnızca pm2 restart anına iniyor.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+
+  async headers() {
+    return [
+      {
+        // Service worker betiği ASLA önbelleklenmemeli. Önbelleklenirse
+        // tarayıcı eski sw.js'i tutar ve içindeki önbellek stratejisi
+        // güncellenemez hale gelir — sunucudan düzeltmesi imkânsız bir
+        // "eski sürümde donma" durumu doğar (nginx proxy_cache olayının
+        // çok daha kalıcı hali). Aynı gerekçe manifest için de geçerli.
+        source: "/:file(sw.js|manifest.webmanifest|offline.html)",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

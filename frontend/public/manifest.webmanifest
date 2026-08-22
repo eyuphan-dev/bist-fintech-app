@@ -1,13 +1,25 @@
 {
+  "id": "/",
   "name": "BIST Simülasyonu & AI Trader",
   "short_name": "BIST Sim",
   "description": "Borsa İstanbul sanal portföy simülasyonu, derin bilanço analizi ve kişisel AI trading botu.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
   "background_color": "#0B0E14",
   "theme_color": "#0B0E14",
   "lang": "tr",
+  "dir": "ltr",
+  "categories": [
+    "finance",
+    "business",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
