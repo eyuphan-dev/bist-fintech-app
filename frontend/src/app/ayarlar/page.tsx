@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Settings, KeyRound, Check, AlertCircle, User as UserIcon, RefreshCw } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import PushNotificationSettings from "../components/PushNotificationSettings";
 
 export default function SettingsPage() {
   const { token, user, loading: authLoading } = useAuth();
@@ -115,6 +116,9 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Anlık bildirimler */}
+      <PushNotificationSettings />
 
       {/* Şifre değiştirme */}
       <form onSubmit={submit} className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-4">

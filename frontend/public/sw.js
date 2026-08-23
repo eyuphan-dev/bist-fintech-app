@@ -142,3 +142,74 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+
+// ---------------------------------------------------------------------------
+// Web Push
+// ---------------------------------------------------------------------------
+// Alarm motoru sunucuda zaten calisiyordu; eksik olan teslimatti. Kullanici
+// uygulamayi acmadan da alarmindan haberdar olsun diye bildirimler burada
+// isletim sistemi bildirimi olarak gosterilir.
+//
+// iOS NOTU: Safari push'a yalnizca ANA EKRANA EKLENMIS (standalone) PWA'larda
+// izin verir. Normal Safari sekmesinde abonelik hic kurulamaz; arayuz bu yuzden
+// once kurulum ister.
+
+self.addEventListener("push", (event) => {
+  // Yuk cozulemezse bile bildirimi yutmayiz: kullaniciya genel bir bildirim
+  // gostermek, hic gostermemekten iyidir.
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+
+  const title = data.title || "BIST Simülasyonu";
+  const options = {
+    body: data.body || "Yeni bir bildiriminiz var.",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    // Ayni tag'li bildirimler ust uste yazilir; bir hisse icin arka arkaya
+    // gelen alarmlar bildirim merkezini doldurmaz.
+    tag: data.tag || "bist",
+    // Tag ayni olsa bile yeni bildirim sessizce degistirmek yerine kullaniciyi
+    // uyarsin - alarm bildirimi kacirilmamali.
+    renotify: true,
+    data: { url: data.url || "/" },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/";
+
+  event.waitUntil(
+    (async () => {
+      const clientList = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      // Uygulama zaten acikssa yeni sekme acmak yerine mevcut pencereyi one al
+      // ve orada gezin; aksi halde her bildirim yeni bir sekme birakirdi.
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin)) {
+          await client.focus();
+          if ("navigate" in client) {
+            try {
+              await client.navigate(target);
+            } catch {
+              // Bazi tarayicilarda navigate engellenir; odaklanmis olmak yeter.
+            }
+          }
+          return;
+        }
+      }
+
+      await self.clients.openWindow(target);
+    })()
+  );
+});

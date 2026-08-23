@@ -656,6 +656,37 @@ class PendingOrder(Base):
 # ---------------------------------------------------------------------------
 # MODÜL 11: Kişiye Özel Bildirim & Alarm Sistemi
 # ---------------------------------------------------------------------------
+class PushSubscription(Base):
+    """
+    Bir tarayıcının/cihazın Web Push aboneliği.
+
+    Kullanıcı başına BİRDEN FAZLA satır olabilir: telefon, tablet ve masaüstü
+    ayrı abonelikler üretir; aynı kullanıcı hepsinden bildirim almalıdır.
+    Benzersizlik `endpoint` üzerindedir çünkü tarayıcının verdiği endpoint URL'i
+    aboneliğin gerçek kimliğidir.
+
+    iOS NOTU: Safari yalnızca ANA EKRANA EKLENMİŞ (standalone) PWA'larda push
+    aboneliğine izin verir — normal Safari sekmesinde `Notification.requestPermission`
+    çağrısı bile başarısız olur. Bu yüzden arayüz iOS'ta önce kurulum ister.
+    """
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False, unique=True)
+    p256dh = Column(String(200), nullable=False)
+    auth = Column(String(100), nullable=False)
+    user_agent = Column(String(300), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_success_at = Column(DateTime, nullable=True)
+    # Üst üste başarısız gönderim sayısı. Push servisi 404/410 dönerse abonelik
+    # zaten silinir; bu sayaç geçici hataların (ağ, 5xx) üst üste birikmesini
+    # yakalamak için tutulur.
+    failure_count = Column(Integer, default=0, nullable=False)
+
+    user = relationship("User")
+
+
 class StockNotificationPreference(Base):
     """
     Bir kullanıcının belirli bir hisse için bıraktığı alarm tercihleri. Fiyat

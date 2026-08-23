@@ -25,7 +25,25 @@ import models
 from constants import EXTREME_CHANGE_GUARD_PCT
 
 
-def _create_notification(db: Session, user_id: int, stock_id: Optional[int], notif_type: str, title: str, message: str) -> None:
+def _create_notification(
+    db: Session,
+    user_id: int,
+    stock_id: Optional[int],
+    notif_type: str,
+    title: str,
+    message: str,
+    outbox: Optional[list] = None,
+    url: str = "/",
+) -> None:
+    """
+    Uygulama içi bildirim kaydını oluşturur ve istenirse push kutusuna ekler.
+
+    Push BURADA GÖNDERİLMEZ. Bu fonksiyon henüz commit edilmemiş bir işlemin
+    içinde çalışır; buradan gönderilen bir push, işlem geri alınırsa var
+    olmayan bir bildirimi duyurmuş olurdu. Ayrıca push bir HTTP çağrısıdır ve
+    işlemi ağ süresi kadar açık tutmak istemeyiz. Bunun yerine yük `outbox`a
+    yazılır, çağıran commit'ten sonra push.send_outbox ile boşaltır.
+    """
     db.add(models.Notification(
         user_id=user_id,
         stock_id=stock_id,
@@ -33,6 +51,31 @@ def _create_notification(db: Session, user_id: int, stock_id: Optional[int], not
         title=title,
         message=message,
     ))
+    if outbox is not None:
+        import push
+        outbox.append({
+            "user_id": user_id,
+            "payload": push.build_payload(title, message, url=url, tag=f"{notif_type}-{stock_id}"),
+        })
+
+
+def _flush(db: Session, outbox: list) -> None:
+    """
+    Push kutusunu boşaltır. Commit'ten SONRA çağrılır.
+
+    Push gönderimi bir yan etkidir; başarısız olması alarmın kendisini
+    geçersiz kılmaz (bildirim zaten veritabanına yazıldı ve kullanıcı
+    uygulama içinde görecek). Bu yüzden tüm hatalar burada yutulur.
+    """
+    if not outbox:
+        return
+    try:
+        import push
+        sent = push.send_outbox(db, outbox)
+        if sent:
+            print(f"[Push] {sent} cihaza gönderildi ({len(outbox)} bildirim).")
+    except Exception as e:
+        print(f"[Push] kutu boşaltılamadı: {e}")
 
 
 def _get_latest_price_and_change(db: Session, stock_id: int):
@@ -95,6 +138,7 @@ def check_price_and_pct_triggers(db: Session) -> None:
 
     today = date.today()
     price_cache: dict[int, tuple] = {}
+    outbox: list = []
 
     for pref in preferences:
         if pref.stock_id not in price_cache:
@@ -113,6 +157,7 @@ def check_price_and_pct_triggers(db: Session) -> None:
                 db, pref.user_id, pref.stock_id, "PRICE_ABOVE",
                 f"{stock.symbol} hedef fiyatı aştı",
                 f"{stock.symbol}, belirlediğiniz {float(pref.price_above):.2f} TL üst limitine ulaştı (güncel: {current_price:.2f} TL).",
+                outbox=outbox, url=f"/hisse/{stock.symbol}",
             )
             pref.price_above = None
 
@@ -122,6 +167,7 @@ def check_price_and_pct_triggers(db: Session) -> None:
                 db, pref.user_id, pref.stock_id, "PRICE_BELOW",
                 f"{stock.symbol} alt limitin altına indi",
                 f"{stock.symbol}, belirlediğiniz {float(pref.price_below):.2f} TL alt limitinin altına indi (güncel: {current_price:.2f} TL).",
+                outbox=outbox, url=f"/hisse/{stock.symbol}",
             )
             pref.price_below = None
 
@@ -137,10 +183,12 @@ def check_price_and_pct_triggers(db: Session) -> None:
                 db, pref.user_id, pref.stock_id, "PCT_CHANGE",
                 f"{stock.symbol} %{float(pref.pct_change_trigger):.1f} üzeri hareket etti",
                 f"{stock.symbol} bugün %{change_pct:.2f} {direction} (eşik: %{float(pref.pct_change_trigger):.1f}).",
+                outbox=outbox, url=f"/hisse/{stock.symbol}",
             )
             pref.last_pct_trigger_date = today
 
     db.commit()
+    _flush(db, outbox)
 
 
 def check_kap_triggers(db: Session, new_kap_notifications: Iterable["models.KapNotification"]) -> None:
@@ -164,6 +212,7 @@ def check_kap_triggers(db: Session, new_kap_notifications: Iterable["models.KapN
     if not watchers:
         return
 
+    outbox: list = []
     watchers_by_stock: dict[int, list] = {}
     for w in watchers:
         watchers_by_stock.setdefault(w.stock_id, []).append(w)
@@ -174,9 +223,11 @@ def check_kap_triggers(db: Session, new_kap_notifications: Iterable["models.KapN
                 db, watcher.user_id, notif.stock_id, "KAP",
                 f"{notif.symbol} için yeni KAP bildirimi",
                 notif.title,
+                outbox=outbox, url=f"/hisse/{notif.symbol}",
             )
 
     db.commit()
+    _flush(db, outbox)
 
 
 def check_ai_signal_triggers(db: Session) -> None:
@@ -199,6 +250,7 @@ def check_ai_signal_triggers(db: Session) -> None:
     risk_config = get_risk_mode_config(DEFAULT_RISK_MODE)
     today = date.today()
     signal_cache: dict[int, tuple] = {}
+    outbox: list = []
 
     for pref in preferences:
         if pref.last_ai_signal_date == today:
@@ -232,7 +284,9 @@ def check_ai_signal_triggers(db: Session) -> None:
             db, pref.user_id, pref.stock_id, "AI_SIGNAL",
             f"{stock.symbol} için AI sinyali: {action}",
             f"Referans strateji (1 Günlük / Normal), {stock.symbol} için %{confidence * 100:.0f} güvenle {action} sinyali üretti.",
+            outbox=outbox, url=f"/hisse/{stock.symbol}",
         )
         pref.last_ai_signal_date = today
 
     db.commit()
+    _flush(db, outbox)

@@ -38,6 +38,7 @@ from schemas import (
     PivotLevelsResponse, ForeignHoldingTrendResponse, EarningsCalendarItem,
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
     WatchlistItemResponse, ScreenerItemResponse,
+    PushSubscribeRequest, PushStatusResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -1975,6 +1976,105 @@ def delete_notification_preference(
         db.delete(pref)
         db.commit()
     return {"message": f"{stock.symbol} için alarm tercihi kaldırıldı."}
+
+
+# ---------------------------------------------------------------------------
+# Web Push abonelikleri
+# ---------------------------------------------------------------------------
+@app.get("/api/push/status", response_model=PushStatusResponse)
+def get_push_status(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Tarayıcının aboneliği kurmak için ihtiyaç duyduğu VAPID açık anahtarı ve
+    kullanıcının kaç cihazının kayıtlı olduğu.
+
+    Sunucuda anahtar tanımlı değilse `configured=false` döner ve arayüz push
+    bölümünü hiç göstermez — çalışmayacak bir düğme göstermektense.
+    """
+    import push
+    count = db.query(models.PushSubscription).filter_by(user_id=current_user.id).count()
+    return PushStatusResponse(
+        configured=push.is_configured(),
+        public_key=push.VAPID_PUBLIC_KEY or None,
+        device_count=count,
+    )
+
+
+@app.post("/api/push/subscribe")
+def subscribe_push(
+    req: PushSubscribeRequest,
+    request: Request,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Cihazı kaydeder. Aynı endpoint zaten kayıtlıysa güncellenir.
+
+    Endpoint benzersizdir ama SAHİBİ DEĞİŞEBİLİR: ortak bir cihazda ikinci bir
+    kullanıcı giriş yaparsa tarayıcı aynı endpoint'i üretir. Bu durumda kayıt
+    yeni kullanıcıya devredilir; aksi halde bildirimler yanlış kişiye giderdi.
+    """
+    existing = db.query(models.PushSubscription).filter_by(endpoint=req.endpoint).first()
+    if existing:
+        existing.user_id = current_user.id
+        existing.p256dh = req.p256dh
+        existing.auth = req.auth
+        existing.failure_count = 0
+    else:
+        db.add(models.PushSubscription(
+            user_id=current_user.id,
+            endpoint=req.endpoint,
+            p256dh=req.p256dh,
+            auth=req.auth,
+            user_agent=(request.headers.get("user-agent") or "")[:300],
+        ))
+    db.commit()
+    count = db.query(models.PushSubscription).filter_by(user_id=current_user.id).count()
+    return {"success": True, "device_count": count}
+
+
+@app.post("/api/push/unsubscribe")
+def unsubscribe_push(
+    req: PushSubscribeRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bu cihazın aboneliğini siler. Kullanıcının diğer cihazları etkilenmez."""
+    deleted = (
+        db.query(models.PushSubscription)
+        .filter_by(endpoint=req.endpoint, user_id=current_user.id)
+        .delete()
+    )
+    db.commit()
+    return {"success": True, "deleted": deleted}
+
+
+@app.post("/api/push/test")
+@limiter.limit("5/minute")
+def send_test_push(
+    request: Request,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Deneme bildirimi. Kullanıcının izni verdikten sonra bildirimlerin gerçekten
+    ulaştığını görmesi için — iOS'ta özellikle gerekli, çünkü orada izin
+    verilmiş görünse bile PWA kurulu değilse bildirim ulaşmaz.
+    """
+    import push
+    if not push.is_configured():
+        raise HTTPException(status_code=503, detail="Push bildirimleri sunucuda yapılandırılmamış.")
+    sent = push.send_to_user(db, current_user.id, push.build_payload(
+        "Bildirimler çalışıyor",
+        "Alarm kurduğunuz hisseler hareket ettiğinde bu şekilde haber vereceğiz.",
+        url="/ayarlar",
+        tag="test",
+    ))
+    if sent == 0:
+        raise HTTPException(status_code=400, detail="Kayıtlı cihaz bulunamadı veya gönderim başarısız oldu.")
+    return {"success": True, "delivered": sent}
 
 
 @app.get("/api/notifications", response_model=List[NotificationResponse])

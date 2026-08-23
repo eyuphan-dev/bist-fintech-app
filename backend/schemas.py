@@ -813,3 +813,17 @@ class BotSessionResponse(BaseModel):
     @field_serializer("started_at", "ended_at")
     def _serialize_dt(self, value: Optional[datetime]) -> Optional[str]:
         return _utc_iso(value) if value else None
+
+
+# --- Web Push abonelikleri -------------------------------------------------
+class PushSubscribeRequest(BaseModel):
+    """Tarayıcının PushSubscription nesnesinden çıkarılan üç alan."""
+    endpoint: str = Field(..., max_length=1000)
+    p256dh: str = Field(..., max_length=200)
+    auth: str = Field(..., max_length=100)
+
+
+class PushStatusResponse(BaseModel):
+    configured: bool
+    public_key: Optional[str] = None
+    device_count: int = 0
