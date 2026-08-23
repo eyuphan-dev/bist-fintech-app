@@ -602,3 +602,119 @@ CEVAP: Hayir, olmuyordu. Uc ayri kirik nokta vardi.
 NOT: iOS'ta ana ekrana eklenen uygulama, Safari'den AYRI bir depolama alani
 kullanir. Bu yuzden Safari'de giris yapmis olsaniz bile PWA'yi ilk actiginizda
 bir kez daha giris yapmaniz gerekir. Bu bir hata degil, iOS'un tasarimi.
+
+================================================================================
+12. YEDEKLEME + 7 MADDELIK GELISTIRME (2026-08-23)
+================================================================================
+
+--- 0. VERITABANI YEDEGI (once bu, cunku ozellik degil RISK) ---
+Sunucuda HICBIR yedekleme yoktu; tek zamanlanmis gorev Let's Encrypt
+yenilemesiydi. 6 Agustos'taki tek seferlik Neon dokumu disinda kopya yoktu.
+Iki katman kuruldu:
+  * ops/backup-db.sh -> gecelik pg_dump 03:30 UTC. Dokum alindiktan sonra
+    pg_restore --list ile DOGRULANIR; nesne sayisi 10'un altindaysa gecerli
+    yedeklerin arasina konmadan hata verir. Yazarken .partial uzantisi
+    kullanilir. 14 gunluk + 8 haftalik rotasyon.
+  * .github/workflows/backup.yml -> gunluk sunucu disi kopya. Dokum indirilip
+    RUNNER'DA GPG/AES256 ile sifrelenir (parola sunucunun surec listesine
+    dusmez), 90 gun saklanan artifact olur. Mevcut deploy anahtarlariyla.
+GERI YUKLEME PROVASI YAPILDI: gecici veritabanina yuklenen dokumda
+users/portfolios/transactions/stock_prices_daily(45.113)/financial_statements/
+watchlist/notifications sayilari kaynakla BIREBIR esit cikti.
+GEREKEN: BACKUP_PASSPHRASE secret'i kullanici tarafindan tanimlanmali.
+
+--- 1. PUSH BILDIRIMI ---
+Alarm motoru zaten calisiyordu, eksik olan TESLIMATTI. iOS 16.4+ kurulu
+PWA'larda Web Push destekledigi ve PWA dun kurulabilir hale geldigi icin
+engel kalkmisti.
+  * push COMMIT'TEN SONRA gonderilir (outbox deseni) - tetikleyicinin icinden
+    gonderilse geri alinan islem icin bildirim yollanabilirdi.
+  * 404/410 donen abonelikler hemen silinir (kalici olarak oludurler).
+  * TTL 0 -> 3600 duzeltildi: varsayilan 0'da cihaz o an ulasilamazsa push
+    servisi bildirimi SESSIZCE ATIYOR; metrodaki kullanici alarmini hic
+    gormezdi.
+  * Sahte push servisine karsi uctan uca test: VAPID JWT imzasi, aes128gcm
+    sifreleme, 201 yanit, yuk kirpma - hepsi dogrulandi.
+
+--- 2. KATALOG 43 -> 165 HISSE ---
+126 aday sembol yfinance'e soruldu, 122'si gercek veri dondu. Sirket adi ve
+sektor UYDURULMADI (ad kaynaktan, sektor industry alanindan acik esleme
+tablosuyla; 56 industry degerinin tamami eslendi).
+BUNU MUMKUN KILAN: fiyat isi hisse basina 2 ayri istek atiyordu. 43 hissede
+tur ~1 dk surup 5 dakikalik araliga sigiyordu; 165 hissede ~3.5 dakikaya
+cikip araligi dolduracakti (Yahoo yavaslasa turlar ust uste biner,
+max_instances=1 yuzunden tetiklemeler sessizce atlanir, fiyatlar bayatlardi).
+yf.download ile toplu cekim yazildi. OLCULDU: 165 sembol 34.5 sn, 165/165
+basarili, onceki kapanis 165/165 dolu - 5 dakikalik araligin %11'i.
+UCUNCU KATILIM DURUMU: yeni hisseler icin kuratorlu veri yok. Boolean alanla
+eklenseler 122 hisse arayuzde kirmizi "UYGUN DEGIL" gorunecekti - bilmedigimiz
+seyi iddia etmek. katilim_status (UYGUN|UYGUN_DEGIL|BELIRSIZ) eklendi, rozete
+notr gri "DEGERLENDIRILMEDI" durumu kondu.
+
+--- 3. KATILIM TARAMASI (iki metodoloji hatasi olculerek bulundu) ---
+  HATA 1 - PAYDA: Piyasa degeri paydasiyla SISE %143, PETKM %99.7, EREGL
+  %60.7 cikti; ucu de endeks uyesi. Toplam varlik paydasiyla ayni sirketler
+  %31.7, %31.6, %27.0 veriyor - sinirin hemen altina oturuyorlar. BIST Katilim
+  Endeksi paydada toplam varlik kullanir.
+  HATA 2 - KIRALAMA: yfinance "Total Debt" finansal kiralama yukumluluklerini
+  de icerir. THYAO: Total Debt ile %37.7, yalnizca uzun+kisa vadeli finansal
+  borcla %6.8 - ucak kiralamalari borcu bese katliyordu.
+  CIFTE SAYMA onlendi: "Cash Cash Equivalents And Short Term Investments"
+  birlesik satiri aday listesinden cikarildi.
+DOGRULAMA VE KARAR: 43 kuratorlu hisseyle karsilastirildi -> hesaplanabilen
+36'nin 25'i uyustu, 11'i ayristi (%69). Ayrisma sebepleri tek tek belirlendi
+ve HICBIRI kapatilamiyor (ALBRK bir KATILIM bankasi ama sektor etiketi
+"Bankacilik"; KCHOL/SAHOL banka istiraki; MGROS urun karmasi; GUNDG/ENKAI
+nakit oraninda cunku olcut yalnizca GETIRILI nakdi sayar).
+BU YUZDEN TARAMA KARAR VERMIYOR - yalnizca oranlari ve sinira uzakligi
+gosteriyor. %69 isabetle 122 hisseye damga vurmak damgasiz birakmaktan kotu.
+NOT: init_db.py'deki arinma oranlari (1.20, 3.20, 2.90...) yuvarlak ve
+uydurulmus gorunuyor; gercek endeks verisiyle degistirilmeli.
+
+--- 4. PERFORMANS KARNESI ---
+transactions'ta her satisin K/Z'si vardi ama hicbir yerde ozetlenmiyordu.
+Tutma suresi FIFO ile: hisse bazinda alimlar kuyrukta, satislar en eski
+alimdan dusuluyor. Yil filtresi uygulanirken kuyruk TUM gecmisten dolduruluyor
+(yoksa onceki yildan tasinan pozisyonlar eslesmezdi). Alim kaydi olmayan
+satislar ortalamaya KATILMIYOR.
+Bellek ici SQLite ile dogrulandi: 100 adet 20 gun + 20 adet 10 gun tutulan
+kismi satista agirlikli ortalama 18.33 gun cikiyor.
+
+--- 5. HASILAT / NET KAR TREND GRAFIGI ---
+Ceyreklik tablolar sayi veriyordu ama yon vermiyordu. Net kar negatif
+olabildigi icin eksen iki yone aciliyor ve sifir cizgisi ciziliyor.
+
+--- 6. STRATEJI GERI TESTI ---
+RSI / SMA kesisimi / MACD, 5 yila kadar. Dort durustluk kurali:
+gelecege bakma yok (sinyal t kapanisi, islem t+1 acilisi), komisyon var,
+al-tut karsilastirmasi zorunlu, kaldirac/aciga satis yok.
+GELECEGE BAKMA TESTI: kasitli hileli bir surum (ayni gun kapanisindan islem
+yapan) uretilip karsilastirildi; anlamli ustunluk saglamadi (-6.2/-1.9/+0.9
+puan, gurultu duzeyinde) -> sizinti yok.
+GERCEK SONUC: stratejilerin cogu al-tut'u YENEMIYOR (ASELS SMA %376 vs
+al-tut %994). Her stratejiyi kazandiran bir geri test supheli olurdu.
+
+--- 7. STOCHASTIC / ADX / OBV ---
+AYRI VERI KAYNAGI GEREKTI: mevcut gostergeler stock_prices'tan (yalnizca
+fiyat) hesaplaniyor; Stochastic ve ADX tanimi geregi gun ici yuksek/dusuk
+ister. stock_prices_daily'deki gercek OHLCV kullanildi.
+Bilinen serilerle dogrulandi: duz yukselen %K=93.3/ADX=100, duz dusen
+%K=6.7/ADX=100, yonsuz salinim ADX=20.7.
+OBV ham degeri anlamsiz (baslangici keyfi) -> son 20 gunluk degisim ortalama
+hacme bolunerek normallestirildi.
+
+--- 8. GRAFIKTE IMLEC OKUMASI (kullanici istegi) ---
+Midas'ta grafikte gezinince yuzde gorunuyor, bizde yoktu. Grafigin ustunde
+sabit serit: fiyat + yuzde + zaman. Yuzen balon degil cunku dokunmatikte
+parmak balonu kapatiyor. Referans: gun ici grafikte onceki kapanis, uzun
+araliklarda araligin ilk noktasi; referans seviyesine noktali cizgi cizildi.
+
+--- KENDI HATAM ---
+Test icin katilim.py ve financials.py dosyalarini dogrudan sunucudaki repoya
+kopyalamistim; sonraki deploy'da git pull "local changes would be overwritten"
+diyip durdu. Atomik takas sayesinde canli etkilenmedi. Ders: test dosyalari
+/tmp'ye, deploy edilen repoya asla elle dosya kopyalama.
+
+--- SON DOGRULAMA ---
+15 sayfa 200 | 8 acik API ucu 200 | 3 yetkili uc 401 (dogru) |
+PWA testi 11/11 GECTI | backend hata logu bos | disk %34
