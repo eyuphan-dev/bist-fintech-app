@@ -106,6 +106,11 @@ def send_to_user(db: Session, user_id: int, payload: dict[str, Any]) -> int:
                 data=data,
                 vapid_private_key=VAPID_PRIVATE_KEY,
                 vapid_claims={"sub": VAPID_SUBJECT},
+                # TTL varsayilani 0'dir: cihaz o an ulasilamazsa bildirim
+                # SESSIZCE ATILIR. Metroda/tunelde olan kullanici alarmini hic
+                # gormezdi. 1 saat, kisa kopukluklari kurtaracak kadar uzun,
+                # bayat bir fiyat alarmi gondermeyecek kadar kisa.
+                ttl=3600,
                 timeout=10,
             )
             sub.last_success_at = datetime.utcnow()
