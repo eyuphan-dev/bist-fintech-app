@@ -984,7 +984,11 @@ def get_stock_analysis(symbol: str, db: Session = Depends(get_db)):
             is_katilim_compliant=bool(stock.is_katilim_compliant),
             katilim_status=stock.katilim_status,
             purification_rate=float(stock.purification_rate or 0.0),
-            non_compliance_reason=stock.non_compliance_reason
+            non_compliance_reason=stock.non_compliance_reason,
+            debt_ratio=float(stock.katilim_debt_ratio) if stock.katilim_debt_ratio is not None else None,
+            asset_ratio=float(stock.katilim_asset_ratio) if stock.katilim_asset_ratio is not None else None,
+            detail=stock.katilim_detail,
+            checked_at=stock.katilim_checked_at,
         ),
         analysis=CompanyAnalysisResponse.model_validate(stock.analysis) if stock.analysis else None
     )

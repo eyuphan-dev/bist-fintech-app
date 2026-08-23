@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { TrendingUp, TrendingDown, Gauge, DollarSign, Percent, RefreshCw, AlertCircle, CheckCircle2, XCircle, ShieldAlert, Scale, Globe2, Crosshair, Users, HelpCircle, Target } from "lucide-react";
 import KatilimBadge from "./KatilimBadge";
+import KatilimScreenPanel from "./KatilimScreenPanel";
 import AnalysisGuideModal from "./AnalysisGuideModal";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
@@ -68,6 +69,11 @@ interface StockProData {
   katilim: {
     is_katilim_compliant: boolean;
   katilim_status?: string | null;
+  debt_ratio?: number | null;
+  asset_ratio?: number | null;
+  threshold?: number;
+  detail?: string | null;
+  checked_at?: string | null;
     purification_rate: number;
     non_compliance_reason: string | null;
   };
@@ -285,6 +291,15 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
           {isRefreshing ? "Tazeleniyor..." : "Analizi Tazele"}
         </button>
       </div>
+
+      {/* Katılım ön taramasının gerekçesi — rozet sonucu, bu panel NEDENİNİ söyler. */}
+      <KatilimScreenPanel
+        debtRatio={katilim.debt_ratio}
+        assetRatio={katilim.asset_ratio}
+        threshold={katilim.threshold ?? 33}
+        detail={katilim.detail}
+        checkedAt={katilim.checked_at}
+      />
 
       {refreshFeedback && <RefreshFeedback feedback={refreshFeedback} />}
 

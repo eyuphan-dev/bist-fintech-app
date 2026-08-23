@@ -318,6 +318,17 @@ def refresh_deep_analysis_job(batch_size: int = 40):
             # kalsaydı tam tur 21 gün sürerdi. Finansal tablolar çeyreklik
             # yayımlandığı için ~8 günlük tur fazlasıyla yeterli.
             refresh_financials_batch(db, batch_size=20)
+
+            # Katılım ön taraması: bilanço partisi tazelendikten HEMEN SONRA
+            # çalışır ki oranlar en güncel bilanço üzerinden hesaplansın.
+            # Tarama tamamen veritabanı içidir (dış çağrı yok), bu yüzden her
+            # gün tüm katalog için çalıştırılabilir.
+            try:
+                from katilim import tum_katalogu_tara
+                tum_katalogu_tara(db)
+            except Exception as e:
+                print(f"[Scheduler] Katılım taraması hatası: {e}")
+                db.rollback()
         except Exception as e:
             print(f"[Scheduler] Finansal tablo tazeleme hatası: {e}")
             db.rollback()

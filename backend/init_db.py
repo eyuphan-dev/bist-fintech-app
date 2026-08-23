@@ -219,6 +219,14 @@ MIGRATIONS = {
         "day_high": "NUMERIC(10, 2)",
         "day_low": "NUMERIC(10, 2)",
         "katilim_status": "VARCHAR(12) DEFAULT 'BELIRSIZ'",
+        "katilim_debt_ratio": "NUMERIC(6, 2)",
+        "katilim_asset_ratio": "NUMERIC(6, 2)",
+        "katilim_checked_at": "TIMESTAMP",
+        "katilim_detail": "TEXT",
+    },
+    "financial_statements": {
+        "cash_and_equivalents": "NUMERIC(20, 2)",
+        "short_term_investments": "NUMERIC(20, 2)",
     },
     "company_analysis": {
         # Temettü alanları (portföy temettü geliri projeksiyonu için).

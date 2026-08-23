@@ -50,6 +50,12 @@ class Stock(Base):
     # saymak yanlış bilgi vermek olurdu. Boolean üçüncü durumu ifade edemediği
     # için bu alan eklendi: 'UYGUN' | 'UYGUN_DEGIL' | 'BELIRSIZ'.
     katilim_status = Column(String(12), default="BELIRSIZ", nullable=True, index=True)
+    # Katılım taramasının hesaplanmış çıktıları (bkz. katilim.py). Elle
+    # küratörlü verinin aksine bunlar gerçek bilanço kalemlerinden üretilir.
+    katilim_debt_ratio = Column(Numeric(6, 2), nullable=True)    # Finansal borç / piyasa değeri (%)
+    katilim_asset_ratio = Column(Numeric(6, 2), nullable=True)   # Nakit + finansal yatırımlar / piyasa değeri (%)
+    katilim_checked_at = Column(DateTime, nullable=True)
+    katilim_detail = Column(Text, nullable=True)                 # Kullanıcıya gösterilecek gerekçe
     purification_rate = Column(Numeric(5, 2), default=0.00)  # Arınma Oranı (%)
     non_compliance_reason = Column(String, nullable=True)
 
@@ -425,6 +431,11 @@ class FinancialStatement(Base):
     net_income = Column(Numeric(20, 2), nullable=True)
 
     # Bilanço (TL)
+    # Katılım taraması için gerekli iki kalem. Endeksin ölçütü nakit ve
+    # finansal yatırımların piyasa değerine oranıdır; bunlar olmadan tarama
+    # yalnızca borç ayağıyla yapılabilirdi.
+    cash_and_equivalents = Column(Numeric(20, 2), nullable=True)
+    short_term_investments = Column(Numeric(20, 2), nullable=True)
     total_assets = Column(Numeric(20, 2), nullable=True)
     total_equity = Column(Numeric(20, 2), nullable=True)
     total_debt = Column(Numeric(20, 2), nullable=True)

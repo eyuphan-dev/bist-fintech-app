@@ -34,6 +34,9 @@ BALANCE_FIELDS = {
     "total_assets": ["Total Assets"],
     "total_equity": ["Stockholders Equity", "Total Equity Gross Minority Interest"],
     "total_debt": ["Total Debt", "Net Debt"],
+    # Katılım taraması için: nakit ve kısa vadeli finansal yatırımlar.
+    "cash_and_equivalents": ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments", "Cash Financial"],
+    "short_term_investments": ["Other Short Term Investments", "Short Term Investments", "Available For Sale Securities"],
 }
 CASHFLOW_FIELDS = {
     "operating_cashflow": ["Operating Cash Flow", "Cash Flow From Continuing Operating Activities"],
