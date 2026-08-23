@@ -165,6 +165,36 @@ def hisseyi_tara(db: Session, stock: models.Stock) -> dict:
     return sonuc
 
 
+def _kuratorlu_detay(mevcut_durum: str, sonuc: dict) -> str:
+    """
+    Küratörlü bir hisse için panel metni üretir — SONUÇ İLAN ETMEDEN.
+
+    Hesaplanan oran endeksin kendi kararıyla ayrışabilir: bilançodan okuduğumuz
+    "toplam finansal borç" kalemi kiralama yükümlülükleri gibi kalemleri de
+    içerebilirken endeks kendi tanımını kullanır. Bu ayrışma gizlenmez, ama
+    hesabın kararı ezmesine de izin verilmez.
+    """
+    d, a = sonuc["debt_ratio"], sonuc["asset_ratio"]
+    if d is None:
+        return sonuc["detail"] or "Oranlar hesaplanamadı."
+
+    parcalar = [f"Hesaplanan finansal borç oranı %{d:.1f}"]
+    if a is not None:
+        parcalar.append(f"nakit ve finansal yatırımlar oranı %{a:.1f}")
+    metin = ", ".join(parcalar) + f" (ön tarama sınırı %{ESIK:.0f})."
+
+    hesap_uygun = sonuc["status"] == "UYGUN"
+    if mevcut_durum == "UYGUN" and not hesap_uygun and d >= ESIK:
+        metin += (
+            " Bu oran ön tarama sınırının üzerinde olmasına rağmen hisse endeks listesinde"
+            " uygun görünüyor: bilançodan okunan toplam finansal borç kalemi, endeksin kendi"
+            " hesabından daha geniş olabilir. Bağlayıcı olan endeksin kararıdır."
+        )
+    elif sonuc["uyari"]:
+        metin += " " + sonuc["uyari"]
+    return metin
+
+
 def tum_katalogu_tara(db: Session) -> dict:
     """
     Aktif tüm hisseleri tarar ve sonucu veritabanına yazar.
@@ -188,16 +218,27 @@ def tum_katalogu_tara(db: Session) -> dict:
         stock.katilim_debt_ratio = sonuc["debt_ratio"]
         stock.katilim_asset_ratio = sonuc["asset_ratio"]
         stock.katilim_checked_at = simdi
-        detay = sonuc["detail"]
-        if sonuc["uyari"]:
-            detay = f"{detay} {sonuc['uyari']}"
-        stock.katilim_detail = detay
 
         # Küratörlü kayıt varsa durum ondan gelir; yoksa hesaplanan kullanılır.
         kuratorlu = _f(stock.purification_rate) not in (None, 0.0) or bool(stock.non_compliance_reason)
+
         if not kuratorlu:
             stock.katilim_status = sonuc["status"]
             stock.is_katilim_compliant = sonuc["status"] == "UYGUN"
+            detay = sonuc["detail"]
+            if sonuc["uyari"]:
+                detay = f"{detay} {sonuc['uyari']}"
+        else:
+            # KÜRATÖRLÜ HİSSEDE ÇELİŞKİ TUZAĞI:
+            # Rozetteki karar endeks listesinden, panel metni ise hesaptan
+            # geliyor. İkisi ayrışırsa arayüz kendi kendini yalanlar (rozet
+            # "UYGUN" derken panel "sınır aşıldı" der). Bu yüzden küratörlü
+            # hisselerde hesap SONUÇ İLAN ETMEZ, yalnızca oranları bildirir ve
+            # ayrışma varsa nedenini açıklar.
+            mevcut = stock.katilim_status or ("UYGUN" if stock.is_katilim_compliant else "UYGUN_DEGIL")
+            detay = _kuratorlu_detay(mevcut, sonuc)
+
+        stock.katilim_detail = detay
 
         sayac[stock.katilim_status or "BELIRSIZ"] = sayac.get(stock.katilim_status or "BELIRSIZ", 0) + 1
 

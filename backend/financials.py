@@ -35,7 +35,15 @@ BALANCE_FIELDS = {
     "total_equity": ["Stockholders Equity", "Total Equity Gross Minority Interest"],
     "total_debt": ["Total Debt", "Net Debt"],
     # Katılım taraması için: nakit ve kısa vadeli finansal yatırımlar.
-    "cash_and_equivalents": ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments", "Cash Financial"],
+    #
+    # ÇİFTE SAYMA TUZAĞI: yfinance ayrıca "Cash Cash Equivalents And Short Term
+    # Investments" adında BİRLEŞİK bir satır da döndürür. O satır aşağıdaki iki
+    # alanın toplamıdır; aday listesine konsaydı ikisi birden toplanıp oran
+    # şişer ve şirket haksız yere sınırı aşmış görünürdü. Bu yüzden yalnızca
+    # ayrışmış kalemler kullanılır. Bir şirket yalnızca birleşik satırı
+    # bildiriyorsa oran hesaplanamamış sayılır — eksik veriyle yanlış "uygun
+    # değil" damgası vurmaktansa "hesaplanamadı" demek doğrudur.
+    "cash_and_equivalents": ["Cash And Cash Equivalents", "Cash Equivalents", "Cash Financial"],
     "short_term_investments": ["Other Short Term Investments", "Short Term Investments", "Available For Sale Securities"],
 }
 CASHFLOW_FIELDS = {
