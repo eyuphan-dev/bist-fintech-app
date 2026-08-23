@@ -16,6 +16,7 @@ göre üretilir.
 """
 
 import threading
+from datetime import date, timedelta
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -123,7 +124,12 @@ def scan_signals(db: Session, limit_per_stock: int = 300, use_cache: bool = True
     Tüm aktif hisseleri tarar ve bugün oluşan teknik sinyalleri döner.
 
     Tek sorguda tüm barlar çekilip Python'da gruplanır; hisse başına ayrı
-    sorgu atmak 43 sorgu demek olurdu.
+    sorgu atmak 165 sorgu demek olurdu.
+
+    `use_cache=False` YALNIZCA OKUMAYI atlar, yazmayı değil: bu bayrak
+    "önbelleği tazele" anlamına gelir ve scheduler ısıtma için böyle çağırır.
+    Yazma da kapatılsaydı ısıtma hiçbir şey doldurmaz, kullanıcı yine soğuk
+    önbelleğe denk gelirdi.
     """
     if use_cache:
         with _cache_lock:
@@ -136,9 +142,29 @@ def scan_signals(db: Session, limit_per_stock: int = 300, use_cache: bool = True
         return []
 
     by_id = {s.id: s for s in stocks}
+
+    # SORGU İKİ YERDEN DARALTILDI:
+    #
+    # 1. TARİH FİLTRESİ: eskiden tüm günlük geçmiş çekilip Python'da
+    #    `bars[-limit_per_stock:]` ile kırpılıyordu. Katalog 165 hisseye
+    #    çıkınca bu 187.836 satır demekti ve yalnızca ~50 bini kullanılıyordu;
+    #    tarama 4,7 saniyeye çıkmıştı. Kesme tarihi SQL'e taşındı.
+    #    Takvim günü payı 1.5 kat: hafta sonları ve tatiller yüzünden
+    #    `limit_per_stock` işlem günü daha fazla takvim gününe yayılır.
+    #
+    # 2. SÜTUN SEÇİMİ: hesaplama yalnızca close ve volume kullanıyor. Tam ORM
+    #    nesnesi yüklemek on binlerce satır için gereksiz bellek ve CPU demek.
+    cutoff = date.today() - timedelta(days=int(limit_per_stock * 1.5))
     rows = (
-        db.query(models.StockPriceDaily)
-        .filter(models.StockPriceDaily.stock_id.in_(list(by_id.keys())))
+        db.query(
+            models.StockPriceDaily.stock_id,
+            models.StockPriceDaily.close,
+            models.StockPriceDaily.volume,
+        )
+        .filter(
+            models.StockPriceDaily.stock_id.in_(list(by_id.keys())),
+            models.StockPriceDaily.trade_date >= cutoff,
+        )
         .order_by(models.StockPriceDaily.stock_id.asc(), models.StockPriceDaily.trade_date.asc())
         .all()
     )
@@ -158,7 +184,7 @@ def scan_signals(db: Session, limit_per_stock: int = 300, use_cache: bool = True
     order = {"AL": 0, "DIKKAT": 1, "SAT": 2}
     results.sort(key=lambda x: (order.get(x["direction"], 3), x["symbol"]))
 
-    if use_cache:
-        with _cache_lock:
-            _cache["all"] = (time.time(), results)
+    # Sonuç HER ZAMAN önbelleğe yazılır (bkz. docstring).
+    with _cache_lock:
+        _cache["all"] = (time.time(), results)
     return results

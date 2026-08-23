@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, date, timedelta
-from typing import Optional
+from typing import Dict, Optional
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from ta.momentum import RSIIndicator
 from ta.trend import MACD, SMAIndicator, EMAIndicator
@@ -376,6 +377,53 @@ def _check_stop_loss_take_profit(portfolio_entry, latest_price: float, risk_conf
     return None
 
 
+# Bot döngüsünde hisse başına kaç tik geriye bakılır.
+BOT_TICK_WINDOW = 500
+
+
+def load_shared_price_history(db: Session, stock_ids: list) -> Dict[int, list]:
+    """
+    TÜM hisselerin son tiklerini TEK sorguda çeker.
+
+    NEDEN: bot döngüsü hisse başına ayrı sorgu atıyordu ve bu sorgular her bot
+    için baştan tekrarlanıyordu — oysa fiyat geçmişi bütün botlar için AYNI.
+    Katalog 165 hisseye çıkınca ölçüldü: hisse başına sorgu deseni bot başına
+    603 ms sürüyor, yani 10 aktif botta 6 saniye, 50 botta 30 saniye. Tetikleme
+    aralığı 5 dakika ve aynı turda 34 saniyelik fiyat çekimi de var; bu şekilde
+    kullanıcı sayısı arttıkça tur aralığı dolardı.
+
+    Sonuç: {stock_id: [en eskiden en yeniye tik kayıtları]}
+    """
+    if not stock_ids:
+        return {}
+
+    rn = func.row_number().over(
+        partition_by=models.StockPrice.stock_id,
+        order_by=models.StockPrice.recorded_at.desc(),
+    ).label("rn")
+    alt = (
+        db.query(
+            models.StockPrice.stock_id,
+            models.StockPrice.price,
+            models.StockPrice.volume,
+            models.StockPrice.recorded_at,
+        )
+        .filter(models.StockPrice.stock_id.in_(stock_ids))
+        .add_columns(rn)
+        .subquery()
+    )
+    rows = (
+        db.query(alt.c.stock_id, alt.c.price, alt.c.volume, alt.c.recorded_at)
+        .filter(alt.c.rn <= BOT_TICK_WINDOW)
+        .order_by(alt.c.stock_id.asc(), alt.c.recorded_at.asc())
+        .all()
+    )
+    out: Dict[int, list] = {}
+    for row in rows:
+        out.setdefault(row.stock_id, []).append(row)
+    return out
+
+
 def _execute_bot_trading_cycle(
     db: Session,
     balance_holder,
@@ -385,6 +433,7 @@ def _execute_bot_trading_cycle(
     time_frame: str = DEFAULT_TIME_FRAME,
     risk_mode: str = DEFAULT_RISK_MODE,
     force_liquidate: bool = False,
+    shared_price_history: Optional[Dict[int, list]] = None,
 ):
     """
     Tek bir "bot aktörü" (paylaşımlı demo bot ya da bir kullanıcının kişisel botu)
@@ -620,6 +669,12 @@ def run_quant_bot(db: Session):
 
     user_bots = db.query(models.UserBot).filter_by(is_active=True).all()
     print(f"[Quant Bot] {len(user_bots)} aktif kişisel bot için işlem döngüsü başlatılıyor...")
+    if not user_bots:
+        return
+
+    # Fiyat geçmişi bütün botlar için aynı; bir kez çekilip paylaşılır.
+    aktif_ids = [s.id for s in db.query(models.Stock.id).filter_by(is_active=True).all()]
+    shared_history = load_shared_price_history(db, aktif_ids)
 
     for user_bot in user_bots:
         try:
@@ -632,6 +687,7 @@ def run_quant_bot(db: Session):
                 is_bot_portfolio=True, log_label=f"[Kişisel Bot #{user_bot.user_id}]",
                 time_frame=user_bot.time_frame or DEFAULT_TIME_FRAME,
                 risk_mode=user_bot.risk_profile or DEFAULT_RISK_MODE,
+                shared_price_history=shared_history,
             )
         except Exception as e:
             print(f"[Quant Bot] Kullanıcı #{user_bot.user_id} botu çalıştırılırken hata: {e}")

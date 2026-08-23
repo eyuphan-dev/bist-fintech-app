@@ -177,6 +177,18 @@ def update_bist_prices_job():
         from notifications import check_price_and_pct_triggers
         check_price_and_pct_triggers(db)
 
+        # SİNYAL ÖNBELLEĞİNİ ISIT: /api/signals 30 dakikalık bir önbellek
+        # kullanıyor ve önbellek soğukken tarama 165 hissede saniyeler sürüyor.
+        # Bunu kullanıcının isteği sırasında ödemek yerine burada, zaten
+        # çalışan işin içinde ödüyoruz; böylece sayfayı açan hiç kimse soğuk
+        # önbelleğe denk gelmiyor. Hata olursa görmezden gelinir — bu bir
+        # iyileştirmedir, fiyat güncellemesini düşürmemeli.
+        try:
+            from signals import scan_signals
+            scan_signals(db, use_cache=False)
+        except Exception as e:
+            print(f"[Scheduler] Sinyal önbelleği ısıtılamadı: {e}")
+
     except Exception as e:
         print(f"[Scheduler] Fiyat güncelleme hatası: {e}")
         db.rollback()
@@ -480,6 +492,47 @@ def log_cleanup_job():
         print(f"[Scheduler] Log temizleme tamamlandı. {deleted} eski kayıt silindi (kesme tarihi: {cutoff.date()}).")
     except Exception as e:
         print(f"[Scheduler] Log temizleme hatası: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+    prune_intraday_ticks()
+
+
+# Gün içi tikler kaç gün saklanır. Grafiğin "1G" aralığı ve bot/alarm sinyalleri
+# yalnızca son birkaç yüz tike bakar; uzun vadeli geçmiş zaten stock_prices_daily
+# tablosunda günlük barlar hâlinde duruyor.
+TICK_RETENTION_DAYS = 45
+
+
+def prune_intraday_ticks():
+    """
+    stock_prices tablosundan eski gün içi tikleri siler.
+
+    NEDEN GEREKLİ: bu tablo süresiz büyüyor ve katalog 43'ten 165 hisseye
+    çıkınca büyüme hızı dörde katlandı — 165 hisse × 12 kayıt/saat × ~8,5 saat
+    ≈ günde 17 bin satır, yani üç ayda ~1,2 milyon satır. Fiyat listesi sorgusu
+    hisse başına en yeni tiki bulmak için bölümün tamamını okumak zorunda
+    olduğundan, bu büyüme doğrudan /api/stocks gecikmesine yansıyordu.
+
+    45 gün, bot ve alarm mantığının baktığı 500 tiklik pencereyi fazlasıyla
+    kapsar (tek başına bir işlem günü bile hisse başına ~100 tik üretir).
+    """
+    db = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=TICK_RETENTION_DAYS)
+        deleted = (
+            db.query(models.StockPrice)
+            .filter(models.StockPrice.recorded_at < cutoff)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        if deleted:
+            print(f"[Scheduler] Gün içi tik temizliği: {deleted} satır silindi (< {cutoff.date()}).")
+        else:
+            print("[Scheduler] Gün içi tik temizliği: silinecek kayıt yok.")
+    except Exception as e:
+        print(f"[Scheduler] Tik temizleme hatası: {e}")
         db.rollback()
     finally:
         db.close()

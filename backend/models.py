@@ -1,3 +1,9 @@
+# NOT: Birincil anahtar sütunlarında `index=True` KULLANILMAZ. PostgreSQL
+# birincil anahtar için zaten benzersiz bir indeks oluşturur; ayrıca index=True
+# vermek birebir aynı ikinci bir indeks daha yaratır. Bunlar hiç kullanılmadan
+# (0 tarama) her INSERT'te güncelleniyor ve yer kaplıyorlardı — üretimde
+# temizlenince 5,3 MB geri alındı. Modelden de kaldırıldı, yoksa bir sonraki
+# create_all() hepsini geri getirirdi.
 from sqlalchemy import Column, Integer, BigInteger, String, Numeric, Boolean, DateTime, Date, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -7,7 +13,7 @@ from database import Base
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(100), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
@@ -36,7 +42,7 @@ class User(Base):
 class Stock(Base):
     __tablename__ = "stocks"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     symbol = Column(String(10), unique=True, nullable=False, index=True)
     company_name = Column(String(150), nullable=False)
     is_active = Column(Boolean, default=True)
@@ -83,7 +89,7 @@ class Stock(Base):
 class StockPrice(Base):
     __tablename__ = "stock_prices"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
     # BigInteger şart: BIST'te yüksek hacimli hisselerde günlük lot adedi Postgres
@@ -107,7 +113,7 @@ class StockPriceDaily(Base):
     __tablename__ = "stock_prices_daily"
     __table_args__ = (UniqueConstraint("stock_id", "trade_date", name="uq_stock_daily_date"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
     trade_date = Column(Date, nullable=False, index=True)
     open = Column(Numeric(12, 2), nullable=True)
@@ -137,7 +143,7 @@ class IndexHistory(Base):
     __tablename__ = "index_history"
     __table_args__ = (UniqueConstraint("symbol", "trade_date", name="uq_index_symbol_date"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     symbol = Column(String(20), nullable=False, index=True)   # 'XU100'
     trade_date = Column(Date, nullable=False, index=True)
     close = Column(Numeric(14, 2), nullable=False)
@@ -146,7 +152,7 @@ class IndexHistory(Base):
 class Portfolio(Base):
     __tablename__ = "portfolios"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
     quantity = Column(Numeric(12, 4), nullable=False)
@@ -186,7 +192,7 @@ class Transaction(Base):
     """
     __tablename__ = "transactions"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
     action_type = Column(String(10), nullable=False)  # 'AL' / 'SAT'
@@ -218,7 +224,7 @@ class StockVote(Base):
     """
     __tablename__ = "stock_votes"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
     direction = Column(String(10), nullable=False)  # 'UP' / 'DOWN'
@@ -233,7 +239,7 @@ class StockVote(Base):
 class BotLog(Base):
     __tablename__ = "bot_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
     action_type = Column(String(10), nullable=False)  # 'AL' or 'SAT'
@@ -260,7 +266,7 @@ class BotSession(Base):
     """
     __tablename__ = "bot_sessions"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     time_frame = Column(String(5), nullable=False)
     risk_mode = Column(String(20), nullable=True)
@@ -279,7 +285,7 @@ class UserPerformanceHistory(Base):
     """
     __tablename__ = "user_performance_history"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     total_portfolio_value = Column(Numeric(15, 2), nullable=False)
     recorded_date = Column(Date, nullable=False, index=True)
@@ -290,7 +296,7 @@ class UserPerformanceHistory(Base):
 class BotPerformanceHistory(Base):
     __tablename__ = "bot_performance_history"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     total_portfolio_value = Column(Numeric(15, 2), nullable=False)
     recorded_date = Column(Date, nullable=False, index=True)
@@ -333,7 +339,7 @@ class UserLog(Base):
     """
     __tablename__ = "user_logs"
 
-    id         = Column(Integer, primary_key=True, index=True)
+    id         = Column(Integer, primary_key=True)
     user_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     action     = Column(String(50), nullable=False)   # LOGIN, TRADE_BUY, TRADE_SELL, WATCHLIST_ADD, etc.
     details    = Column(Text, nullable=True)          # JSON string with extra context
@@ -351,7 +357,7 @@ class CompanyAnalysis(Base):
     """Piotroski skoru, F/K, PD/DD ve makul değer analizi (Derin Bilanço Analizi)."""
     __tablename__ = "company_analysis"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), unique=True, nullable=False)
     piotroski_score = Column(Integer, nullable=True)   # 0-9 arası
     pe_ratio = Column(Numeric(10, 2), nullable=True)   # F/K
@@ -419,7 +425,7 @@ class FinancialStatement(Base):
     __tablename__ = "financial_statements"
     __table_args__ = (UniqueConstraint("stock_id", "period_end", name="uq_financial_stock_period"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
     period_end = Column(Date, nullable=False, index=True)
 
@@ -462,7 +468,7 @@ class DividendHistory(Base):
     __tablename__ = "dividend_history"
     __table_args__ = (UniqueConstraint("stock_id", "pay_date", name="uq_dividend_stock_date"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
     pay_date = Column(Date, nullable=False, index=True)
     amount = Column(Numeric(12, 6), nullable=False)   # hisse başına brüt TL
@@ -480,7 +486,7 @@ class ForeignHoldingSnapshot(Base):
     """
     __tablename__ = "foreign_holding_snapshots"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
     held_pct = Column(Numeric(6, 2), nullable=False)
     recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
@@ -494,7 +500,7 @@ class ForeignHoldingSnapshot(Base):
 class InsiderTrade(Base):
     __tablename__ = "insider_trades"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
     symbol = Column(String(10), nullable=False)
     title_person = Column(String(150), nullable=False)
@@ -512,7 +518,7 @@ class InsiderTrade(Base):
 class KapNotification(Base):
     __tablename__ = "kap_notifications"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=True)
     symbol = Column(String(10), nullable=False)
     title = Column(String(300), nullable=False)
@@ -534,7 +540,7 @@ class StockNews(Base):
     """
     __tablename__ = "stock_news"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
     symbol = Column(String(10), nullable=False, index=True)
     title = Column(String(500), nullable=False)
@@ -551,7 +557,7 @@ class StockNews(Base):
 class Fund(Base):
     __tablename__ = "funds"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     code = Column(String(10), unique=True, nullable=False, index=True)
     name = Column(String(200), nullable=False)
     fund_type = Column(String(50), nullable=True)
@@ -564,7 +570,7 @@ class Fund(Base):
 class FundPrice(Base):
     __tablename__ = "fund_prices"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     fund_id = Column(Integer, ForeignKey("funds.id", ondelete="CASCADE"), nullable=False)
     price = Column(Numeric(12, 6), nullable=False)
     daily_return = Column(Numeric(6, 2), nullable=True)
@@ -581,7 +587,7 @@ class FundPrice(Base):
 class Ipo(Base):
     __tablename__ = "ipos"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     company_name = Column(String(200), nullable=False)
     symbol = Column(String(10), nullable=True)
     offer_price = Column(Numeric(10, 2), nullable=True)
@@ -596,7 +602,7 @@ class Ipo(Base):
 class StockComment(Base):
     __tablename__ = "stock_comments"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
     comment_text = Column(String(500), nullable=False)
@@ -620,7 +626,7 @@ class UserBot(Base):
     """
     __tablename__ = "user_bots"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     bot_name = Column(String(50), nullable=False, default="Kişisel AI Bot")
     virtual_balance = Column(Numeric(15, 2), default=100000.00)
@@ -656,7 +662,7 @@ class PendingOrder(Base):
     """
     __tablename__ = "pending_orders"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
     order_type = Column(String(20), nullable=False)  # 'LIMIT_BUY' | 'LIMIT_SELL' | 'SCHEDULED_BUY'
@@ -690,7 +696,7 @@ class PushSubscription(Base):
     """
     __tablename__ = "push_subscriptions"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     endpoint = Column(Text, nullable=False, unique=True)
     p256dh = Column(String(200), nullable=False)
@@ -716,7 +722,7 @@ class StockNotificationPreference(Base):
     __tablename__ = "stock_notification_preferences"
     __table_args__ = (UniqueConstraint("user_id", "stock_id", name="uq_notification_pref_user_stock"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
     price_above = Column(Numeric(10, 2), nullable=True)
@@ -737,7 +743,7 @@ class Watchlist(Base):
     __tablename__ = "watchlist"
     __table_args__ = (UniqueConstraint("user_id", "stock_id", name="uq_watchlist_user_stock"),)
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
     # Kullanıcının kendi hedef fiyatı ve notu — "bunu 120 TL'den almayı düşünüyorum,
@@ -756,7 +762,7 @@ class Notification(Base):
     """Kullanıcıya özel, sistem içi bildirim geçmişi (fiyat/KAP/AI sinyal alarmlarının çıktısı)."""
     __tablename__ = "notifications"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="SET NULL"), nullable=True)
     notif_type = Column(String(20), nullable=False)  # 'PRICE_ABOVE' | 'PRICE_BELOW' | 'PCT_CHANGE' | 'KAP' | 'AI_SIGNAL'

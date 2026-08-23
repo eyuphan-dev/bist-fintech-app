@@ -396,10 +396,40 @@ def _bulk_price_and_change(db: Session, stock_ids: List[int]) -> Dict[int, tuple
     )
     prev_close_map = {stock_id: float(close) for stock_id, close in prev_close_rows}
 
+    # Hisse başına EN SON KAPANIŞ — tik bulunamazsa fiyat için yedek.
+    # (prev_close_map bilerek "dünden önce" filtreliyor; o referans fiyat, bu ise
+    #  gösterilecek fiyat. İkisini karıştırmak günlük değişimi sıfırlardı.)
+    latest_any_subq = (
+        db.query(
+            models.StockPriceDaily.stock_id,
+            func.max(models.StockPriceDaily.trade_date).label("max_date"),
+        )
+        .filter(models.StockPriceDaily.stock_id.in_(stock_ids))
+        .group_by(models.StockPriceDaily.stock_id)
+        .subquery()
+    )
+    latest_close_map = {
+        stock_id: float(close)
+        for stock_id, close in db.query(models.StockPriceDaily.stock_id, models.StockPriceDaily.close)
+        .join(
+            latest_any_subq,
+            (models.StockPriceDaily.stock_id == latest_any_subq.c.stock_id)
+            & (models.StockPriceDaily.trade_date == latest_any_subq.c.max_date),
+        )
+        .all()
+    }
+
     # Her hisse için en son 2 tik: [0]=güncel, [1]=bir önceki (prev_close yoksa fallback için).
-    # stock_prices tablosu süresiz büyüdüğü için ".filter(stock_id.in_(...))" + Python'da
-    # ilk 2'yi almak TÜM geçmişi çekip belleğe yığar (ciddi performans riski); bunun yerine
-    # DB tarafında ROW_NUMBER() ile hisse başına en yeni 2 satır seçilir.
+    # DB tarafında ROW_NUMBER() ile hisse başına en yeni 2 satır seçilir; ".in_()" ile
+    # çekip Python'da ilk 2'yi almak TÜM geçmişi belleğe yığardı.
+    #
+    # ZAMAN FİLTRESİ ŞART: ROW_NUMBER() bir bölümün TAMAMINI okumak zorundadır, yani
+    # filtresiz sorgu 208 satır döndürmek için 57.436 satırın hepsini tarıyordu ve
+    # maliyeti geçmişle birlikte doğrusal büyüyordu (ölçüldü: 38 ms; tablo 3 ayda
+    # 1,2 milyon satıra çıkacaktı). Son günlerle sınırlayınca sorgu sabit maliyetli
+    # hale geliyor (ölçüldü: 14 ms, 12.893 satır). Pencere 7 gün: uzun hafta sonu ve
+    # resmi tatil üst üste gelse bile son işlem gününün tikleri kapsam içinde kalır.
+    tick_window_start = datetime.utcnow() - timedelta(days=7)
     row_num = func.row_number().over(
         partition_by=models.StockPrice.stock_id,
         order_by=models.StockPrice.recorded_at.desc(),
@@ -409,7 +439,10 @@ def _bulk_price_and_change(db: Session, stock_ids: List[int]) -> Dict[int, tuple
             models.StockPrice.stock_id,
             models.StockPrice.price,
         )
-        .filter(models.StockPrice.stock_id.in_(stock_ids))
+        .filter(
+            models.StockPrice.stock_id.in_(stock_ids),
+            models.StockPrice.recorded_at >= tick_window_start,
+        )
         .add_columns(row_num)
         .subquery()
     )
@@ -427,7 +460,21 @@ def _bulk_price_and_change(db: Session, stock_ids: List[int]) -> Dict[int, tuple
     for stock_id in stock_ids:
         ticks = ticks_by_stock.get(stock_id, [])
         if not ticks:
-            result[stock_id] = (0.0, None)
+            # Son 7 günde tik yoksa (yeni eklenmiş hisse, uzun süredir işlem
+            # görmeyen hisse, ya da tik saklama süresi dolmuş) günlük kapanışa
+            # düşülür. Eskiden burada 0.0 dönülüyordu ve arayüzde "0,00 TL"
+            # görünüyordu — oysa günlük kapanış verisi elimizde duruyordu.
+            fallback = latest_close_map.get(stock_id)
+            if not fallback:
+                result[stock_id] = (0.0, None)
+                continue
+            prev_close = yahoo_prev_close_map.get(stock_id) or prev_close_map.get(stock_id)
+            change = None
+            if prev_close and prev_close > 0:
+                change = ((fallback - prev_close) / prev_close) * 100
+                if abs(change) > EXTREME_CHANGE_GUARD_PCT:
+                    change = None
+            result[stock_id] = (fallback, change)
             continue
 
         current_price = float(ticks[0])
