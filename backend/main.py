@@ -470,6 +470,7 @@ def get_stocks(db: Session = Depends(get_db)):
             "current_price": round(current_price, 2),
             "price_change_pct": round(price_change_pct, 2) if price_change_pct is not None else None,
             "is_katilim_compliant": bool(stock.is_katilim_compliant),
+            "katilim_status": stock.katilim_status,
             "purification_rate": float(stock.purification_rate or 0.0)
         })
 
@@ -515,6 +516,7 @@ def search_stocks(q: str = "", limit: int = 8, db: Session = Depends(get_db)):
             company_name=s.company_name,
             sector=s.sector,
             is_katilim_compliant=bool(s.is_katilim_compliant),
+            katilim_status=s.katilim_status,
         )
         for s in stocks
     ]
@@ -558,6 +560,7 @@ def compare_stocks(symbols: str = "", db: Session = Depends(get_db)):
             current_price=round(current_price, 2),
             price_change_pct=round(price_change_pct, 2) if price_change_pct is not None else None,
             is_katilim_compliant=bool(stock.is_katilim_compliant),
+            katilim_status=stock.katilim_status,
             pe_ratio=float(analysis.pe_ratio) if analysis and analysis.pe_ratio is not None else None,
             pb_ratio=float(analysis.pb_ratio) if analysis and analysis.pb_ratio is not None else None,
             roe=float(analysis.roe) if analysis and analysis.roe is not None else None,
@@ -658,6 +661,7 @@ def get_screener(
             current_price=round(current_price, 2),
             price_change_pct=round(price_change_pct, 2) if price_change_pct is not None else None,
             is_katilim_compliant=bool(stock.is_katilim_compliant),
+            katilim_status=stock.katilim_status,
             pe_ratio=pe_ratio,
             pb_ratio=pb_ratio,
             roe=roe,
@@ -978,6 +982,7 @@ def get_stock_analysis(symbol: str, db: Session = Depends(get_db)):
         company_name=stock.company_name,
         katilim=KatilimInfoResponse(
             is_katilim_compliant=bool(stock.is_katilim_compliant),
+            katilim_status=stock.katilim_status,
             purification_rate=float(stock.purification_rate or 0.0),
             non_compliance_reason=stock.non_compliance_reason
         ),
@@ -2177,6 +2182,7 @@ def get_watchlist(
             current_price=round(current_price, 2),
             price_change_pct=round(price_change_pct, 2) if price_change_pct is not None else None,
             is_katilim_compliant=bool(stock.is_katilim_compliant),
+            katilim_status=stock.katilim_status,
             purification_rate=float(stock.purification_rate or 0.0),
             added_at=row.created_at,
             target_price=float(row.target_price) if row.target_price is not None else None,
@@ -2233,6 +2239,7 @@ def update_watchlist_item(
         current_price=round(current_price, 2),
         price_change_pct=None,
         is_katilim_compliant=bool(stock.is_katilim_compliant),
+        katilim_status=stock.katilim_status,
         purification_rate=float(stock.purification_rate or 0.0),
         added_at=row.created_at,
         target_price=float(row.target_price) if row.target_price is not None else None,

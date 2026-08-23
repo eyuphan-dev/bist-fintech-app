@@ -12,6 +12,7 @@ interface WatchlistItem {
   current_price: number;
   price_change_pct: number | null;
   is_katilim_compliant: boolean;
+  katilim_status?: string | null;
   purification_rate: number;
   added_at: string;
   target_price: number | null;
@@ -179,7 +180,7 @@ export default function FavorilerPage() {
                   <p className="font-bold text-sm text-white tabular-nums">{item.current_price} TL</p>
                 </div>
 
-                <KatilimBadge isCompliant={item.is_katilim_compliant} purificationRate={item.purification_rate} size="sm" />
+                <KatilimBadge isCompliant={item.is_katilim_compliant} status={item.katilim_status} purificationRate={item.purification_rate} size="sm" />
               </Link>
 
               {/* Hedef fiyat & not */}

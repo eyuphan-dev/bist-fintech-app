@@ -13,6 +13,7 @@ interface ScreenerItem {
   current_price: number;
   price_change_pct: number | null;
   is_katilim_compliant: boolean;
+  katilim_status?: string | null;
   pe_ratio: number | null;
   pb_ratio: number | null;
   roe: number | null;
@@ -274,7 +275,7 @@ export default function TarayiciPage() {
                   <td className="px-3 py-2 text-right text-gray-300 tabular-nums hidden md:table-cell">{fmt(item.piotroski_score, "/9")}</td>
                   <td className="px-3 py-2 text-right tabular-nums hidden md:table-cell" style={{ color: item.dividend_yield ? "#F59E0B" : undefined }}>{fmt(item.dividend_yield, "%")}</td>
                   <td className="px-3 py-2 hidden lg:table-cell">
-                    <KatilimBadge isCompliant={item.is_katilim_compliant} purificationRate={0} size="sm" />
+                    <KatilimBadge isCompliant={item.is_katilim_compliant} status={item.katilim_status} purificationRate={0} size="sm" />
                   </td>
                 </tr>
               ))}

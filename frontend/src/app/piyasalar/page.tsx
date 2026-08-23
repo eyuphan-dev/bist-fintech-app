@@ -15,6 +15,7 @@ interface Stock {
   current_price: number;
   price_change_pct: number | null;
   is_katilim_compliant: boolean;
+  katilim_status?: string | null;
   purification_rate: number;
 }
 
@@ -176,6 +177,7 @@ export default function PiyasalarPage() {
               <div onClick={(e) => e.stopPropagation()} className="w-fit">
                 <KatilimBadge
                   isCompliant={stock.is_katilim_compliant}
+                  status={stock.katilim_status}
                   purificationRate={stock.purification_rate}
                   size="sm"
                 />

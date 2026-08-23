@@ -64,6 +64,138 @@ INITIAL_STOCKS = [
     {"symbol": "OYAKC", "company_name": "Oyak Çimento A.Ş.", "sector": "İnşaat", "is_katilim_compliant": True, "purification_rate": 1.10, "non_compliance_reason": None},
     {"symbol": "MGROS", "company_name": "Migros Ticaret A.Ş.", "sector": "Perakende", "is_katilim_compliant": False, "purification_rate": 0.00,
      "non_compliance_reason": "Toplam faizli borç / piyasa değeri oranı Katılım Endeksi eşik değerini aşmaktadır."},
+
+    # --- BIST 100 / BIST Tüm geniş kapsam (2026-08-23'te eklendi) --------------
+    # Katalog 43 hisseden 165'e çıkarıldı. Bu satırların şirket adı ve sektörü
+    # UYDURULMADI: her sembol yfinance'e sorulup gerçekten veri dönenler
+    # alındı, ad kaynaktan geldi, sektör ise yfinance "industry" alanından
+    # açık bir eşleme tablosuyla mevcut Türkçe sözlüğe çevrildi.
+    #
+    # katilim_status = BELIRSIZ: bu hisseler için elle küratörlü katılım
+    # uygunluğu verisi YOK. "Uygun değil" olarak işaretlemek yanlış bilgi
+    # vermek olurdu; gerçek bilanço oranlarıyla ayrıca hesaplanacaklar.
+    {"symbol": "ADEL", "company_name": "Adel Kalemcilik Ticaret ve Sanayi A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AEFES", "company_name": "Anadolu Efes Biracilik ve Malt Sanayii A.Ş.", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AGHOL", "company_name": "AG Anadolu Grubu Holding A.Ş.", "sector": "Holding", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AGROT", "company_name": "AGROTECH TEKNOLOJI", "sector": "Holding", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AHGAZ", "company_name": "Ahlatci Dogal Gaz Dagitim Enerji ve Yatirim A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AKCNS", "company_name": "Akçansa Çimento Sanayi ve Ticaret A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AKFGY", "company_name": "Akfen Gayrimenkul Yatirim Ortakligi A.Ş.", "sector": "GYO", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AKFYE", "company_name": "Akfen Yenilenebilir Enerji A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AKSA", "company_name": "Aksa Akrilik Kimya Sanayii A.Ş.", "sector": "Tekstil", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AKSEN", "company_name": "Aksa Enerji Üretim A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AKSGY", "company_name": "Akis Gayrimenkul Yatirim Ortakligi A.Ş.", "sector": "GYO", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ALARK", "company_name": "Alarko Holding A.Ş.", "sector": "Holding", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ALCTL", "company_name": "Alcatel Lucent Teletas Telekomünikasyon A.Ş.", "sector": "Teknoloji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ALFAS", "company_name": "Alfa Solar Enerji Sanayi ve Ticaret A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ALTNY", "company_name": "ALTINAY SAVUNMA", "sector": "Savunma", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ANHYT", "company_name": "Anadolu Hayat Emeklilik A.Ş.", "sector": "Sigorta", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ANSGR", "company_name": "Anadolu Anonim Türk Sigorta Sirketi", "sector": "Sigorta", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ARCLK", "company_name": "Arçelik A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ARDYZ", "company_name": "Ard Grup Bilisim Teknolojileri A.Ş.", "sector": "Teknoloji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ARENA", "company_name": "Arena Bilgisayar Sanayi ve Ticaret A.Ş.", "sector": "Perakende", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ASTOR", "company_name": "Astor Enerji A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AYDEM", "company_name": "Aydem Yenilenebilir Enerji A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "AYGAZ", "company_name": "Aygaz A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "BASGZ", "company_name": "Baskent Dogalgaz Dagitim Gayrimenkul Yatirim Ortakligi A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "BERA", "company_name": "Bera Holding A.Ş.", "sector": "Holding", "katilim_status": "BELIRSIZ"},
+    {"symbol": "BIENY", "company_name": "Bien Yapi Urunleri Sanayi Turizm ve Ticaret A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "BIOEN", "company_name": "Biotrend Cevre ve Enerji Yatirimlari A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "BRISA", "company_name": "Brisa Bridgestone Sabanci Lastik Sanayi ve Ticaret A.Ş.", "sector": "Otomotiv", "katilim_status": "BELIRSIZ"},
+    {"symbol": "BRSAN", "company_name": "Borusan Birlesik Boru Fabrikalari Sanayi ve Ticaret A.Ş.", "sector": "Demir-Çelik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "BRYAT", "company_name": "Borusan Yatirim ve Pazarlama A.Ş.", "sector": "Demir-Çelik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "BUCIM", "company_name": "Bursa Cimento Fabrikasi A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "CANTE", "company_name": "Çan2 Termik A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "CCOLA", "company_name": "Coca-Cola Içecek A.Ş.", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "CIMSA", "company_name": "Çimsa Çimento Sanayi ve Ticaret A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "CLEBI", "company_name": "Çelebi Hava Servisi A.Ş.", "sector": "Ulaştırma", "katilim_status": "BELIRSIZ"},
+    {"symbol": "CVKMD", "company_name": "CVK Maden Isletmeleri Sanayi ve Ticaret A.Ş.", "sector": "Madencilik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "CWENE", "company_name": "CW Enerji Mühendislik Ticaret ve Sanayi A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "DEVA", "company_name": "Deva Holding A.Ş.", "sector": "Sağlık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "DOAS", "company_name": "Dogus Otomotiv Servis ve Ticaret A.Ş.", "sector": "Otomotiv", "katilim_status": "BELIRSIZ"},
+    {"symbol": "DOHOL", "company_name": "Dogan Sirketler Grubu Holding A.Ş.", "sector": "Holding", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ECILC", "company_name": "EIS Eczacibasi Ilaç, Sinai ve Finansal Yatirimlar Sanayi ve Ticaret A.Ş.", "sector": "Sağlık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ECZYT", "company_name": "Eczacibasi Yatirim Holding Ortakligi A.Ş.", "sector": "Holding", "katilim_status": "BELIRSIZ"},
+    {"symbol": "EGEEN", "company_name": "Ege Endüstri ve Ticaret A.Ş.", "sector": "Otomotiv", "katilim_status": "BELIRSIZ"},
+    {"symbol": "EGGUB", "company_name": "Ege Gübre Sanayii A.Ş.", "sector": "Ulaştırma", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ENERY", "company_name": "Enerya Enerji A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ENJSA", "company_name": "Enerjisa Enerji A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "EUPWR", "company_name": "Europower Enerji ve Otomasyon Teknolojileri Sanayi Ticaret A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "FENER", "company_name": "Fenerbahçe Futbol A.Ş.", "sector": "Medya", "katilim_status": "BELIRSIZ"},
+    {"symbol": "GENIL", "company_name": "Gen Ilac Ve Saglik Urunleri Sanayi Ve Ticaret A.Ş.", "sector": "Sağlık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "GESAN", "company_name": "Girisim Elektrik Sanayi Taahhüt ve Ticaret A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "GLYHO", "company_name": "Global Yatirim Holding A.Ş.", "sector": "Holding", "katilim_status": "BELIRSIZ"},
+    {"symbol": "GUBRF", "company_name": "Gübre Fabrikalari Türk A.Ş.", "sector": "Kimya", "katilim_status": "BELIRSIZ"},
+    {"symbol": "GWIND", "company_name": "Galata Wind Enerji A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "HALKB", "company_name": "Türkiye Halk Bankasi A.Ş.", "sector": "Bankacılık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "HATSN", "company_name": "Hat-San Gemi Insaa Bakim Onarim Deniz Nakliyat Sanayi ve Ticaret A.Ş.", "sector": "Savunma", "katilim_status": "BELIRSIZ"},
+    {"symbol": "HLGYO", "company_name": "Halk Gayrimenkul Yatirim Ortakligi A.S", "sector": "GYO", "katilim_status": "BELIRSIZ"},
+    {"symbol": "HRKET", "company_name": "Hareket Proje Tasimaciligi Ve Yuk Muhendisligi A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "INVEO", "company_name": "Inveo Yatirim Holding A.Ş.", "sector": "Aracı Kurum", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ISCTR", "company_name": "Türkiye Is Bankasi A.Ş.", "sector": "Bankacılık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ISDMR", "company_name": "Iskenderun Demir ve Çelik A.Ş.", "sector": "Demir-Çelik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ISGYO", "company_name": "Is Gayrimenkul Yatirim Ortakligi A.Ş.", "sector": "GYO", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ISMEN", "company_name": "Is Yatirim Menkul Degerler A.Ş.", "sector": "Aracı Kurum", "katilim_status": "BELIRSIZ"},
+    {"symbol": "IZMDC", "company_name": "Izmir Demir Çelik Sanayi A.Ş.", "sector": "Demir-Çelik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "JANTS", "company_name": "Jantsa Jant Sanayi ve Ticaret A.Ş.", "sector": "Otomotiv", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KARSN", "company_name": "Karsan Otomotiv Sanayii ve Ticaret A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KARTN", "company_name": "Kartonsan Karton Sanayi ve Ticaret A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KCAER", "company_name": "Kocaer Celik Sanayi ve Ticaret A.Ş.", "sector": "Demir-Çelik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KLKIM", "company_name": "Kalekim Kimyevi Maddeler Sanayi Ve Ticaret A.Ş.", "sector": "Kimya", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KLSER", "company_name": "Kaleseramik Canakkale Kalebodur Seramik Sanayi A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KMPUR", "company_name": "Kimteks Poliüretan Sanayi ve Ticaret A.Ş.", "sector": "Kimya", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KONTR", "company_name": "Kontrolmatik Teknoloji Enerji Ve Muhendislik A.Ş.", "sector": "Holding", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KONYA", "company_name": "Konya Çimento Sanayii A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "KRDMD", "company_name": "Kardemir Karabük Demir Çelik Sanayi Ve Ticaret A.Ş.", "sector": "Demir-Çelik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "LMKDC", "company_name": "LIMAK DOGU ANADOLU", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "LOGO", "company_name": "Logo Yazilim Sanayi ve Ticaret A.Ş.", "sector": "Teknoloji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "MAGEN", "company_name": "Margün Enerji Üretim Sanayi ve Ticaret A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "MAVI", "company_name": "Mavi Giyim Sanayi ve Ticaret A.Ş.", "sector": "Perakende", "katilim_status": "BELIRSIZ"},
+    {"symbol": "MIATK", "company_name": "MIA Teknoloji A.Ş.", "sector": "Teknoloji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "NETAS", "company_name": "Netas Telekomünikasyon A.Ş.", "sector": "Teknoloji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "NTHOL", "company_name": "Net Holding A.Ş.", "sector": "Turizm", "katilim_status": "BELIRSIZ"},
+    {"symbol": "OBAMS", "company_name": "OBA MAKARNACILIK", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ODAS", "company_name": "Odas Elektrik Üretim Sanayi Ticaret A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "OTKAR", "company_name": "Otokar Otomotiv ve Savunma Sanayi A.Ş.", "sector": "Otomotiv", "katilim_status": "BELIRSIZ"},
+    {"symbol": "PAPIL", "company_name": "Papilon Savunma Teknoloji ve Ticaret A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "PARSN", "company_name": "Parsan Makina Parçalari Sanayii A.Ş.", "sector": "Otomotiv", "katilim_status": "BELIRSIZ"},
+    {"symbol": "PEKGY", "company_name": "Peker Gayrimenkul Yatirim Ortakligi A.Ş.", "sector": "GYO", "katilim_status": "BELIRSIZ"},
+    {"symbol": "PGSUS", "company_name": "Pegasus Hava Tasimaciligi A.Ş.", "sector": "Ulaştırma", "katilim_status": "BELIRSIZ"},
+    {"symbol": "PRKME", "company_name": "Park Elektrik Üretim Madencilik Sanayi ve Ticaret A.Ş.", "sector": "Madencilik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "PSGYO", "company_name": "Pasifik Gayrimenkul Yatirim Ortakligi A.Ş.", "sector": "GYO", "katilim_status": "BELIRSIZ"},
+    {"symbol": "QUAGR", "company_name": "QUA Granite Hayal Yapi ve Ürünleri Sanayi Ticaret A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "REEDR", "company_name": "Reeder Teknoloji Sanayi ve Ticaret A.Ş.", "sector": "Perakende", "katilim_status": "BELIRSIZ"},
+    {"symbol": "SARKY", "company_name": "Sarkuysan Elektrolitik Bakir Sanayi ve Ticaret A.Ş.", "sector": "Madencilik", "katilim_status": "BELIRSIZ"},
+    {"symbol": "SDTTR", "company_name": "SDT Uzay ve Savunma Teknolojileri A.Ş.", "sector": "Savunma", "katilim_status": "BELIRSIZ"},
+    {"symbol": "SELEC", "company_name": "Selçuk Ecza Deposu Ticaret ve Sanayi A.Ş.", "sector": "Sağlık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "SKBNK", "company_name": "Sekerbank T.A.S.", "sector": "Bankacılık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "SMRTG", "company_name": "Smart Günes Enerjisi Teknolojileri Arastirma ve Gelistirme Üretim Sanayi ve Ticaret A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
+    {"symbol": "SNGYO", "company_name": "Sinpas Gayrimenkul Yatirim Ortakligi A.Ş.", "sector": "GYO", "katilim_status": "BELIRSIZ"},
+    {"symbol": "SOKM", "company_name": "Sok Marketler Ticaret A.Ş.", "sector": "Perakende", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TABGD", "company_name": "TAB GIDA", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TATGD", "company_name": "Tat Gida Sanayi A.Ş.", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TAVHL", "company_name": "TAV Havalimanlari Holding A.Ş.", "sector": "Ulaştırma", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TCELL", "company_name": "Turkcell Iletisim Hizmetleri A.Ş.", "sector": "Telekomünikasyon", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TKFEN", "company_name": "Tekfen Holding A.Ş.", "sector": "Kimya", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TMSN", "company_name": "Tümosan Motor ve Traktör Sanayi A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TRGYO", "company_name": "Torunlar Gayrimenkul Yatirim Ortakligi A.Ş.", "sector": "GYO", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TSKB", "company_name": "Türkiye Sinai Kalkinma Bankasi A.Ş.", "sector": "Bankacılık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TTKOM", "company_name": "Türk Telekomünikasyon A.Ş.", "sector": "Telekomünikasyon", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TTRAK", "company_name": "Türk Traktör ve Ziraat Makineleri A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TUCLK", "company_name": "Tugçelik Alüminyum Ve Metal Mamulleri Sanayi Ve Ticaret A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TUKAS", "company_name": "Tukas Gida Sanayi ve Ticaret A.Ş.", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "TURSG", "company_name": "Türkiye Sigorta A.Ş.", "sector": "Sigorta", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ULKER", "company_name": "Ülker Bisküvi Sanayi A.Ş.", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ULUUN", "company_name": "Ulusoy Un Sanayi ve Ticaret A.Ş.", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "USAK", "company_name": "Usak Seramik Sanayi A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "VAKBN", "company_name": "Türkiye Vakiflar Bankasi Türk A.O.", "sector": "Bankacılık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "VAKKO", "company_name": "Vakko Tekstil ve Hazir Giyim Sanayi Isletmeleri A.Ş.", "sector": "Tekstil", "katilim_status": "BELIRSIZ"},
+    {"symbol": "VESBE", "company_name": "Vestel Beyaz Esya Sanayi ve Ticaret A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "VESTL", "company_name": "Vestel Elektronik Sanayi ve Ticaret A.Ş.", "sector": "Sanayi", "katilim_status": "BELIRSIZ"},
+    {"symbol": "YEOTK", "company_name": "Yeo Teknoloji Enerji Ve Endustri A.Ş.", "sector": "İnşaat", "katilim_status": "BELIRSIZ"},
+    {"symbol": "YKBNK", "company_name": "Yapi ve Kredi Bankasi A.Ş.", "sector": "Bankacılık", "katilim_status": "BELIRSIZ"},
+    {"symbol": "YYLGD", "company_name": "Yayla Agro Gida Sanayi ve Ticaret A.Ş.", "sector": "Gıda", "katilim_status": "BELIRSIZ"},
+    {"symbol": "ZOREN", "company_name": "Zorlu Enerji Elektrik Üretim A.Ş.", "sector": "Enerji", "katilim_status": "BELIRSIZ"},
 ]
 
 # Var olan tablolara sonradan eklenen kolonlar (SQLite ALTER TABLE ADD COLUMN destekler;
@@ -86,6 +218,7 @@ MIGRATIONS = {
         "open_price": "NUMERIC(10, 2)",
         "day_high": "NUMERIC(10, 2)",
         "day_low": "NUMERIC(10, 2)",
+        "katilim_status": "VARCHAR(12) DEFAULT 'BELIRSIZ'",
     },
     "company_analysis": {
         # Temettü alanları (portföy temettü geliri projeksiyonu için).
@@ -347,28 +480,47 @@ def init_database():
     db = SessionLocal()
     try:
         # 1. Seed / güncelle stocks (katılım endeksi bilgileri dahil)
+        eklenen = guncellenen = 0
         for stock_data in INITIAL_STOCKS:
+            # Tohum listesi iki tür satır içerir:
+            #  - KÜRATÖRLÜ: is_katilim_compliant / purification_rate elle girilmiş.
+            #  - KAPSAM: yalnızca sembol/ad/sektör; katılım durumu BELİRSİZ.
+            # Bu yüzden alanlar .get() ile okunur.
+            kuratorlu = "is_katilim_compliant" in stock_data
+            durum = stock_data.get(
+                "katilim_status",
+                ("UYGUN" if stock_data.get("is_katilim_compliant") else "UYGUN_DEGIL") if kuratorlu else "BELIRSIZ",
+            )
+
             exists = db.query(models.Stock).filter_by(symbol=stock_data["symbol"]).first()
             if not exists:
-                stock = models.Stock(
+                db.add(models.Stock(
                     symbol=stock_data["symbol"],
                     company_name=stock_data["company_name"],
                     is_active=True,
                     sector=stock_data["sector"],
-                    is_katilim_compliant=stock_data["is_katilim_compliant"],
-                    purification_rate=stock_data["purification_rate"],
-                    non_compliance_reason=stock_data["non_compliance_reason"],
-                )
-                db.add(stock)
-                print(f"Hisse eklendi: {stock_data['symbol']}")
+                    is_katilim_compliant=bool(stock_data.get("is_katilim_compliant", False)),
+                    purification_rate=stock_data.get("purification_rate", 0.00),
+                    non_compliance_reason=stock_data.get("non_compliance_reason"),
+                    katilim_status=durum,
+                ))
+                eklenen += 1
             else:
                 exists.company_name = stock_data["company_name"]
                 exists.is_active = True
                 exists.sector = stock_data["sector"]
-                exists.is_katilim_compliant = stock_data["is_katilim_compliant"]
-                exists.purification_rate = stock_data["purification_rate"]
-                exists.non_compliance_reason = stock_data["non_compliance_reason"]
-                print(f"Hisse güncellendi: {stock_data['symbol']}")
+                # Katılım alanları YALNIZCA küratörlü satırlardan güncellenir.
+                # Aksi halde her uygulama açılışında, sonradan gerçek bilanço
+                # oranlarıyla hesaplanmış bir durum "BELİRSİZ"e geri ezilirdi.
+                if kuratorlu:
+                    exists.is_katilim_compliant = stock_data["is_katilim_compliant"]
+                    exists.purification_rate = stock_data["purification_rate"]
+                    exists.non_compliance_reason = stock_data["non_compliance_reason"]
+                    exists.katilim_status = durum
+                elif not exists.katilim_status:
+                    exists.katilim_status = "BELIRSIZ"
+                guncellenen += 1
+        print(f"Hisse kataloğu: {eklenen} eklendi, {guncellenen} güncellendi (toplam {len(INITIAL_STOCKS)}).")
 
         # 2. Seed AI Bot User (paylaşımlı demo bot — geriye dönük uyumluluk için korunur)
         bot_username = "yapay_zeka_trader"

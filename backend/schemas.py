@@ -73,6 +73,7 @@ class StockResponse(BaseModel):
     current_price: float
     price_change_pct: Optional[float] = None
     is_katilim_compliant: bool
+    katilim_status: Optional[str] = None  # UYGUN | UYGUN_DEGIL | BELIRSIZ
     purification_rate: float
 
 class SectorAllocationItem(BaseModel):
@@ -109,6 +110,7 @@ class StockSearchResponse(BaseModel):
     company_name: str
     sector: Optional[str] = None
     is_katilim_compliant: bool
+    katilim_status: Optional[str] = None  # UYGUN | UYGUN_DEGIL | BELIRSIZ
 
 class CompanyAnalysisResponse(BaseModel):
     piotroski_score: Optional[int]
@@ -184,6 +186,7 @@ class ForeignHoldingTrendResponse(BaseModel):
 
 class KatilimInfoResponse(BaseModel):
     is_katilim_compliant: bool
+    katilim_status: Optional[str] = None  # UYGUN | UYGUN_DEGIL | BELIRSIZ
     purification_rate: float
     non_compliance_reason: Optional[str]
 
@@ -550,6 +553,7 @@ class FundResponse(BaseModel):
     fund_type: Optional[str]
     risk_level: Optional[int]
     is_katilim_compliant: bool
+    katilim_status: Optional[str] = None  # UYGUN | UYGUN_DEGIL | BELIRSIZ
     latest_price: Optional[FundPriceResponse]
 
 class IpoResponse(BaseModel):
@@ -559,6 +563,7 @@ class IpoResponse(BaseModel):
     offer_price: Optional[float]
     demand_collection_dates: Optional[str]
     is_katilim_compliant: bool
+    katilim_status: Optional[str] = None  # UYGUN | UYGUN_DEGIL | BELIRSIZ
     lot_distribution_type: Optional[str]
 
     class Config:
@@ -756,6 +761,7 @@ class ScreenerItemResponse(BaseModel):
     current_price: float
     price_change_pct: Optional[float] = None
     is_katilim_compliant: bool
+    katilim_status: Optional[str] = None  # UYGUN | UYGUN_DEGIL | BELIRSIZ
     pe_ratio: Optional[float] = None
     pb_ratio: Optional[float] = None
     roe: Optional[float] = None
@@ -773,6 +779,7 @@ class WatchlistItemResponse(BaseModel):
     current_price: float
     price_change_pct: Optional[float] = None
     is_katilim_compliant: bool
+    katilim_status: Optional[str] = None  # UYGUN | UYGUN_DEGIL | BELIRSIZ
     purification_rate: float
     target_price: Optional[float] = None
     note: Optional[str] = None

@@ -67,6 +67,7 @@ interface StockProData {
   company_name: string;
   katilim: {
     is_katilim_compliant: boolean;
+  katilim_status?: string | null;
     purification_rate: number;
     non_compliance_reason: string | null;
   };
@@ -263,6 +264,7 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
         <div className="flex items-center gap-1.5">
           <KatilimBadge
             isCompliant={katilim.is_katilim_compliant}
+            status={katilim.katilim_status}
             purificationRate={katilim.purification_rate}
             nonComplianceReason={katilim.non_compliance_reason}
           />

@@ -44,6 +44,12 @@ class Stock(Base):
 
     # Katılım Endeksi (Helal Finans) Uygunluk Bilgileri
     is_katilim_compliant = Column(Boolean, default=False)
+    # Katılım uygunluğunun ÜÇ durumu vardır: uygun, uygun değil ve HENÜZ
+    # DEĞERLENDİRİLMEDİ. Katalog 43'ten 165 hisseye çıkarıldığında yeni
+    # hisseler için elle küratörlü uygunluk verisi yoktu; bunları "uygun değil"
+    # saymak yanlış bilgi vermek olurdu. Boolean üçüncü durumu ifade edemediği
+    # için bu alan eklendi: 'UYGUN' | 'UYGUN_DEGIL' | 'BELIRSIZ'.
+    katilim_status = Column(String(12), default="BELIRSIZ", nullable=True, index=True)
     purification_rate = Column(Numeric(5, 2), default=0.00)  # Arınma Oranı (%)
     non_compliance_reason = Column(String, nullable=True)
 

@@ -195,3 +195,93 @@ def fetch_historical_prices(symbol: str, period: str = "1mo", interval: str = "1
     except Exception as e:
         print(f"Error fetching historical prices for {symbol}: {str(e)}")
     return prices
+
+
+# ---------------------------------------------------------------------------
+# Toplu fiyat çekimi
+# ---------------------------------------------------------------------------
+# NEDEN: fetch_current_price hisse başına ayrı HTTP isteği yapar. Katalog 43
+# hisseyken (istek başına ~0.8 sn + 0.4 sn bekleme) bir tur ~1 dakika sürüyordu
+# ve 5 dakikalık tetikleme aralığına rahat sığıyordu. Katalog 165 hisseye
+# çıkınca aynı yaklaşım ~3.5 dakikaya çıkıp aralığı doldurmaya başlıyordu:
+# Yahoo bir gün yavaşladığında turlar üst üste biner, max_instances=1 yüzünden
+# tetiklemeler sessizce atlanır ve fiyatlar bayatlardı.
+#
+# yf.download tek istekte ONLARCA sembol döndürür. 165 hisse, 40'lık parçalarda
+# 5 istekle çekilir — yani ~330 istek yerine ~10 istek.
+BATCH_SIZE = 40
+
+
+def fetch_current_prices_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+    """
+    Birden çok hissenin güncel fiyat/hacim/açılış/yüksek/düşük/önceki kapanış
+    değerlerini toplu çeker.
+
+    Dönen sözlükte YALNIZCA veri gelen semboller bulunur; eksik kalanlar için
+    çağıran tarafın tek tek `fetch_current_price` ile denemesi beklenir.
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    if not symbols:
+        return out
+
+    for i in range(0, len(symbols), BATCH_SIZE):
+        chunk = symbols[i : i + BATCH_SIZE]
+        tickers = [f"{s}.IS" for s in chunk]
+        try:
+            # Gün içi barlar: seansın açılış/yüksek/düşük/son değeri buradan.
+            intraday = call_with_retry(
+                lambda: yf.download(
+                    tickers, period="1d", interval="5m",
+                    group_by="ticker", auto_adjust=False,
+                    progress=False, threads=False,
+                ),
+                attempts=2, label=f"batch_intraday[{i}]",
+            )
+            # Önceki kapanış: 5 günlük günlük bar. 2 gün yetmez — araya hafta
+            # sonu veya tatil girerse önceki iş günü elde kalmaz.
+            daily = call_with_retry(
+                lambda: yf.download(
+                    tickers, period="5d", interval="1d",
+                    group_by="ticker", auto_adjust=False,
+                    progress=False, threads=False,
+                ),
+                attempts=2, label=f"batch_daily[{i}]",
+            )
+        except Exception as e:
+            print(f"[yfinance_client] toplu çekim başarısız ({chunk[0]}...): {e}")
+            continue
+
+        for symbol in chunk:
+            yahoo = f"{symbol}.IS"
+            try:
+                # Tek sembollük indirmede yfinance sütunları düzleştirir;
+                # çok sembollüde ilk seviye ticker olur. İkisi de desteklenir.
+                bars = intraday[yahoo] if yahoo in getattr(intraday, "columns", []) else intraday
+                bars = bars.dropna(subset=["Close"])
+                if bars.empty:
+                    continue
+
+                last = bars.iloc[-1]
+                prev_close = None
+                try:
+                    dbars = daily[yahoo] if yahoo in getattr(daily, "columns", []) else daily
+                    dbars = dbars.dropna(subset=["Close"])
+                    # Son satır BUGÜN olabilir; önceki kapanış bir öncekidir.
+                    if len(dbars) >= 2:
+                        prev_close = round(float(dbars["Close"].iloc[-2]), 2)
+                except Exception:
+                    prev_close = None
+
+                out[symbol] = {
+                    "price": round(float(last["Close"]), 2),
+                    "volume": int(last["Volume"]) if last["Volume"] == last["Volume"] else 0,
+                    "previous_close": prev_close,
+                    "open": round(float(bars.iloc[0]["Open"]), 2),
+                    "high": round(float(bars["High"].max()), 2),
+                    "low": round(float(bars["Low"].min()), 2),
+                }
+            except Exception:
+                # Tek bir sembolün bozuk gelmesi tüm partiyi düşürmemeli.
+                continue
+
+    return out

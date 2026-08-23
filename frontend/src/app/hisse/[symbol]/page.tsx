@@ -342,6 +342,7 @@ export default function StockDetailPage() {
             <div className="mt-2">
               <KatilimBadge
                 isCompliant={summary.is_katilim_compliant}
+                status={summary.katilim_status}
                 purificationRate={summary.purification_rate}
               />
             </div>

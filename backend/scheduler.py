@@ -15,7 +15,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import SessionLocal
 import models
-from yfinance_client import fetch_current_price, fetch_stock_news
+from yfinance_client import fetch_current_price, fetch_current_prices_batch, fetch_stock_news
 from cache import set_latest_price
 from datetime import datetime, timedelta, date
 import pytz
@@ -113,14 +113,27 @@ def update_bist_prices_job():
         stocks = db.query(models.Stock).filter_by(is_active=True).all()
         now_utc = datetime.utcnow()
 
+        # TOPLU ÇEKİM: hisse başına ayrı istek atmak yerine yf.download ile
+        # 40'lık partiler halinde tek istekte çekilir. Katalog 43'ten 165 hisseye
+        # çıkarıldığında tek tek çekim ~3.5 dakikaya uzuyordu; tetikleme aralığı
+        # 5 dakika olduğu için Yahoo bir gün yavaşladığında turlar üst üste
+        # biner, max_instances=1 yüzünden tetiklemeler sessizce atlanır ve
+        # fiyatlar bayatlardı. Ölçüm: 89 sembol tek tek ~107 sn, toplu 18 sn.
+        symbols = [s.symbol for s in stocks]
+        batch = fetch_current_prices_batch(symbols)
+        print(f"[Scheduler] Toplu çekim: {len(batch)}/{len(symbols)} hisse.")
+
         updated = []
+        eksik = 0
         for i, stock in enumerate(stocks):
-            # Hisseler arası kısa bekleme: Yahoo'ya art arda patlama (burst) istek
-            # göndermeyi önler — sunucu tek egress IP kullandığından, hızlı ardışık
-            # istekler Yahoo tarafında geçici "Too Many Requests" bloğuna yol açabiliyor.
-            if i > 0:
-                time.sleep(0.4)
-            res = fetch_current_price(stock.symbol)
+            res = batch.get(stock.symbol)
+            if res is None:
+                # Partide gelmeyen tek tük sembol için tekil çekime düşülür.
+                # Bunlar azınlıkta kaldığı sürece toplam süre etkilenmez.
+                eksik += 1
+                if eksik > 1:
+                    time.sleep(0.4)
+                res = fetch_current_price(stock.symbol)
             if res:
                 price, volume = res["price"], res["volume"]
                 db.add(
@@ -145,7 +158,9 @@ def update_bist_prices_job():
                 updated.append(f"{stock.symbol}({price})")
 
         db.commit()
-        print(f"[Scheduler] Güncellenen hisseler: {', '.join(updated)}")
+        if eksik:
+            print(f"[Scheduler] {eksik} hisse toplu partide gelmedi, tek tek çekildi.")
+        print(f"[Scheduler] {len(updated)} hisse güncellendi.")
 
         # Bekleyen (LIMIT/SCHEDULED) kullanıcı emirleri — botla AYNI thread'de, bot'tan
         # ÖNCE işlenir (kullanıcının kendi bıraktığı emirler önceliklidir). Emirler
@@ -246,7 +261,7 @@ def refresh_market_data_job():
 # ---------------------------------------------------------------------------
 # MODÜL 1.6: Hisse Haberleri (Yahoo Finance) — 24 Saatlik Döngü
 # ---------------------------------------------------------------------------
-def refresh_deep_analysis_job(batch_size: int = 15):
+def refresh_deep_analysis_job(batch_size: int = 40):
     """
     Derin bilanço analizini (F/K, PD/DD, ROE, Piotroski, Altman Z, hedef fiyat...)
     arka planda tazeler.
@@ -299,7 +314,10 @@ def refresh_deep_analysis_job(batch_size: int = 15):
         # Çeyreklik finansal tablolar — aynı gece işinde, ayrı parti hâlinde.
         try:
             from financials import refresh_financials_batch
-            refresh_financials_batch(db, batch_size=8)
+            # Katalog 165 hisseye çıktığı için parti de büyütüldü; 8'de
+            # kalsaydı tam tur 21 gün sürerdi. Finansal tablolar çeyreklik
+            # yayımlandığı için ~8 günlük tur fazlasıyla yeterli.
+            refresh_financials_batch(db, batch_size=20)
         except Exception as e:
             print(f"[Scheduler] Finansal tablo tazeleme hatası: {e}")
             db.rollback()
@@ -545,8 +563,9 @@ def start_scheduler():
 
     # ── Görev 4: Derin Bilanço Analizi Tazeleme ──────────────────────────
     # Her gün 02:00 UTC (Türkiye'de 05:00) — borsa kapalıyken, hisse başına
-    # birkaç yfinance çağrısı gerektiren ağır iş. Her çalıştırmada en bayat 15
-    # hisse işlenir; 43 hisselik katalog ~3 günde bir tam tur tazelenir.
+    # birkaç yfinance çağrısı gerektiren ağır iş. Her çalıştırmada en bayat 40
+    # hisse işlenir; 165 hisselik katalog ~4 günde bir tam tur tazelenir.
+    # (Parti 15'te bırakılsaydı katalog büyümesiyle tur 11 güne çıkardı.)
     scheduler.add_job(
         refresh_deep_analysis_job,
         "cron",
@@ -559,7 +578,7 @@ def start_scheduler():
 
     scheduler.start()
     print("APScheduler başlatıldı.")
-    print("  • deep_analysis_sync: Her gün 02:00 UTC (en bayat 15 hissenin bilanço analizi)")
+    print("  • deep_analysis_sync: Her gün 02:00 UTC (en bayat 40 hissenin bilanço analizi)")
     print("  • bist_updater     : Hafta içi 10:00–18:55, her 5 dakika")
     print("  • market_data_sync : Her gün 08:00 UTC (KAP bildirimleri + TEFAS fon fiyatları)")
     print("  • stock_news_sync  : Her gün 07:30 UTC (Hisse haberleri, 24 saatlik döngü)")
