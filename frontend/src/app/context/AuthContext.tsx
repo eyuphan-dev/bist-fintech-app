@@ -45,6 +45,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // TANIM SIRASI ONEMLI: asagidaki fetchMe efekti logout'u cagiriyor. Tanim
+  // efektten SONRA gelseydi React Compiler "degiskene tanimlanmadan erisiliyor"
+  // diyerek bu bileseni hic optimize etmiyordu.
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setUser(null);
+  }, []);
+
   useEffect(() => {
     if (!token) return;
 
@@ -120,12 +129,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return { ok: false, message: "Sunucuya bağlanılamadı." };
     }
-  }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
   }, []);
 
   return (

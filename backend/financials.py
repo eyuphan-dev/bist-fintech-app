@@ -17,6 +17,7 @@ sürüme değişebiliyor ("Total Revenue" / "Operating Revenue", "Net Income" /
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import models
@@ -156,11 +157,29 @@ def refresh_financials_batch(db: Session, batch_size: int = 8) -> int:
     """
     import time
 
+    # FAN-OUT TUZAGI (olculerek bulundu):
+    # FinancialStatement hisse basina TEK satir degil, DONEM basina bir satirdir
+    # (~6 ceyrek). Dogrudan outerjoin yapilinca her hisse 6 satira aciliyor,
+    # .limit(batch_size) bu BIRLESMIS satirlari sinirliyor ve SQLAlchemy ayni
+    # Stock nesnelerini tekillestirince geriye batch_size'in cok altinda hisse
+    # kaliyordu. Logda kaniti: batch_size=8 istenirken "5 hisse" isleniyordu;
+    # bu haliyle 165 hisselik katalogun tam turu 8 gun yerine ~33 gun surerdi
+    # ve bilanco kapsami 39 hissede takili kalmisti.
+    #
+    # Cozum: bayatlik once hisse basina TEK satira indirgenir, sonra join edilir.
+    bayatlik = (
+        db.query(
+            models.FinancialStatement.stock_id.label("sid"),
+            func.max(models.FinancialStatement.updated_at).label("son_guncelleme"),
+        )
+        .group_by(models.FinancialStatement.stock_id)
+        .subquery()
+    )
     rows = (
         db.query(models.Stock)
-        .outerjoin(models.FinancialStatement, models.FinancialStatement.stock_id == models.Stock.id)
+        .outerjoin(bayatlik, bayatlik.c.sid == models.Stock.id)
         .filter(models.Stock.is_active == True)
-        .order_by(models.FinancialStatement.updated_at.asc().nullsfirst())
+        .order_by(bayatlik.c.son_guncelleme.asc().nullsfirst())
         .limit(batch_size)
         .all()
     )
