@@ -476,7 +476,15 @@ export default function StockDetailPage() {
                     Bu aralık için yeterli veri bulunamadı.
                   </div>
                 ) : (
-                  <TradingViewChart data={chartData} symbol={stockDetail.symbol} />
+                  <TradingViewChart
+                    data={chartData}
+                    symbol={stockDetail.symbol}
+                    // Gün içi grafikte yüzde ÖNCEKİ KAPANIŞA göre okunur (borsanın
+                    // günlük değişim tanımı budur); uzun aralıklarda referans
+                    // aralığın ilk noktasıdır, yani "bu dönemde ne kadar değişti".
+                    baseline={chartRange === "1D" ? stockDetail.previous_close ?? null : null}
+                    intraday={chartRange === "1D"}
+                  />
                 )}
               </div>
 
