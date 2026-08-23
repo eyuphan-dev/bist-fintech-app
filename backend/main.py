@@ -39,7 +39,7 @@ from schemas import (
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
     WatchlistItemResponse, ScreenerItemResponse,
     PushSubscribeRequest, PushStatusResponse,
-    ScorecardResponse,
+    ScorecardResponse, BacktestResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -2085,6 +2085,41 @@ def send_test_push(
     if sent == 0:
         raise HTTPException(status_code=400, detail="Kayıtlı cihaz bulunamadı veya gönderim başarısız oldu.")
     return {"success": True, "delivered": sent}
+
+
+@app.get("/api/backtest/strategies")
+def list_backtest_strategies():
+    """Geri testte seçilebilecek stratejiler ve varsayılan parametreleri."""
+    from backtest import STRATEJILER, VARSAYILAN_KOMISYON_PCT
+    return {
+        "strategies": [
+            {"key": k, "label": v["label"], "description": v["description"], "params": v["params"]}
+            for k, v in STRATEJILER.items()
+        ],
+        "default_commission_pct": VARSAYILAN_KOMISYON_PCT,
+    }
+
+
+@app.get("/api/stocks/{symbol}/backtest", response_model=BacktestResponse)
+@limiter.limit("20/minute")
+def run_strategy_backtest(
+    request: Request,
+    symbol: str,
+    strategy: str = "SMA_CROSS",
+    years: int = 3,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Bir stratejinin geçmişte ne yapacağını ölçer.
+
+    Hız sınırı var: her çağrı 5 yıla kadar günlük barı okuyup gösterge
+    hesaplıyor, kullanıcı parametreleri hızla değiştirdiğinde sunucuyu
+    gereksiz yere yorabilir.
+    """
+    from backtest import run_backtest
+    years = max(1, min(5, years))
+    return BacktestResponse(**run_backtest(db, symbol, strategy, years=years))
 
 
 @app.get("/api/portfolio/scorecard", response_model=ScorecardResponse)

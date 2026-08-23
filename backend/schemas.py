@@ -877,3 +877,44 @@ class ScorecardResponse(BaseModel):
     buy_volume: Optional[float] = None
     sell_volume: Optional[float] = None
     by_stock: List[ScorecardStock] = []
+
+
+# --- Strateji geri testi ----------------------------------------------------
+class BacktestPoint(BaseModel):
+    date: date
+    strategy: float
+    buy_hold: float
+
+
+class BacktestTrade(BaseModel):
+    date: date
+    action: str
+    price: float
+    pnl_pct: Optional[float] = None
+
+
+class BacktestResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    symbol: Optional[str] = None
+    company_name: Optional[str] = None
+    strategy: Optional[str] = None
+    strategy_label: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    initial_capital: Optional[float] = None
+    final_value: Optional[float] = None
+    strategy_return_pct: Optional[float] = None
+    buy_hold_return_pct: Optional[float] = None
+    excess_return_pct: Optional[float] = None
+    trade_count: Optional[int] = None
+    closed_trades: Optional[int] = None
+    win_count: Optional[int] = None
+    win_rate: Optional[float] = None
+    max_drawdown_pct: Optional[float] = None
+    buy_hold_max_drawdown_pct: Optional[float] = None
+    commission_pct: Optional[float] = None
+    in_position: Optional[bool] = None
+    equity_curve: List[BacktestPoint] = []
+    trades: List[BacktestTrade] = []
