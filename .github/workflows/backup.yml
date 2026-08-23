@@ -1,0 +1,74 @@
+name: Database Backup (off-site)
+
+# NEDEN BU IS VAR:
+# Sunucudaki gecelik pg_dump (ops/backup-db.sh) yedegi AYNI DISKTE tutuyor.
+# VPS'in kendisi giderse o yedekler de gider. Bu is, dokumun sifrelenmis bir
+# kopyasini GitHub artifact'i olarak sunucu disinda ikinci bir yere birakir.
+# Yeni bir servis veya odeme gerekmez; mevcut deploy anahtarlari yeterli.
+#
+# GERI YUKLEME: ops/README.md
+
+on:
+  schedule:
+    # 04:00 UTC (07:00 TR). Sunucudaki yedek 03:30 UTC'de alindigi icin bu is
+    # her zaman o geceki taze dokumu bulur.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH anahtarini hazirla
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sunucuda taze yedek al
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no "$USER@$HOST" \
+            '/usr/local/bin/bist-backup.sh >> /var/log/bist-backup.log 2>&1 && ls -1t /var/backups/bist/daily/*.dump | head -1' \
+            > remote_path.txt
+          echo "Sunucudaki dokum: $(cat remote_path.txt)"
+
+      - name: Dokumu indir ve sifrele
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PASSPHRASE:-}" ]; then
+            echo "HATA: BACKUP_PASSPHRASE secret'i tanimli degil." >&2
+            exit 1
+          fi
+          mkdir -p out
+          scp -o StrictHostKeyChecking=no "$USER@$HOST:$(cat remote_path.txt)" plain.dump
+
+          # Dokum kullanici e-postalari ve parola ozetleri iceriyor. Sifreleme
+          # RUNNER'DA yapilir: boylece parola sunucunun surec listesine hic
+          # dusmez ve duz metin dokum hicbir zaman artifact'a girmez.
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+              --pinentry-mode loopback --passphrase "$PASSPHRASE" \
+              --output "out/bist_app-$(date -u +%Y%m%d).dump.gpg" plain.dump
+          shred -u plain.dump 2>/dev/null || rm -f plain.dump
+
+          ls -lh out/
+
+      - name: Artifact olarak sakla
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_number }}
+          path: out/
+          # GitHub'in izin verdigi en uzun saklama suresi.
+          retention-days: 90
+          if-no-files-found: error
