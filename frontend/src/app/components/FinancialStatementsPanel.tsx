@@ -38,6 +38,81 @@ function fmtTL(v: number | null): string {
   return `${sign}${abs.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
 }
 
+/**
+ * Hasılat ve net kâr trendi.
+ *
+ * Tablo sayıları veriyor ama yönü vermiyor: 6 çeyreklik rakama bakıp "büyüyor
+ * mu, daralıyor mu" sorusunu cevaplamak zor. Çubuklar hasılatı, çizgi net kârı
+ * gösterir. İkisinin ayrışması (hasılat artarken kâr düşmesi) marj sorununun
+ * en hızlı okunan işaretidir.
+ */
+function TrendGrafigi({ periods }: { periods: Period[] }) {
+  // Kronolojik: en eski solda. Veri en yeniden geliyor.
+  const seri = [...periods].reverse().filter((p) => p.revenue !== null || p.net_income !== null);
+  if (seri.length < 2) return null;
+
+  const gelirler = seri.map((p) => p.revenue ?? 0);
+  const karlar = seri.map((p) => p.net_income ?? 0);
+  const maxGelir = Math.max(...gelirler.map(Math.abs), 1);
+  // Net kâr negatif olabildiği için ekseni iki yöne açmak gerekir.
+  const maxKar = Math.max(...karlar.map(Math.abs), 1);
+
+  const W = 100, H = 44, bosluk = 2;
+  const sutun = W / seri.length;
+  const karY = (v: number) => H / 2 - (v / maxKar) * (H / 2 - 4);
+
+  const cizgi = karlar
+    .map((v, i) => `${i === 0 ? "M" : "L"} ${(i + 0.5) * sutun} ${karY(v)}`)
+    .join(" ");
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-[9px] text-gray-500 uppercase font-bold">Hasılat ve Net Kâr Trendi</p>
+        <div className="flex items-center gap-2.5">
+          <span className="flex items-center gap-1 text-[9px] text-gray-500">
+            <span className="w-2 h-2 rounded-sm bg-[#2F6F5B]" /> Hasılat
+          </span>
+          <span className="flex items-center gap-1 text-[9px] text-gray-500">
+            <span className="w-2.5 h-px bg-[#F59E0B]" /> Net Kâr
+          </span>
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-14" preserveAspectRatio="none">
+        {/* Sıfır çizgisi: net kâr negatife düştüğünde nereye göre okunacağı belli olsun. */}
+        <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="#242B35" strokeWidth="0.4" />
+        {gelirler.map((v, i) => {
+          const y = (Math.abs(v) / maxGelir) * (H - 6);
+          return (
+            <rect
+              key={i}
+              x={i * sutun + bosluk / 2}
+              y={H - y}
+              width={sutun - bosluk}
+              height={y}
+              fill="#2F6F5B"
+              rx="0.6"
+            />
+          );
+        })}
+        <path d={cizgi} fill="none" stroke="#F59E0B" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        {karlar.map((v, i) => (
+          <circle key={i} cx={(i + 0.5) * sutun} cy={karY(v)} r="1.1" fill="#F59E0B" />
+        ))}
+      </svg>
+
+      <div className="flex justify-between">
+        {seri.map((p) => (
+          <span key={p.period_end} className="text-[8px] text-gray-600 tabular-nums">
+            {p.period_label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const ROWS: { key: keyof Period; label: string; group: string }[] = [
   { key: "revenue", label: "Hasılat", group: "Gelir Tablosu" },
   { key: "gross_profit", label: "Brüt Kâr", group: "Gelir Tablosu" },
@@ -103,6 +178,8 @@ export default function FinancialStatementsPanel({ symbol }: { symbol: string })
           Çeyreklik Finansal Tablolar
         </h4>
       </div>
+
+      <TrendGrafigi periods={periods} />
 
       {/* Son çeyreğin yıllık büyümesi — tek bakışta özet */}
       <div className="grid grid-cols-3 gap-2">
