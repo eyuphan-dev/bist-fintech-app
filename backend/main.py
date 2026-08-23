@@ -39,6 +39,7 @@ from schemas import (
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
     WatchlistItemResponse, ScreenerItemResponse,
     PushSubscribeRequest, PushStatusResponse,
+    ScorecardResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -2084,6 +2085,24 @@ def send_test_push(
     if sent == 0:
         raise HTTPException(status_code=400, detail="Kayıtlı cihaz bulunamadı veya gönderim başarısız oldu.")
     return {"success": True, "delivered": sent}
+
+
+@app.get("/api/portfolio/scorecard", response_model=ScorecardResponse)
+def get_portfolio_scorecard(
+    year: Optional[int] = None,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    İşlem performans karnesi: gerçekleşen kâr/zarar, isabet oranı, ortalama
+    tutma süresi, en iyi/en kötü işlem ve hisse bazlı kırılım.
+
+    Yeni veri çekilmez; `transactions` tablosundaki mevcut kayıtlar okunur.
+    `year` verilirse yalnızca o yıl özetlenir (tutma süresi hesabı yine tüm
+    geçmişi kullanır, aksi halde önceki yıldan taşınan pozisyonlar eşleşmezdi).
+    """
+    from scorecard import build_scorecard
+    return ScorecardResponse(**build_scorecard(db, current_user.id, year))
 
 
 @app.get("/api/notifications", response_model=List[NotificationResponse])

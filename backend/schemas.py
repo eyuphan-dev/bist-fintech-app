@@ -841,3 +841,39 @@ class PushStatusResponse(BaseModel):
     configured: bool
     public_key: Optional[str] = None
     device_count: int = 0
+
+
+# --- İşlem performans karnesi ----------------------------------------------
+class ScorecardTrade(BaseModel):
+    symbol: str
+    pnl: float
+    pnl_pct: Optional[float] = None
+    date: Optional[datetime] = None
+
+    @field_serializer("date")
+    def _ser(self, v: Optional[datetime]) -> Optional[str]:
+        return _utc_iso(v) if v else None
+
+
+class ScorecardStock(BaseModel):
+    symbol: str
+    pnl: float
+    trades: int
+
+
+class ScorecardResponse(BaseModel):
+    has_data: bool
+    years: List[int] = []
+    year: Optional[int] = None
+    realized_pnl: Optional[float] = None
+    sell_count: Optional[int] = None
+    win_count: Optional[int] = None
+    loss_count: Optional[int] = None
+    win_rate: Optional[float] = None
+    avg_holding_days: Optional[float] = None
+    matched_sells: Optional[int] = None
+    best_trade: Optional[ScorecardTrade] = None
+    worst_trade: Optional[ScorecardTrade] = None
+    buy_volume: Optional[float] = None
+    sell_volume: Optional[float] = None
+    by_stock: List[ScorecardStock] = []

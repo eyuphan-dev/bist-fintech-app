@@ -6,6 +6,7 @@ import {
   History, TrendingUp, TrendingDown, ArrowRight, Wallet, Target, Clock, RefreshCw, Download,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import PerformanceScorecard from "../components/PerformanceScorecard";
 
 interface TransactionItem {
   id: number;
@@ -149,6 +150,10 @@ export default function TransactionsPage() {
           AI Trader&apos;ın işlemleri buraya dahil değildir.
         </p>
       </div>
+
+      {/* Karne listenin ÜSTÜNDE: 40 satırlık bir listeye bakıp "iyi mi
+          gidiyorum" sorusunu cevaplamak mümkün değil. */}
+      <PerformanceScorecard />
 
       {loading ? (
         <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-8 text-center">
