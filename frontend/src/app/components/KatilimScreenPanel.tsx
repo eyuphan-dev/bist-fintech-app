@@ -100,10 +100,11 @@ export default function KatilimScreenPanel({
       <p className="text-[9px] text-gray-600 leading-relaxed flex items-start gap-1.5 border-t border-[#242B35] pt-2">
         <Info className="w-3 h-3 shrink-0 mt-0.5" />
         <span>
-          Bu bir <strong>ön taramadır</strong>, endeks üyeliği değildir. Ölçütlerden
-          &quot;uygun olmayan gelirlerin toplam gelire oranı&quot; kalemi yalnızca KAP
-          dipnotlarında ayrıştırılmış olduğu için <strong>hesaplanamıyor</strong>;
-          burada yalnızca faaliyet alanı ve iki bilanço oranı kontrol edilir.
+          Bu oranlar <strong>bilgi amaçlıdır</strong>, uygunluk kararını belirlemez —
+          rozetteki karar endeks kaydından gelir. Hesap üç yerde eksik kalıyor:
+          bilançodaki nakdin yalnızca getirili kısmı ayrıştırılamıyor, holdinglerin
+          iştirak yapısı görülemiyor ve &quot;uygun olmayan gelir / toplam gelir&quot;
+          ölçütü yalnızca KAP dipnotlarında bulunduğu için hiç hesaplanamıyor.
           {checkedAt && (
             <> Son hesaplama: {new Date(checkedAt).toLocaleDateString("tr-TR")}.</>
           )}

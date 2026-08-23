@@ -25,6 +25,21 @@ PAYDA NEDEN TOPLAM VARLIK (ölçülerek bulundu):
   Islamic gibi yurt dışı endeksleridir). Ek fayda: artık piyasa değeri verisi
   gerekmediği için yalnızca bilançosu olan her hisse taranabiliyor.
 
+TARAMA KARAR VERMEZ — ÖLÇÜLDÜ, YETMİYOR
+  Sonuçlar elle küratörlü 43 hisseyle karşılaştırıldı: hesaplanabilen 36
+  hissenin 25'inde uyum, 11'inde ayrışma çıktı (%69). Ayrışmaların sebepleri
+  tek tek belirlendi ve HİÇBİRİ elimizdeki veriyle kapatılamıyor:
+    • ALBRK bir katılım bankasıdır ama sektör taraması yalnızca "Bankacılık"
+      etiketini görür; katılım bankasını geleneksel bankadan ayıramaz.
+    • KCHOL, SAHOL gibi holdingler banka iştirakleri yüzünden uygun sayılmaz;
+      sektör etiketi iştirak yapısını göstermez.
+    • MGROS ürün karması (alkol) nedeniyle elenir; ürün kırılımı verisi yok.
+    • GUNDG, ENKAI nakit oranında ayrışır: ölçüt yalnızca GETİRİLİ nakit ve
+      menkul kıymetleri sayar, bilançodaki toplam nakit bunu ayırmaz.
+  Bu yüzden tarama katilim_status'u ASLA DEĞİŞTİRMEZ. %69 isabetle 122 hisseye
+  damga vurmak, damgasız bırakmaktan daha kötüdür. Tarama yalnızca oranları ve
+  sınıra uzaklığı gösterir — zaten kimsenin göstermediği kısım budur.
+
 UYGULANAMAYAN ÖLÇÜT (dürüstlük notu)
   Endeksin dördüncü ölçütü "uygun olmayan gelirlerin toplam gelire oranı
   < %5"tir. Bu kalem yalnızca KAP dipnotlarında ayrıştırılmış olarak bulunur,
@@ -186,31 +201,45 @@ def hisseyi_tara(db: Session, stock: models.Stock) -> dict:
     return sonuc
 
 
-def _kuratorlu_detay(mevcut_durum: str, sonuc: dict) -> str:
+def _panel_metni(stock: "models.Stock", sonuc: dict) -> str:
     """
-    Küratörlü bir hisse için panel metni üretir — SONUÇ İLAN ETMEDEN.
+    Panelde gösterilecek metni üretir — KARAR CÜMLESİ KURMADAN.
 
-    Hesaplanan oran endeksin kendi kararıyla ayrışabilir: bilançodan okuduğumuz
-    "toplam finansal borç" kalemi kiralama yükümlülükleri gibi kalemleri de
-    içerebilirken endeks kendi tanımını kullanır. Bu ayrışma gizlenmez, ama
-    hesabın kararı ezmesine de izin verilmez.
+    Rozetteki karar küratörlü endeks kaydından gelir, buradaki oranlar ise
+    hesaptan. İkisi ayrışabildiği için bu metin asla "uygundur/uygun değildir"
+    demez; oranları bildirir ve ayrışma varsa nedenini açıklar. Aksi halde
+    rozet "UYGUN" derken panelin "sınır aşıldı" demesi gibi, arayüzün kendi
+    kendini yalanladığı bir durum doğardı.
     """
     d, a = sonuc["debt_ratio"], sonuc["asset_ratio"]
+
     if d is None:
-        return sonuc["detail"] or "Oranlar hesaplanamadı."
+        # Oran yoksa yalnızca nedenini söyle. Sektör taramasının reddini
+        # burada YAZMIYORUZ: ALBRK bir katılım bankasıdır ama sektör etiketi
+        # "Bankacılık"tır; o metin uygun bir hissede yanlış görünürdü.
+        neden = sonuc["detail"] or "Oranlar hesaplanamadı."
+        if neden in UYGUNSUZ_SEKTORLER.values():
+            return "Bu şirket için bilanço oranları hesaplanmadı; uygunluk faaliyet alanına göre değerlendirilir."
+        return neden
 
-    parcalar = [f"Hesaplanan finansal borç oranı %{d:.1f}"]
+    parcalar = [f"finansal borç / toplam varlık %{d:.1f}"]
     if a is not None:
-        parcalar.append(f"nakit ve finansal yatırımlar oranı %{a:.1f}")
-    metin = ", ".join(parcalar) + f" (ön tarama sınırı %{ESIK:.0f})."
+        parcalar.append(f"nakit ve finansal yatırımlar / toplam varlık %{a:.1f}")
+    metin = "Hesaplanan oranlar: " + ", ".join(parcalar) + f" (ön tarama sınırı %{ESIK:.0f})."
 
-    hesap_uygun = sonuc["status"] == "UYGUN"
-    if mevcut_durum == "UYGUN" and not hesap_uygun and d >= ESIK:
+    asan = [ad for ad, oran in (("finansal borç", d), ("nakit ve finansal yatırımlar", a))
+            if oran is not None and oran >= ESIK]
+    mevcut = stock.katilim_status or ("UYGUN" if stock.is_katilim_compliant else None)
+
+    if asan and mevcut == "UYGUN":
         metin += (
-            " Bu oran ön tarama sınırının üzerinde olmasına rağmen hisse endeks listesinde"
-            " uygun görünüyor: bilançodan okunan toplam finansal borç kalemi, endeksin kendi"
-            " hesabından daha geniş olabilir. Bağlayıcı olan endeksin kararıdır."
+            f" {', '.join(asan).capitalize()} oranı ön tarama sınırının üzerinde olmasına rağmen"
+            " hisse uygun kabul ediliyor. Bu ön tarama şirketin bilanço toplamlarını kullanır;"
+            " endeks kendi tanımlarıyla (örneğin nakdin yalnızca getirili kısmı) hesaplar."
+            " Bağlayıcı olan endeksin kararıdır."
         )
+    elif asan:
+        metin += f" {', '.join(asan).capitalize()} oranı sınırın üzerinde."
     elif sonuc["uyari"]:
         metin += " " + sonuc["uyari"]
     return metin
@@ -218,15 +247,15 @@ def _kuratorlu_detay(mevcut_durum: str, sonuc: dict) -> str:
 
 def tum_katalogu_tara(db: Session) -> dict:
     """
-    Aktif tüm hisseleri tarar ve sonucu veritabanına yazar.
+    Aktif tüm hisseleri tarar; ORANLARI yazar, KARARI değiştirmez.
 
-    ELLE KÜRATÖRLÜ VERİ EZİLMEZ: is_katilim_compliant değeri elle girilmiş
-    hisselerde (arınma oranı da yayımlanmış olanlar) o kayıt daha güvenilirdir
-    çünkü endeksin kendi listesine dayanır. Hesaplanan oranlar yine de yazılır
-    ki kullanıcı gerekçeyi ve eşiğe yaklaşmayı görebilsin.
+    Neden karar değiştirmiyor: bkz. modül başlığındaki doğruluk ölçümü.
+    Hesap küratörlü veriyle %69 uyuşuyor ve ayrışmaların hiçbiri elimizdeki
+    veriyle kapatılabilir cinsten değil. Bir hisseyi yanlışlıkla "uygun değil"
+    damgalamak, "değerlendirilmedi" bırakmaktan çok daha zararlıdır.
     """
     stocks = db.query(models.Stock).filter_by(is_active=True).all()
-    sayac = {"UYGUN": 0, "UYGUN_DEGIL": 0, "BELIRSIZ": 0}
+    yazilan = 0
     simdi = datetime.utcnow()
 
     for stock in stocks:
@@ -239,30 +268,10 @@ def tum_katalogu_tara(db: Session) -> dict:
         stock.katilim_debt_ratio = sonuc["debt_ratio"]
         stock.katilim_asset_ratio = sonuc["asset_ratio"]
         stock.katilim_checked_at = simdi
-
-        # Küratörlü kayıt varsa durum ondan gelir; yoksa hesaplanan kullanılır.
-        kuratorlu = _f(stock.purification_rate) not in (None, 0.0) or bool(stock.non_compliance_reason)
-
-        if not kuratorlu:
-            stock.katilim_status = sonuc["status"]
-            stock.is_katilim_compliant = sonuc["status"] == "UYGUN"
-            detay = sonuc["detail"]
-            if sonuc["uyari"]:
-                detay = f"{detay} {sonuc['uyari']}"
-        else:
-            # KÜRATÖRLÜ HİSSEDE ÇELİŞKİ TUZAĞI:
-            # Rozetteki karar endeks listesinden, panel metni ise hesaptan
-            # geliyor. İkisi ayrışırsa arayüz kendi kendini yalanlar (rozet
-            # "UYGUN" derken panel "sınır aşıldı" der). Bu yüzden küratörlü
-            # hisselerde hesap SONUÇ İLAN ETMEZ, yalnızca oranları bildirir ve
-            # ayrışma varsa nedenini açıklar.
-            mevcut = stock.katilim_status or ("UYGUN" if stock.is_katilim_compliant else "UYGUN_DEGIL")
-            detay = _kuratorlu_detay(mevcut, sonuc)
-
-        stock.katilim_detail = detay
-
-        sayac[stock.katilim_status or "BELIRSIZ"] = sayac.get(stock.katilim_status or "BELIRSIZ", 0) + 1
+        stock.katilim_detail = _panel_metni(stock, sonuc)
+        if sonuc["debt_ratio"] is not None:
+            yazilan += 1
 
     db.commit()
-    print(f"[Katılım] Tarama tamamlandı: {sayac}")
-    return sayac
+    print(f"[Katılım] Tarama tamamlandı: {yazilan}/{len(stocks)} hissede oran hesaplandı.")
+    return {"hesaplanan": yazilan, "toplam": len(stocks)}
