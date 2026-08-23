@@ -13,8 +13,17 @@ gerekçe gösterilebilir hem de "eşiğe yaklaşıyor" uyarısı verilebilir.
 
 UYGULANAN ÖLÇÜTLER
   1. Faaliyet alanı  — şirketin işi katılım ilkeleriyle bağdaşmalı.
-  2. Finansal borç / piyasa değeri  < %33
-  3. Nakit + finansal yatırımlar / piyasa değeri  < %33
+  2. Finansal borç / toplam varlık  < %33
+  3. Nakit + finansal yatırımlar / toplam varlık  < %33
+
+PAYDA NEDEN TOPLAM VARLIK (ölçülerek bulundu):
+  İlk uygulamada payda piyasa değeriydi ve sonuçlar saçmaydı: SISE %143,
+  PETKM %99.7, EREGL %60.7 çıkıyordu — oysa üçü de endeks üyesi. Aynı
+  şirketler toplam varlık paydasıyla sırasıyla %31.7, %31.6 ve %27.0 veriyor,
+  yani sınırın hemen altına oturuyorlar. Bu tesadüf değil: BIST Katılım
+  Endeksi paydada toplam varlığı kullanır (piyasa değerini kullanan, Dow Jones
+  Islamic gibi yurt dışı endeksleridir). Ek fayda: artık piyasa değeri verisi
+  gerekmediği için yalnızca bilançosu olan her hisse taranabiliyor.
 
 UYGULANAMAYAN ÖLÇÜT (dürüstlük notu)
   Endeksin dördüncü ölçütü "uygun olmayan gelirlerin toplam gelire oranı
@@ -83,6 +92,7 @@ def hisseyi_tara(db: Session, stock: models.Stock) -> dict:
         "asset_ratio": None,
         "detail": None,
         "uyari": None,
+        "debt_source": None,
     }
 
     # --- 1. Faaliyet alanı ---------------------------------------------------
@@ -92,25 +102,36 @@ def hisseyi_tara(db: Session, stock: models.Stock) -> dict:
         sonuc["detail"] = gerekce
         return sonuc
 
-    # --- Piyasa değeri -------------------------------------------------------
-    analysis = db.query(models.CompanyAnalysis).filter_by(stock_id=stock.id).first()
-    market_cap = _f(getattr(analysis, "market_cap", None)) if analysis else None
-    if not market_cap or market_cap <= 0:
-        sonuc["detail"] = "Piyasa değeri verisi olmadığı için oranlar hesaplanamadı."
-        return sonuc
-
+    # --- Payda: toplam varlık ------------------------------------------------
     bilanco = _son_bilanco(db, stock.id)
     if bilanco is None:
         sonuc["detail"] = "Şirketin bilanço verisi henüz alınmadı."
         return sonuc
 
+    toplam_varlik = _f(bilanco.total_assets)
+    if not toplam_varlik or toplam_varlik <= 0:
+        sonuc["detail"] = "Bilançoda toplam varlık kalemi bulunamadığı için oranlar hesaplanamadı."
+        return sonuc
+
     # --- 2. Finansal borç oranı ---------------------------------------------
-    borc = _f(bilanco.total_debt)
+    # Uzun + kısa vadeli finansal borç TERCİH EDİLİR; "Total Debt" ancak bunlar
+    # yoksa kullanılır. Sebep ölçülerek bulundu: yfinance'in Total Debt kalemi
+    # finansal kiralama yükümlülüklerini de içeriyor ve THYAO'da oranı %6.8
+    # yerine %37.7 gösteriyordu (uçak kiralamaları). Katılım ölçütü kiralamayı
+    # değil finansal borcu esas alır.
+    uzun, kisa = _f(bilanco.long_term_debt), _f(bilanco.current_debt)
+    if uzun is not None or kisa is not None:
+        borc = (uzun or 0.0) + (kisa or 0.0)
+        borc_kaynagi = "ayrisik"
+    else:
+        borc = _f(bilanco.total_debt)
+        borc_kaynagi = "toplam"
     if borc is None:
         sonuc["detail"] = "Bilançoda finansal borç kalemi bulunamadı."
         return sonuc
-    debt_ratio = round(borc / market_cap * 100, 2)
+    debt_ratio = round(borc / toplam_varlik * 100, 2)
     sonuc["debt_ratio"] = debt_ratio
+    sonuc["debt_source"] = borc_kaynagi
 
     # --- 3. Nakit ve finansal yatırımlar oranı -------------------------------
     nakit = _f(bilanco.cash_and_equivalents) or 0.0
@@ -120,7 +141,7 @@ def hisseyi_tara(db: Session, stock: models.Stock) -> dict:
     if bilanco.cash_and_equivalents is None and bilanco.short_term_investments is None:
         asset_ratio = None
     else:
-        asset_ratio = round((nakit + yatirim) / market_cap * 100, 2)
+        asset_ratio = round((nakit + yatirim) / toplam_varlik * 100, 2)
     sonuc["asset_ratio"] = asset_ratio
 
     # --- Karar ---------------------------------------------------------------

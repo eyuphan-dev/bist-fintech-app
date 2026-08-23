@@ -82,8 +82,8 @@ export default function KatilimScreenPanel({
       </div>
 
       <div className="space-y-2.5">
-        <OranCubugu label="Finansal borç / piyasa değeri" value={debtRatio} threshold={threshold} />
-        <OranCubugu label="Nakit ve finansal yatırımlar / piyasa değeri" value={assetRatio} threshold={threshold} />
+        <OranCubugu label="Finansal borç / toplam varlık" value={debtRatio} threshold={threshold} />
+        <OranCubugu label="Nakit ve finansal yatırımlar / toplam varlık" value={assetRatio} threshold={threshold} />
       </div>
 
       {detail && (

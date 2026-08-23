@@ -225,6 +225,8 @@ MIGRATIONS = {
         "katilim_detail": "TEXT",
     },
     "financial_statements": {
+        "long_term_debt": "NUMERIC(20, 2)",
+        "current_debt": "NUMERIC(20, 2)",
         "cash_and_equivalents": "NUMERIC(20, 2)",
         "short_term_investments": "NUMERIC(20, 2)",
     },

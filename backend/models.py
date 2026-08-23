@@ -52,8 +52,8 @@ class Stock(Base):
     katilim_status = Column(String(12), default="BELIRSIZ", nullable=True, index=True)
     # Katılım taramasının hesaplanmış çıktıları (bkz. katilim.py). Elle
     # küratörlü verinin aksine bunlar gerçek bilanço kalemlerinden üretilir.
-    katilim_debt_ratio = Column(Numeric(6, 2), nullable=True)    # Finansal borç / piyasa değeri (%)
-    katilim_asset_ratio = Column(Numeric(6, 2), nullable=True)   # Nakit + finansal yatırımlar / piyasa değeri (%)
+    katilim_debt_ratio = Column(Numeric(6, 2), nullable=True)    # Finansal borç / toplam varlık (%)
+    katilim_asset_ratio = Column(Numeric(6, 2), nullable=True)   # Nakit + finansal yatırımlar / toplam varlık (%)
     katilim_checked_at = Column(DateTime, nullable=True)
     katilim_detail = Column(Text, nullable=True)                 # Kullanıcıya gösterilecek gerekçe
     purification_rate = Column(Numeric(5, 2), default=0.00)  # Arınma Oranı (%)
@@ -434,6 +434,8 @@ class FinancialStatement(Base):
     # Katılım taraması için gerekli iki kalem. Endeksin ölçütü nakit ve
     # finansal yatırımların piyasa değerine oranıdır; bunlar olmadan tarama
     # yalnızca borç ayağıyla yapılabilirdi.
+    long_term_debt = Column(Numeric(20, 2), nullable=True)
+    current_debt = Column(Numeric(20, 2), nullable=True)
     cash_and_equivalents = Column(Numeric(20, 2), nullable=True)
     short_term_investments = Column(Numeric(20, 2), nullable=True)
     total_assets = Column(Numeric(20, 2), nullable=True)

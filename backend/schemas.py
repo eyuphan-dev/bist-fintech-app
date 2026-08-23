@@ -191,8 +191,8 @@ class KatilimInfoResponse(BaseModel):
     non_compliance_reason: Optional[str]
     # Hesaplanmış ön tarama çıktıları (bkz. katilim.py). Kullanıcı sonucu
     # değil GEREKÇEYİ görmeli; endeks bile bu oranları yayımlamıyor.
-    debt_ratio: Optional[float] = None       # Finansal borç / piyasa değeri (%)
-    asset_ratio: Optional[float] = None      # Nakit + finansal yatırımlar / piyasa değeri (%)
+    debt_ratio: Optional[float] = None       # Finansal borç / toplam varlık (%)
+    asset_ratio: Optional[float] = None      # Nakit + finansal yatırımlar / toplam varlık (%)
     threshold: float = 33.0
     detail: Optional[str] = None
     checked_at: Optional[datetime] = None

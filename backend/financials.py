@@ -34,6 +34,14 @@ BALANCE_FIELDS = {
     "total_assets": ["Total Assets"],
     "total_equity": ["Stockholders Equity", "Total Equity Gross Minority Interest"],
     "total_debt": ["Total Debt", "Net Debt"],
+    # KİRALAMA TUZAĞI: yfinance'in "Total Debt" kalemi finansal kiralama
+    # yükümlülüklerini de içerir. THYAO'da ölçüldü: toplam varlığa oran
+    # "Total Debt" ile %37.7 (sınırın üstünde), yalnızca uzun+kısa vadeli
+    # finansal borçla %6.8. Uçak kiralamaları borcu üçe katlıyordu. Katılım
+    # ölçütü kiralama yükümlülüğünü değil finansal borcu esas aldığı için bu
+    # iki kalem ayrıca saklanır ve taramada toplamları kullanılır.
+    "long_term_debt": ["Long Term Debt"],
+    "current_debt": ["Current Debt"],
     # Katılım taraması için: nakit ve kısa vadeli finansal yatırımlar.
     #
     # ÇİFTE SAYMA TUZAĞI: yfinance ayrıca "Cash Cash Equivalents And Short Term
