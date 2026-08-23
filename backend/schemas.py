@@ -918,3 +918,16 @@ class BacktestResponse(BaseModel):
     in_position: Optional[bool] = None
     equity_curve: List[BacktestPoint] = []
     trades: List[BacktestTrade] = []
+
+
+# --- Ek teknik göstergeler (günlük OHLCV'den) -------------------------------
+class ExtraIndicatorsResponse(BaseModel):
+    available: bool
+    reason: Optional[str] = None
+    as_of: Optional[date] = None
+    bar_count: Optional[int] = None
+    stochastic_k: Optional[float] = None
+    stochastic_d: Optional[float] = None
+    adx: Optional[float] = None
+    obv: Optional[float] = None
+    obv_slope: Optional[float] = None

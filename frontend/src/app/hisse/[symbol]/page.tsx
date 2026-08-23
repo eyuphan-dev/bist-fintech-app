@@ -13,6 +13,7 @@ import DerinAnalizTab from "../../components/DerinAnalizTab";
 import FinancialStatementsPanel from "../../components/FinancialStatementsPanel";
 import DividendHistoryPanel from "../../components/DividendHistoryPanel";
 import BacktestPanel from "../../components/BacktestPanel";
+import ExtraIndicatorsPanel from "../../components/ExtraIndicatorsPanel";
 import InsiderTrackerBadge from "../../components/InsiderTrackerBadge";
 import DividendCalculatorWidget from "../../components/DividendCalculatorWidget";
 import DcaBacktestWidget from "../../components/DcaBacktestWidget";
@@ -624,6 +625,8 @@ export default function StockDetailPage() {
               <FinancialStatementsPanel symbol={symbol} />
 
               <DividendHistoryPanel symbol={symbol} />
+
+              <ExtraIndicatorsPanel symbol={symbol} />
 
               <BacktestPanel symbol={symbol} />
 

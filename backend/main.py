@@ -39,7 +39,7 @@ from schemas import (
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
     WatchlistItemResponse, ScreenerItemResponse,
     PushSubscribeRequest, PushStatusResponse,
-    ScorecardResponse, BacktestResponse,
+    ScorecardResponse, BacktestResponse, ExtraIndicatorsResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -2085,6 +2085,20 @@ def send_test_push(
     if sent == 0:
         raise HTTPException(status_code=400, detail="Kayıtlı cihaz bulunamadı veya gönderim başarısız oldu.")
     return {"success": True, "delivered": sent}
+
+
+@app.get("/api/stocks/{symbol}/indicators", response_model=ExtraIndicatorsResponse)
+def get_extra_indicators(symbol: str, db: Session = Depends(get_db)):
+    """
+    Stochastic, ADX ve OBV — GÜNLÜK OHLCV barlarından.
+
+    Mevcut RSI/MACD/SMA göstergeleri gün içi anlık fiyat kayıtlarından
+    hesaplanıyor ama o tabloda yüksek/düşük yok. Stochastic ve ADX tanımı
+    gereği gün içi yüksek ve düşüğü kullandığı için burada ayrı bir kaynaktan
+    (stock_prices_daily) hesaplanır.
+    """
+    from indicators import compute_extra_indicators
+    return ExtraIndicatorsResponse(**compute_extra_indicators(db, symbol))
 
 
 @app.get("/api/backtest/strategies")
