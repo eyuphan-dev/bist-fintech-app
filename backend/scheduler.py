@@ -5,7 +5,6 @@ APScheduler arka plan gorev yoneticisi.
 """
 
 import sys
-import io
 import threading
 import time
 # Windows konsolunda Turkce karakter sorununun onlenmesi
@@ -18,7 +17,6 @@ import models
 from yfinance_client import fetch_current_price, fetch_current_prices_batch, fetch_stock_news
 from cache import set_latest_price
 from datetime import datetime, timedelta, date
-import pytz
 from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
 from tefas_client import update_tefas_funds

@@ -3,7 +3,6 @@ import jwt
 import pytz
 from datetime import datetime, timedelta
 from typing import Union, Any
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -31,7 +30,6 @@ DAILY_SESSION_RESET_HOUR = 9
 MIN_SESSION_MINUTES = 60
 
 import bcrypt
-from fastapi.security import OAuth2PasswordBearer
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 

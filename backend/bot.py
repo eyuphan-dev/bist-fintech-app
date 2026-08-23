@@ -8,7 +8,6 @@ from ta.momentum import RSIIndicator
 from ta.trend import MACD, SMAIndicator, EMAIndicator
 
 import models
-from cache import get_latest_price
 from market_hours import is_market_open
 
 # ---------------------------------------------------------------------------
@@ -453,28 +452,39 @@ def _execute_bot_trading_cycle(
         .all()
     )
     portfolio_map = {p.stock_id: p for p in portfolio_rows}
-    stock_by_id = {s.id: s for s in stocks}
+    # Piotroski skorlari da TEK sorguda alinir. Eskiden dongu icinde hisse
+    # basina ayri sorgu atiliyordu; katalog 165 hisseye cikinca bu, fiyat
+    # gecmisinin yaninda IKINCI bir N+1 kaynagiydi.
+    piotroski_map: Dict[int, int] = {}
+    if config["mode"] == "trend":
+        piotroski_map = {
+            sid: int(score)
+            for sid, score in db.query(
+                models.CompanyAnalysis.stock_id, models.CompanyAnalysis.piotroski_score
+            ).filter(models.CompanyAnalysis.piotroski_score.isnot(None)).all()
+        }
 
     for stock in stocks:
-        # DESC + limit ile SON 500 kayıt çekilip kronolojik sıraya (eskiden yeniye)
-        # çevrilir. Önceki haliyle (asc + limit) toplam kayıt 500'ü geçtiğinde en
-        # ESKİ 500 kayıt dönüyordu — bot, birikmiş geçmişi olan hisselerde asla
-        # güncel fiyatı görmüyor, donmuş bir pencerede işlem yapıyordu.
-        price_records = db.query(models.StockPrice)\
-            .filter_by(stock_id=stock.id)\
-            .order_by(models.StockPrice.recorded_at.desc())\
-            .limit(500)\
-            .all()
-        price_records.reverse()
+        if shared_price_history is not None:
+            # Tum botlar icin tek seferde cekilmis ortak gecmis
+            # (bkz. load_shared_price_history). Zaten kronolojik siralidir.
+            price_records = shared_price_history.get(stock.id, [])
+        else:
+            # DESC + limit ile SON 500 kayıt çekilip kronolojik sıraya (eskiden yeniye)
+            # çevrilir. Önceki haliyle (asc + limit) toplam kayıt 500'ü geçtiğinde en
+            # ESKİ 500 kayıt dönüyordu — bot, birikmiş geçmişi olan hisselerde asla
+            # güncel fiyatı görmüyor, donmuş bir pencerede işlem yapıyordu.
+            price_records = db.query(models.StockPrice)\
+                .filter_by(stock_id=stock.id)\
+                .order_by(models.StockPrice.recorded_at.desc())\
+                .limit(BOT_TICK_WINDOW)\
+                .all()
+            price_records.reverse()
 
         if not price_records:
             continue
 
-        piotroski_score = None
-        if config["mode"] == "trend":
-            analysis = db.query(models.CompanyAnalysis).filter_by(stock_id=stock.id).first()
-            if analysis and analysis.piotroski_score is not None:
-                piotroski_score = int(analysis.piotroski_score)
+        piotroski_score = piotroski_map.get(stock.id)
 
         action, latest_price, confidence = _generate_timeframe_signal(price_records, config, risk_config, piotroski_score)
         if latest_price is None:

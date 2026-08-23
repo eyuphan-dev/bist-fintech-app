@@ -130,12 +130,22 @@ self.addEventListener("fetch", (event) => {
         const hit = await cache.match(request);
         if (hit) return hit;
         const response = await fetch(request);
-        // Yalnızca tam ve başarılı yanıtlar saklanır; kısmi (206) veya hatalı
-        // yanıtların önbelleğe girmesi bozuk sayfa yükleme sonucu verir.
+        // Yalnizca tam ve basarili yanitlar saklanir; kismi (206) veya hatali
+        // yanitlarin onbellege girmesi bozuk sayfa yukleme sonucu verir.
         if (response && response.status === 200 && response.type === "basic") {
-          await cache.put(request, response.clone());
-          // Budama yanıtı geciktirmesin diye beklenmez.
-          event.waitUntil(trimStaticCache());
+          const kopya = response.clone();
+          // NE BEKLENIR NE DE waitUntil KULLANILIR:
+          //  - await edilseydi sayfa, onbellege yazma bitene kadar dosyayi
+          //    alamazdi; oysa yanit elimizde, yazma bir yan istir.
+          //  - event.waitUntil() burada respondWith'in icinden cagriliyor ve
+          //    tarayiciya gore olayin artik "etkin" sayilmadigi durumda
+          //    InvalidStateError atar. Bu istisna respondWith sozunu reddeder
+          //    ve DOSYA HIC YUKLENMEZ - onbellek suslemesi yuzunden sayfayi
+          //    bozmak kabul edilemez. Bu yuzden hata yutulur.
+          cache
+            .put(request, kopya)
+            .then(() => trimStaticCache())
+            .catch(() => {});
         }
         return response;
       })()
