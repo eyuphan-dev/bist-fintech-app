@@ -718,3 +718,89 @@ diyip durdu. Atomik takas sayesinde canli etkilenmedi. Ders: test dosyalari
 --- SON DOGRULAMA ---
 15 sayfa 200 | 8 acik API ucu 200 | 3 yetkili uc 401 (dogru) |
 PWA testi 11/11 GECTI | backend hata logu bos | disk %34
+
+================================================================================
+13. KAPSAMLI DEBUG VE OPTIMIZASYON (2026-08-23/24)
+================================================================================
+
+Katalog 43'ten 165 hisseye cikinca ortaya cikan darbogazlar olculerek
+bulundu; hicbiri tahminle degil, olcumle tespit edildi ve olcumle dogrulandi.
+
+--- BULUNAN HATALAR ---
+
+1) FINANSAL TABLO ISI ISTENENIN BESDE BIRINI ISLIYORDU  (en etkilisi)
+   Log kaniti: is "batch_size=20" ile cagriliyor ama cikti "(5 hisse)" diyordu.
+   SEBEP: FinancialStatement hisse basina degil DONEM basina bir satir (~6
+   ceyrek). Dogrudan outerjoin her hisseyi 6 satira aciyor, .limit() bu
+   BIRLESMIS satirlari sinirliyor, SQLAlchemy tekillestirince geriye cok az
+   hisse kaliyor. Testle kanitlandi: 30 hisse x 6 donem veride eski sorgu
+   limit=20 icin 4 hisse donduruyor, yeni sorgu 20.
+   ETKISI: katalog turu 8 gun yerine ~33 gun suruyordu; bilanco kapsaminin
+   39 hissede takili kalmasinin, katilim oranlarinin ve trend grafiginin cogu
+   hissede bos gorunmesinin sebebi buydu.
+   SONUC: kapsam 39 -> 157 hisse (toplu doldurma + duzeltme).
+
+2) "0,00 TL" HATASI
+   Tik kaydi bulunamayan hissede fiyat 0.0 donuyordu ve arayuzde "0,00 TL"
+   goruluyordu - oysa gunluk kapanis verisi elimizde duruyordu. Artik son
+   gunluk kapanisa dusuluyor.
+
+3) SINYAL ONBELLEGI ISITMASI HIC CALISMAYACAKTI
+   use_cache=False hem okumayi hem YAZMAYI kapatiyordu; scheduler'in isitma
+   cagrisi onbellegi hic doldurmayacakti. Yazma kosuldan cikarildi.
+
+4) SERVICE WORKER SAYFAYI BOZABILIRDI
+   Statik dosya onbellege yazilirken hem await ediliyor hem event.waitUntil
+   cagriliyordu. waitUntil respondWith icinden cagrilinca tarayiciya gore
+   InvalidStateError atar; bu istisna respondWith sozunu reddeder ve DOSYA HIC
+   YUKLENMEZ. Yazma artik beklenmiyor, hatasi yutuluyor.
+
+5) BOT OPTIMIZASYONU OLU KODDU
+   Paylasilan fiyat gecmisi parametresi eklenmis ve gecirilmisti ama dongu
+   govdesi hala hisse basina sorgu atiyordu. Sebep: heredoc ile gonderilen
+   betikte Turkce karakterler stdin kodlamasinda bozulup replace sessizce
+   tutmamis, assert koymadigim icin fark edilmemis. Gercekten baglandi.
+
+--- OLCULEN IYILESTIRMELER ---
+  /api/signals (soguk onbellek)   4680 ms -> 448 ms
+     Tum gunluk gecmis (187.836 satir) cekilip Python'da kirpiliyordu;
+     yalnizca ~50 bini kullaniliyordu. Kesme tarihi SQL'e tasindi, tam ORM
+     nesnesi yerine kullanilan iki sutun secildi. Ayrica scheduler her fiyat
+     turunde onbellegi isitiyor, kimse soguga denk gelmiyor.
+
+  En son tik sorgusu               38 ms -> 14 ms VE SABIT
+     ROW_NUMBER() bolumun tamamini okumak zorunda: 208 satir dondurmek icin
+     57.436 satir taraniyordu ve maliyet gecmisle dogrusal buyuyordu.
+     7 gunluk zaman filtresi eklendi.
+
+  Bot fiyat gecmisi (10 bot)     6029 ms -> 204 ms
+     Fiyat gecmisi butun botlar icin ayni; tek sorguda cekilip paylasiliyor.
+     ESDEGERLIK TESTI: 6 hisse x 700 tik x 3 zaman diliminde fiyat dizileri
+     birebir esit, tum AL/SAT/BEKLE sonuclari ayni, kirpma dogru uctan.
+
+  Bot piotroski sorgusu           162 ms -> 3 ms
+     Ayni dongudeki IKINCI N+1; toplu sorguya cevrildi.
+
+  Veritabani indeksleri                    -5,3 MB
+     30 modelde birincil anahtara ayrica index=True verilmis; PostgreSQL
+     zaten benzersiz indeks olusturur. 0 tarama almislar ama her INSERT'te
+     guncelleniyorlardi. Modelden de kaldirildi, yoksa create_all() geri
+     getirirdi.
+
+--- EKLENEN KORUMA ---
+  stock_prices 45 gunluk saklama isi: tablo sinirsiz buyuyordu (gunde ~17 bin
+  satir, ucayda ~1,2 milyon) ve bu dogrudan /api/stocks gecikmesine
+  yansiyordu. Bugun silinecek kayit yok (veri 28 gunluk), yani risksiz devreye
+  girdi.
+
+--- DIGER ---
+  AuthContext: logout, kendisini cagiran efektten sonra tanimlaniyordu.
+  Calisma aninda sorun yok ama React Compiler bileseni HIC optimize
+  etmiyordu. Lint uyarisi 3 -> 1 (kalan mesru).
+  Kullanilmayan importlar temizlendi.
+
+--- DOGRULAMA ---
+  16 sayfa 200 | 10 API ucu 200 | 8 yetkili ucun tamami 401 |
+  yerel SQLite uzerinde 16/16 API testi gecti (karne 3000 TL / %100 / 25 gun
+  birebir dogru, sinir durumlari cokmuyor) | PWA 11/11 | konsol temiz |
+  FCP 332-412 ms, 46 KB | backend hata logu bos | disk %34
