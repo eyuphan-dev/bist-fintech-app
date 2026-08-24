@@ -1,7 +1,7 @@
 import os
 import re
 import pandas as pd
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time as dt_time
 from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
@@ -3088,16 +3088,24 @@ def get_market_quotes(db: Session = Depends(get_db)):
     """
     Döviz kurları, gram altın ve BIST 100 — hisse yanında izlenen referans seriler.
 
-    Veriler günlük kapanışlardan gelir (index_history), scheduler tazeler.
+    Dolar, euro ve gram altın 15 dakikada bir yurt içi kaynaktan tazelenir
+    (bkz. tr_market.py); BIST 100 seans saatlerinde güncellenir. Gün içi
+    tazelenen kayıtlarda as_of SAAT taşır ve is_live=True döner.
     Ücretli platformlarda paket içinde sunulan bu veri yfinance'ta ücretsiz
     olduğu için burada da gösterilir.
     """
     items: List[MarketQuoteItem] = []
 
     for symbol, label in MARKET_QUOTE_LABELS.items():
+        # 'yfinance-gcf' BİLİNEREK DIŞLANIR. Bunlar gram altının COMEX vadeli
+        # sözleşmesinden türetildiği dönemin satırlarıdır ve %1,16 yüksektir
+        # (bkz. tr_market.py). Silinmiyorlar — geriye dönük inceleme için
+        # duruyorlar — ama yeni spot verisiyle karıştırılırlarsa 30 günlük
+        # değişim gerçekte olmayan bir sıçrama gösterir.
         rows = (
             db.query(models.IndexHistory)
             .filter(models.IndexHistory.symbol == symbol)
+            .filter(func.coalesce(models.IndexHistory.source, "") != "yfinance-gcf")
             .order_by(models.IndexHistory.trade_date.desc())
             .limit(40)
             .all()
@@ -3108,11 +3116,16 @@ def get_market_quotes(db: Session = Depends(get_db)):
         latest = rows[0]
         price = float(latest.close)
 
-        # 1 günlük değişim: bir önceki İŞLEM GÜNÜ kapanışına göre (takvim günü değil) —
-        # hafta sonu/tatilde bir önceki takvim gününde kapanış olmadığı için
-        # tarih aritmetiği yerine listedeki bir sonraki kayıt kullanılır.
+        # 1 günlük değişim: ÖNCE kaynağın kendi değişimi kullanılır. Kendi
+        # geçmişimizden hesaplamak, dünkü satır başka bir kaynaktan geldiyse
+        # (yedeğe düşülmüş ya da kaynak değişmiş olabilir) gerçekte olmayan bir
+        # sıçrama üretir. Kaynak değişim vermiyorsa (XU100, TCMB) bir önceki
+        # İŞLEM GÜNÜ satırından hesaplanır — takvim günü değil, çünkü hafta
+        # sonu/tatilde bir önceki takvim gününde kayıt yoktur.
         change_1d = None
-        if len(rows) > 1 and float(rows[1].close) > 0:
+        if latest.change_1d_pct is not None:
+            change_1d = float(latest.change_1d_pct)
+        elif len(rows) > 1 and float(rows[1].close) > 0:
             change_1d = round(((price - float(rows[1].close)) / float(rows[1].close)) * 100, 2)
 
         # 30 günlük: 30 takvim günü öncesine en yakın (ondan önceki) kapanış.
@@ -3122,13 +3135,23 @@ def get_market_quotes(db: Session = Depends(get_db)):
         if older and float(older[0].close) > 0:
             change_30d = round(((price - float(older[0].close)) / float(older[0].close)) * 100, 2)
 
+        # Zaman damgası: gün içi tazelenen satırlarda updated_at doludur.
+        # Eski (yalnızca günlük) satırlarda yoktur; o zaman günün başlangıcı
+        # gösterilir ve is_live=False ile "bu anlık değil" denir.
+        zaman = latest.updated_at
+        canli = zaman is not None
+        if zaman is None:
+            zaman = datetime.combine(latest.trade_date, dt_time.min)
+
         items.append(MarketQuoteItem(
             symbol=symbol,
             label=label,
             price=price,
             change_1d_pct=change_1d,
             change_30d_pct=change_30d,
-            as_of=latest.trade_date,
+            as_of=zaman,
+            source=latest.source,
+            is_live=canli,
         ))
 
     return items

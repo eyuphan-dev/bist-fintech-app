@@ -21,7 +21,8 @@ from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
 from tefas_client import update_tefas_funds
 from analysis_engine import refresh_earnings_calendar
-from daily_history import refresh_daily_history, refresh_index_history, refresh_market_quotes
+from daily_history import refresh_daily_history, refresh_index_history
+from tr_market import store_tr_quotes, store_index_intraday
 
 
 # ---------------------------------------------------------------------------
@@ -249,13 +250,9 @@ def refresh_market_data_job():
             print(f"[Scheduler] Endeks geçmişi tazeleme hatası: {e}")
             db.rollback()
 
-        # Döviz kurları ve altın — hisse yanında izlenen referans seriler.
-        print("[Scheduler] Döviz ve altın fiyatları tazeleniyor...")
-        try:
-            refresh_market_quotes(db)
-        except Exception as e:
-            print(f"[Scheduler] Döviz/altın tazeleme hatası: {e}")
-            db.rollback()
+        # NOT: Döviz/altın buradan ÇIKARILDI. Günde bir kez (TR 11:00) yazılıyordu
+        # ve gram altın COMEX vadelisinden türetildiği için %1,16 yüksekti.
+        # Artık refresh_tr_quotes_job 15 dakikada bir yurt içi kaynaktan yazıyor.
 
         print("[Scheduler] AI sinyal alarmları kontrol ediliyor...")
         try:
@@ -271,6 +268,45 @@ def refresh_market_data_job():
 # ---------------------------------------------------------------------------
 # MODÜL 1.6: Hisse Haberleri (Yahoo Finance) — 24 Saatlik Döngü
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Döviz & Altın — 15 Dakikalık Tazeleme
+# ---------------------------------------------------------------------------
+def refresh_tr_quotes_job():
+    """
+    Dolar, euro ve gram altını yurt içi kaynaktan tazeler (bkz. tr_market.py).
+
+    Neden 15 dakika: kaynağın kendisi ~15 dakikada bir güncelleniyor, daha sık
+    çağırmak aynı sayıyı tekrar tekrar çekmek olurdu. Günde ~96 istek.
+
+    Neden HER GÜN, seans saatlerine bağlı değil: döviz ve altın BİST'e bağlı
+    değil, neredeyse 24 saat işlem görüyor. Piyasa kapalıyken kaynak son
+    değeri döndürür, biz de aynı satırın üzerine yazarız — zararsızdır.
+
+    BIST 100 ise seans saatlerinde ayrıca güncellenir; is_market_open() zaten
+    dakika bazlı kontrol yaptığı için burada ek saat koşuluna gerek yok.
+    """
+    db = SessionLocal()
+    try:
+        try:
+            store_tr_quotes(db)
+        except Exception as e:
+            print(f"[Scheduler] Döviz/altın tazeleme hatası: {e}")
+            db.rollback()
+
+        # DIKKAT: is_market_open() DEMET dondurur -> (acik_mi, sebep).
+        # Dogrudan "if is_market_open():" yazilsaydi bos olmayan demet her zaman
+        # dogru sayilir, XU100 gece yarisi da cekilmeye calisilirdi.
+        acik, _sebep = is_market_open()
+        if acik:
+            try:
+                store_index_intraday(db)
+            except Exception as e:
+                print(f"[Scheduler] XU100 gün içi tazeleme hatası: {e}")
+                db.rollback()
+    finally:
+        db.close()
+
+
 def refresh_deep_analysis_job(batch_size: int = 40):
     """
     Derin bilanço analizini (F/K, PD/DD, ROE, Piotroski, Altman Z, hedef fiyat...)
@@ -599,6 +635,19 @@ def start_scheduler():
         max_instances=1,
     )
 
+    # ── Görev 1.7: Döviz & Altın — 15 Dakikalık Tazeleme ────────────────
+    # Her gün, 24 saat, 15 dakikada bir. Döviz ve altın BİST saatlerine bağlı
+    # değildir; eskiden günde tek sefer (TR 11:00) yazılıyor ve sayı ertesi
+    # sabaha kadar donuyordu.
+    scheduler.add_job(
+        refresh_tr_quotes_job,
+        "cron",
+        minute="*/15",
+        id="tr_quotes_sync",
+        max_instances=1,
+        coalesce=True,           # Kaçan tetiklemeler birikmesin
+    )
+
     # ── Görev 2: Log Temizleme ───────────────────────────────────────────
     # Her Pazar sabahı 03:00 UTC (Türkiye'de 06:00)
     scheduler.add_job(
@@ -643,6 +692,7 @@ def start_scheduler():
     print("  • deep_analysis_sync: Her gün 02:00 UTC (en bayat 40 hissenin bilanço analizi)")
     print("  • bist_updater     : Hafta içi 10:00–18:55, her 5 dakika")
     print("  • market_data_sync : Her gün 08:00 UTC (KAP bildirimleri + TEFAS fon fiyatları)")
+    print("  • tr_quotes_sync   : Her 15 dakika (dolar/euro/gram altın + seansta BIST 100)")
     print("  • stock_news_sync  : Her gün 07:30 UTC (Hisse haberleri, 24 saatlik döngü)")
     print("  • log_cleaner      : Her Pazar 03:00 UTC (90 günden eski logları siler)")
     return scheduler

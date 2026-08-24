@@ -160,10 +160,19 @@ def refresh_market_quotes(db, period: str = "3mo") -> int:
     Endeksle aynı tabloyu kullanır çünkü veri şekli birebir aynıdır
     (sembol + gün + kapanış) ve bunlar da hisse değil "referans seri"dir.
 
-    GRAMALTIN türetilmiş bir seridir: ons altın (USD) × USD/TRY ÷ 31.1034768.
-    Yalnızca her iki serinin de kapanışının bulunduğu günler için hesaplanır —
-    aksi halde eksik günde yanlış bir kur eşleşmesiyle saçma bir gram fiyatı
-    üretilirdi.
+    ARTIK KULLANILMIYOR — bkz. tr_market.py.
+
+    Bu fonksiyon USDTRY/EURTRY/GRAMALTIN'i günde bir kez (TR 11:00) yazıyordu
+    ve gram altını ons altından TÜRETİYORDU. Ons için `GC=F`, yani COMEX VADELİ
+    sözleşmesi kullanılıyordu; vadeli spotun üzerinde işlem görür. Ölçüldü:
+    GC=F 4695,60 USD iken spot ons 4641,83 USD (contango %1,16), bunun gram
+    altına yansıması 7251,81 TL yerine olması gereken 7175,52 TL idi.
+
+    Yerine yurt içi kaynaktan 15 dakikada bir anlık kur yazan
+    tr_market.store_tr_quotes() geçti. Fonksiyon SİLİNMEDİ çünkü tr_market'in
+    dayandığı dış kaynak kalıcı olarak düşerse geri dönülebilecek tek şey bu —
+    ama geri dönülürse yukarıdaki sapmanın bilinerek kabul edilmesi gerekir.
+    Zamanlayıcıya BAĞLI DEĞİLDİR; elle çağrılmadıkça çalışmaz.
     """
     import yfinance as yf
     import models

@@ -460,13 +460,21 @@ class FinancialStatementsResponse(BaseModel):
 
 
 class MarketQuoteItem(BaseModel):
-    """Döviz/altın referans serisi — son kapanış ve değişimler."""
+    """Döviz/altın/endeks referans serisi — son değer ve değişimler."""
     symbol: str
     label: str
     price: float
     change_1d_pct: Optional[float] = None
     change_30d_pct: Optional[float] = None
-    as_of: Optional[date] = None
+    # SAAT İÇEREN zaman damgası (UTC). Eskiden yalnızca tarihti; arayüz "12:15
+    # itibarıyla" diyemediği için kullanıcı günde bir kez yazılan bayat bir
+    # sayıyı anlık sanıyordu.
+    as_of: Optional[datetime] = None
+    # Değerin nereden geldiği ('truncgil' | 'tcmb' | 'yfinance'). Yedek kaynağa
+    # düşüldüğünde bunu arayüzde göstermek, sessizce farklı bir veriye geçmekten
+    # daha dürüst.
+    source: Optional[str] = None
+    is_live: bool = False
 
 
 class BenchmarkPoint(BaseModel):

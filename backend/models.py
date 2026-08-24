@@ -148,6 +148,17 @@ class IndexHistory(Base):
     trade_date = Column(Date, nullable=False, index=True)
     close = Column(Numeric(14, 2), nullable=False)
 
+    # Gun ici tazeleme alanlari (bkz. tr_market.py, scheduler.refresh_tr_quotes_job).
+    # Doviz ve altin gun icinde 15 dakikada bir GUNCELLENIR; bu yuzden bugunun
+    # satiri bir "kapanis" degil, en son goruleni tutar. updated_at olmadan
+    # arayuz "12:15 itibariyla" diyemez, kullanici da bayat bir sayiyi anlik
+    # sanar -- sorunun yarisi tam olarak buydu.
+    updated_at = Column(DateTime, nullable=True)
+    source = Column(String(20), nullable=True)          # 'truncgil' | 'tcmb' | 'yfinance'
+    # Kaynagin KENDI gunluk degisimi. Kendi gecmisimizden hesaplamak, dunku
+    # satir baska bir kaynaktan geldiyse yanlis sonuc verirdi.
+    change_1d_pct = Column(Numeric(6, 2), nullable=True)
+
 
 class Portfolio(Base):
     __tablename__ = "portfolios"

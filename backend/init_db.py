@@ -224,6 +224,12 @@ MIGRATIONS = {
         "katilim_checked_at": "TIMESTAMP",
         "katilim_detail": "TEXT",
     },
+    "index_history": {
+        # Gun ici tazeleme: doviz/altin artik 15 dakikada bir guncelleniyor.
+        "updated_at": "TIMESTAMP",
+        "source": "VARCHAR(20)",
+        "change_1d_pct": "NUMERIC(6, 2)",
+    },
     "financial_statements": {
         "long_term_debt": "NUMERIC(20, 2)",
         "current_debt": "NUMERIC(20, 2)",
