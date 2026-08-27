@@ -30,18 +30,39 @@ interface TemettuOlayi {
 export default function TemettuTakvimi() {
   const [olaylar, setOlaylar] = useState<TemettuOlayi[]>([]);
   const [gecmisiGoster, setGecmisiGoster] = useState(false);
+  // Yaklaşan ödeme bulunamayıp geçmişe düşüldüğünde true olur; başlıkta
+  // kullanıcıya ne gördüğü açıkça söylenir.
+  const [geriyeDusuldu, setGeriyeDusuldu] = useState(false);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [hata, setHata] = useState(false);
 
   const getir = useCallback(async () => {
     setYukleniyor(true);
     setHata(false);
+    setGeriyeDusuldu(false);
     try {
       const res = await fetch(
         `${API_BASE}/dividend-calendar?upcoming_only=${gecmisiGoster ? "false" : "true"}`
       );
       if (!res.ok) throw new Error(String(res.status));
-      setOlaylar(await res.json());
+      const veri: TemettuOlayi[] = await res.json();
+
+      // YAKLAŞAN YOKSA GEÇMİŞE DÜŞ. Boş bir bölüm göstermek, kullanıcıya
+      // "veri yok" izlenimi verir; oysa elimizde son ödemeler var ve
+      // temettü ödeyen şirketleri görmek yine değerli. Ne gösterdiğimizi
+      // gizlemiyoruz — başlıkta yazıyor.
+      if (!gecmisiGoster && veri.length === 0) {
+        const yedek = await fetch(`${API_BASE}/dividend-calendar?upcoming_only=false`);
+        if (yedek.ok) {
+          const gecmis: TemettuOlayi[] = await yedek.json();
+          if (gecmis.length > 0) {
+            setOlaylar(gecmis);
+            setGeriyeDusuldu(true);
+            return;
+          }
+        }
+      }
+      setOlaylar(veri);
     } catch {
       setHata(true);
     } finally {
@@ -71,6 +92,11 @@ export default function TemettuTakvimi() {
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
           <Coins className="w-4 h-4 text-[#10B981]" /> Temettü Takvimi
+          {geriyeDusuldu && (
+            <span className="text-[10px] font-normal text-gray-500 normal-case">
+              · yaklaşan ödeme yok, son ödemeler gösteriliyor
+            </span>
+          )}
         </h2>
         <div className="flex items-center gap-1.5">
           <button
@@ -104,7 +130,7 @@ export default function TemettuTakvimi() {
         </div>
       ) : olaylar.length === 0 ? (
         <p className="text-xs text-gray-500 py-6 text-center">
-          Önümüzdeki 90 gün için KAP&apos;a bildirilmiş nakit temettü ödemesi yok.
+          KAP&apos;a bildirilmiş nakit temettü ödemesi bulunamadı.
         </p>
       ) : (
         <ul className="divide-y divide-[#242B35] border border-[#242B35] rounded-xl overflow-hidden">

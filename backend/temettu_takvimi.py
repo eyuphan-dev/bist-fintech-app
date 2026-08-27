@@ -27,6 +27,11 @@ doğrulandı:
      TURSG'nin 2025 ödemesi 0,100000 TL. Bunlar sırasıyla %1,9231 ve %10
      oranlarına karşılık geliyor.
 
+  3. EN GÜÇLÜ DOĞRULAMA — BEGYO: KAP bildirimindeki %3,06748 oranından
+     hesaplanan 0,030675 TL, `dividend_history`deki gerçekleşmiş ödeme
+     tutarıyla BİREBİR AYNI çıktı. Yani dönüşüm bağımsız bir kaynakla
+     tam olarak doğrulandı.
+
 Sonuç: oran, 1 TL NOMİNAL paya göre yüzdedir.
     pay başına brüt TL = brüt oran / 100
 
