@@ -211,6 +211,22 @@ class KatilimInfoResponse(BaseModel):
     kap_varlik_esik: float = 33.0
     kap_borc_esik: float = 33.0
 
+class MarketNewsItem(BaseModel):
+    """Genel piyasa haberi (Türkçe RSS kaynakları)."""
+    title: str
+    summary: Optional[str] = None
+    source: Optional[str] = None
+    url: Optional[str] = None
+    published_at: datetime
+
+    @field_serializer("published_at")
+    def _yayin(self, value: datetime) -> Optional[str]:
+        return value.isoformat() if value else None
+
+    class Config:
+        from_attributes = True
+
+
 class StockProResponse(BaseModel):
     symbol: str
     company_name: str

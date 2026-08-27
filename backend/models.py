@@ -591,6 +591,12 @@ class StockNews(Base):
     thumbnail = Column(String(500), nullable=True)
     published_at = Column(String(50), nullable=True)
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)
+    # Haberi HANGİ boru hattının yazdığı. Yahoo tazeleme işi hisse başına
+    # "önce hepsini sil, sonra yaz" yapıyor; bu kolon olmadan o silme, Türkçe
+    # RSS'ten eşleştirilmiş haberleri de süpürüyordu (ölçüldü: 10 eşleşme
+    # yazıldı, bir sonraki Yahoo turunda hepsi kayboldu). Artık her iş
+    # yalnızca KENDİ kayıtlarını siler.
+    provider = Column(String(12), nullable=True, index=True)  # 'yahoo' | 'rss'
 
     stock = relationship("Stock")
 
@@ -606,6 +612,29 @@ class Fund(Base):
     is_katilim_compliant = Column(Boolean, default=False)
 
     prices = relationship("FundPrice", back_populates="fund", cascade="all, delete-orphan")
+
+
+class MarketNews(Base):
+    """
+    Genel piyasa/ekonomi haberleri (Türkçe RSS kaynakları).
+
+    NEDEN AYRI TABLO: `stock_news` haberi bir hisseye BAĞLAR (stock_id zorunlu).
+    Ama çekilen haberlerin büyük çoğunluğu belirli bir hisseyle ilgili değildir
+    (ölçüldü: 320 haberin 7'si eşleşiyor) ve bunlar yine de değerlidir —
+    "bugün piyasada ne oldu" sorusunun cevabı burada. Hisseye bağlanamayanları
+    atmak, elimizdeki verinin %97'sini çöpe atmak olurdu.
+    """
+    __tablename__ = "market_news"
+
+    id = Column(Integer, primary_key=True)
+    title = Column(String(500), nullable=False)
+    summary = Column(Text, nullable=True)
+    source = Column(String(60), nullable=True, index=True)
+    # Tekilleştirme URL üzerinden yapılır; başlıkla tekilleştirmek farklı
+    # haberleri birleştirme riski taşır.
+    url = Column(String(500), nullable=True, unique=True)
+    published_at = Column(DateTime, nullable=False, index=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow)
 
 
 class FundPrice(Base):

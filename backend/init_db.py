@@ -209,6 +209,10 @@ MIGRATIONS = {
         "note": "VARCHAR(280)",
         "updated_at": "TIMESTAMP",
     },
+    "stock_news": {
+        # bkz. models.StockNews.provider — Yahoo işi RSS kayıtlarını siliyordu.
+        "provider": "VARCHAR(12)",
+    },
     "stocks": {
         "is_katilim_compliant": "INTEGER DEFAULT 0",
         "purification_rate": "NUMERIC(5, 2) DEFAULT 0.00",

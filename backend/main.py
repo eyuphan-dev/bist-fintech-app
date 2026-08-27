@@ -37,6 +37,7 @@ from schemas import (
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
     DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest,
     PendingOrderCreate, PendingOrderUpdate, PendingOrderResponse, StockNewsItem,
+    MarketNewsItem,
     PivotLevelsResponse, ForeignHoldingTrendResponse, EarningsCalendarItem,
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
     WatchlistItemResponse, ScreenerItemResponse,
@@ -58,7 +59,7 @@ from market_hours import get_market_status_dict, is_market_open
 from transactions import record_transaction, alim_maliyeti, satim_geliri
 from analysis_engine import (
     calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError,
-    calculate_pivot_levels, get_foreign_holding_trend,
+    get_foreign_holding_trend,
 )
 from insider_client import fetch_insider_trades, get_recent_insider_buys, refresh_all_insider_trades
 from dividend_stability import compute_dividend_stability
@@ -1155,7 +1156,11 @@ def get_pivot_levels(symbol: str, db: Session = Depends(get_db)):
     if cached and (datetime.utcnow() - cached["cached_at"]).total_seconds() < _PIVOT_CACHE_TTL_SECONDS:
         return cached["data"]
 
-    data = calculate_pivot_levels(symbol)
+    # Hesap KENDİ günlük fiyat tablomuzdan yapılır. Eskiden burada Yahoo'ya
+    # canlı istek atılıyordu; uç, kod hiç değişmeden bir gün içinde çalışır
+    # durumdan available:false'a düştü (bkz. pivot.py başlığı).
+    from pivot import hesapla as pivot_hesapla
+    data = pivot_hesapla(db, stock.id, symbol)
     _pivot_cache[symbol] = {"data": data, "cached_at": datetime.utcnow()}
     return data
 
@@ -1473,6 +1478,59 @@ def get_major_holder_news(db: Session = Depends(get_db)):
     # çalışır ("Pay Bazında Devre Kesici" gibi 60+ gürültü kaydı elenir).
     filtered = [n for n in notifications if is_major_holder_news(n.title)]
     return filtered[:30]
+
+
+# --- GENEL PİYASA HABERLERİ ---
+
+@app.get("/api/market/news", response_model=List[MarketNewsItem])
+def get_market_news(
+    q: Optional[str] = None,
+    source: Optional[str] = None,
+    limit: int = Query(40, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Türkçe finans/ekonomi haber akışı (bkz. haber_kaynaklari.py, 11 kaynak).
+
+    NEDEN HİSSEDEN AYRI: çekilen haberlerin yalnızca küçük bir kısmı belirli
+    bir hisseyle eşleşiyor (ölçüldü: 320 haberin 7'si). Eşleşmeyenleri atmak
+    verinin çoğunu çöpe atmak olurdu; "bugün piyasada ne oldu" sorusunun
+    cevabı bu akışta.
+    """
+    query = db.query(models.MarketNews)
+    if source:
+        query = query.filter(models.MarketNews.source == source)
+
+    if q and q.strip():
+        # ILIKE KULLANILMIYOR: Türkçe harf katlayamıyor (bkz. tr_fold ve
+        # /api/stocks/search'teki aynı gerekçe). Akış birkaç yüz satır,
+        # bellekte süzmek ölçülebilir bir maliyet getirmiyor.
+        katlanmis = tr_fold(q.strip())
+        adaylar = (
+            query.order_by(models.MarketNews.published_at.desc())
+            .limit(500)
+            .all()
+        )
+        return [
+            MarketNewsItem.model_validate(n) for n in adaylar
+            if katlanmis in tr_fold(n.title or "") or katlanmis in tr_fold(n.summary or "")
+        ][:limit]
+
+    rows = query.order_by(models.MarketNews.published_at.desc()).limit(limit).all()
+    return [MarketNewsItem.model_validate(n) for n in rows]
+
+
+@app.get("/api/market/news/sources", response_model=List[str])
+def get_market_news_sources(db: Session = Depends(get_db)):
+    """Akışta hâlihazırda haberi bulunan kaynakların listesi (filtre kutusu için)."""
+    rows = (
+        db.query(models.MarketNews.source)
+        .filter(models.MarketNews.source.isnot(None))
+        .distinct()
+        .order_by(models.MarketNews.source)
+        .all()
+    )
+    return [r[0] for r in rows]
 
 
 # --- TEFAS FONLARI ---

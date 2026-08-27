@@ -152,6 +152,7 @@ test("Analiz: derin analiz", PROD, "/api/stocks/{}/analysis".format(S), kontrol=
 test("Analiz: bilanco", PROD, "/api/stocks/{}/financials".format(S), kontrol=dolu(1))
 test("Analiz: gostergeler", PROD, "/api/stocks/{}/indicators".format(S), kontrol=dolu(alan="adx"))
 test("Analiz: pivot seviyeleri", PROD, "/api/stocks/{}/pivot-levels".format(S), kontrol=dolu(alan="pivot"))
+test("Analiz: pivot (2. hisse)", PROD, "/api/stocks/ASELS/pivot-levels", kontrol=dolu(alan="previous_close"))
 test("Analiz: sektor kiyasi", PROD, "/api/stocks/{}/sector-comparison".format(S), kontrol=dolu(alan="sector_median_pe"))
 test("Analiz: sinyal taramasi", PROD, "/api/signals", kontrol=dolu(1))
 test("Analiz: tarayici", PROD, "/api/screener", kontrol=dolu(1))
@@ -176,6 +177,10 @@ test("Kurumsal: temettu gecmisi", PROD, "/api/stocks/{}/dividend-history".format
 test("Takvim: bilanco takvimi", PROD, "/api/earnings-calendar", kontrol=dolu(1))
 test("Takvim: halka arzlar", PROD, "/api/ipos", kontrol=dolu(1))
 test("Fonlar: liste", PROD, "/api/funds", kontrol=dolu(10))
+test("Haber: piyasa akisi", PROD, "/api/market/news", kontrol=dolu(10, "title"))
+test("Haber: kaynak listesi", PROD, "/api/market/news/sources", kontrol=dolu(5))
+test("Haber: kaynak filtresi", PROD, "/api/market/news?source=Foreks", kontrol=dolu(1))
+test("Haber: akis aramasi", PROD, "/api/market/news?q=borsa", kontrol=dolu(1))
 
 # ---------- 4. PORTFOY VE ISLEM ----------
 test("Portfoy: bos portfoy okunuyor", LOCAL, "/api/portfolio", token=TOKEN)

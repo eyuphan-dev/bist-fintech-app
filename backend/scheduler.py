@@ -13,6 +13,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import SessionLocal
+from sqlalchemy import or_
+
 import models
 from yfinance_client import fetch_current_price, fetch_current_prices_batch, fetch_stock_news
 from cache import set_latest_price
@@ -21,6 +23,7 @@ from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
 from insider_client import refresh_all_insider_trades
 from katilim_kap import kap_katilim_formlarini_senkronize_et
+from haber_kaynaklari import haberleri_senkronize_et
 from tefas_client import sync_tefas
 from analysis_engine import refresh_earnings_calendar
 from daily_history import refresh_daily_history, refresh_index_history
@@ -230,6 +233,13 @@ def refresh_market_data_job():
             print(f"[Scheduler] İçeriden öğrenenler tazeleme hatası: {e}")
             db.rollback()
 
+        print("[Scheduler] Türkçe haber kaynakları tazeleniyor...")
+        try:
+            haberleri_senkronize_et(db)
+        except Exception as e:
+            print(f"[Scheduler] Haber tazeleme hatası: {e}")
+            db.rollback()
+
         print("[Scheduler] KAP Katılım Finansı formları tazeleniyor...")
         try:
             # KAP bildirimleri BU İŞTE yukarıda tazelendiği için formlar da
@@ -437,12 +447,20 @@ def refresh_stock_news_job():
                 continue
 
             # Önceki günün kayıtlarını sil (24 saatlik döngü: eskiler silinip yenilerle değiştirilir)
-            db.query(models.StockNews).filter_by(stock_id=stock.id).delete(synchronize_session=False)
+            # YALNIZCA Yahoo kayıtları silinir. Eskiden koşulsuz siliniyordu ve
+            # Türkçe RSS'ten eşleştirilen haberleri de süpürüyordu
+            # (bkz. models.StockNews.provider).
+            (db.query(models.StockNews)
+               .filter(models.StockNews.stock_id == stock.id,
+                       or_(models.StockNews.provider == "yahoo",
+                           models.StockNews.provider.is_(None)))
+               .delete(synchronize_session=False))
 
             for item in items:
                 if not item.get("title"):
                     continue
                 db.add(models.StockNews(
+                    provider="yahoo",
                     stock_id=stock.id,
                     symbol=stock.symbol,
                     title=item["title"][:500],

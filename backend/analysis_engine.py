@@ -468,9 +468,15 @@ def calculate_deep_analysis(db: Session, symbol: str, sector_pe_avg_override: Op
 # ---------------------------------------------------------------------------
 def calculate_pivot_levels(symbol: str) -> Dict[str, Any]:
     """
-    Bir önceki tam işlem gününün Yüksek/Düşük/Kapanış (High/Low/Close) verisinden
-    klasik pivot noktalarını (P, R1-R3, S1-S3) ve son 20 günlük yüksek/düşük
-    aralığına göre Fibonacci geri çekilme seviyelerini (%23.6/%38.2/%50/%61.8) hesaplar.
+    BAYAT — KULLANMAYIN. Yerine `pivot.hesapla(db, stock_id, symbol)`.
+
+    Bu sürüm kullanıcı isteği sırasında Yahoo'ya bağlanıyordu (projenin "dış
+    servise istek sırasında bağlanılmaz" ilkesine aykırı) ve `iloc[-1]` ile
+    YANLIŞ GÜNÜ kullanıyordu — seans sonrası son satır bugündür, oysa klasik
+    pivot bir önceki günün verisine dayanır. Üretimde kod hiç değişmeden
+    available:false'a düştü. Ayrıntı için pivot.py başlığına bakın.
+
+    Fonksiyon geriye dönük uyum için duruyor; hiçbir uç bunu çağırmıyor.
     """
     yahoo_symbol = f"{symbol.upper()}.IS"
     try:

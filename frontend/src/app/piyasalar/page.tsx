@@ -6,6 +6,7 @@ import { Search, RefreshCw, Star } from "lucide-react";
 import KatilimBadge from "../components/KatilimBadge";
 import MarketQuotesBar from "../components/MarketQuotesBar";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import PiyasaHaberleri from "../components/PiyasaHaberleri";
 import { marketBadgeClass } from "../../lib/marketColor";
 
 interface Stock {
@@ -190,6 +191,9 @@ export default function PiyasalarPage() {
           )}
         </div>
       )}
+
+      {/* Türkçe piyasa haber akışı (bkz. backend/haber_kaynaklari.py, 10 kaynak). */}
+      <PiyasaHaberleri limit={20} />
     </div>
   );
 }
