@@ -56,7 +56,7 @@ export default function Footer() {
           <p className="text-[10px] text-gray-600">
             © {new Date().getFullYear()} BIST Simülasyonu & Yapay Zeka Trader. Tüm hakları saklıdır.
           </p>
-          <p className="text-[10px] text-gray-600">Design by Eyüphan İpek Hazretleri (ks)</p>
+          <p className="text-[10px] text-gray-600">Design by Eyüphan İpek</p>
         </div>
       </div>
     </footer>
