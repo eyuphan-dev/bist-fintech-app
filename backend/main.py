@@ -1625,6 +1625,13 @@ def get_funds(
 
 @app.get("/api/ipos", response_model=List[IpoResponse])
 def get_ipos(db: Session = Depends(get_db)):
+    """
+    Halka arz takvimi (bkz. ipo_client.py).
+
+    Tablo uzun süre BOŞTU — onu dolduran hiçbir kod yoktu, kullanıcıya
+    çalışmayan bir bölüm gösteriliyordu. Artık halkarz.com'dan günlük
+    tazeleniyor.
+    """
     return db.query(models.Ipo).order_by(models.Ipo.id.desc()).all()
 
 

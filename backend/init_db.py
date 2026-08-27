@@ -209,6 +209,14 @@ MIGRATIONS = {
         "note": "VARCHAR(280)",
         "updated_at": "TIMESTAMP",
     },
+    "ipos": {
+        # bkz. ipo_client.py — tablo eskiden hicbir kod tarafindan doldurulmuyordu.
+        "lot_count": "BIGINT",
+        "broker": "VARCHAR(120)",
+        "market": "VARCHAR(40)",
+        "source_url": "VARCHAR(500)",
+        "updated_at": "TIMESTAMP",
+    },
     "stock_news": {
         # bkz. models.StockNews.provider — Yahoo işi RSS kayıtlarını siliyordu.
         "provider": "VARCHAR(12)",

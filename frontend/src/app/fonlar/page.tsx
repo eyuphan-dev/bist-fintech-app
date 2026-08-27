@@ -28,8 +28,14 @@ interface Ipo {
   symbol: string | null;
   offer_price: number | null;
   demand_collection_dates: string | null;
-  is_katilim_compliant: boolean;
+  // boolean DEĞİL: halka arz olan şirketin katılım uygunluğu bilinmiyor
+  // (bilanço yok, KAP Katılım formu yok). null = değerlendirilmedi.
+  is_katilim_compliant: boolean | null;
   lot_distribution_type: string | null;
+  lot_count: number | null;
+  broker: string | null;
+  market: string | null;
+  source_url: string | null;
 }
 
 export default function FonlarPage() {
@@ -85,7 +91,7 @@ export default function FonlarPage() {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-            <PiggyBank className="w-4 h-4 text-[#F59E0B]" /> TEFAS Yatırım Fonları
+            <PiggyBank className="w-4 h-4 text-[#10B981]" /> TEFAS Yatırım Fonları
           </h2>
           <button
             onClick={() => setKatilimOnly((v) => !v)}
@@ -173,46 +179,62 @@ export default function FonlarPage() {
       {/* Halka Arzlar */}
       <section className="space-y-4">
         <h2 className="text-sm font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-          <Rocket className="w-4 h-4 text-[#F59E0B]" /> Halka Arz Takvimi
+          <Rocket className="w-4 h-4 text-[#10B981]" /> Halka Arz Takvimi
         </h2>
 
         {ipos.length === 0 ? (
-          // "Halka arz yok" demek yanıltıcı olurdu: veri kaynağımız olmadığı için
-          // liste her zaman boş. Kullanıcı gerçek durumu ve nereye bakacağını bilsin.
-          <div className="text-center py-6 space-y-2">
-            <p className="text-xs text-gray-500">
-              Halka arz takvimi için otomatik bir veri kaynağı henüz bağlı değil.
-            </p>
-            <a
-              href="https://www.kap.org.tr/tr/bildirim-sorgu"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block text-[11px] font-semibold text-[#F59E0B] hover:underline"
-            >
-              Güncel halka arzlar için KAP&apos;a bakın →
-            </a>
-          </div>
+          <p className="text-xs text-gray-500 text-center py-6">
+            Şu anda listelenen halka arz yok.
+          </p>
         ) : (
           <div className="space-y-3">
             {ipos.map((ipo) => (
               <div key={ipo.id} className="bg-[#151921] border border-[#242B35] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-white">{ipo.company_name}</span>
-                    {ipo.symbol && <span className="text-[10px] text-gray-500">({ipo.symbol})</span>}
-                    {ipo.is_katilim_compliant && (
+                    {ipo.symbol && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#242B35] text-gray-300">
+                        {ipo.symbol}
+                      </span>
+                    )}
+                    {/* Katılım rozeti YALNIZCA true iken çıkar. null "değerlendirilmedi"
+                        demektir; halka arzda şirketin bilançosu da KAP Katılım formu da
+                        yok, uygunluğu bilmiyoruz ve bilmediğimizi iddia etmiyoruz. */}
+                    {ipo.is_katilim_compliant === true && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#10B981]/10 text-[#10B981]">
                         KATILIM
                       </span>
                     )}
                   </div>
                   <p className="text-[11px] text-gray-500 mt-1">
-                    Talep Toplama: {ipo.demand_collection_dates || "Belirtilmedi"} · Dağıtım: {ipo.lot_distribution_type || "Belirtilmedi"}
+                    Talep toplama: {ipo.demand_collection_dates || "Belirtilmedi"}
+                    {ipo.lot_distribution_type ? ` · ${ipo.lot_distribution_type}` : ""}
+                    {ipo.lot_count ? ` · ${ipo.lot_count.toLocaleString("tr-TR")} lot` : ""}
                   </p>
+                  {(ipo.broker || ipo.market) && (
+                    <p className="text-[10px] text-gray-600 mt-0.5">
+                      {ipo.broker}
+                      {ipo.broker && ipo.market ? " · " : ""}
+                      {ipo.market}
+                    </p>
+                  )}
                 </div>
-                <span className="text-sm font-bold text-[#F59E0B] tabular-nums">
-                  {ipo.offer_price ? `${ipo.offer_price.toFixed(2)} TL` : "Fiyat Belirlenmedi"}
-                </span>
+                <div className="text-right">
+                  <span className="text-sm font-bold text-white tabular-nums block">
+                    {ipo.offer_price ? `${ipo.offer_price.toFixed(2)} TL` : "Fiyat belirlenmedi"}
+                  </span>
+                  {ipo.source_url && (
+                    <a
+                      href={ipo.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-[#10B981] hover:underline"
+                    >
+                      Detay →
+                    </a>
+                  )}
+                </div>
               </div>
             ))}
           </div>

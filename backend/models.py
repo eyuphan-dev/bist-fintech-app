@@ -662,8 +662,20 @@ class Ipo(Base):
     symbol = Column(String(10), nullable=True)
     offer_price = Column(Numeric(10, 2), nullable=True)
     demand_collection_dates = Column(String(60), nullable=True)
-    is_katilim_compliant = Column(Boolean, default=False)
+    # NULLABLE ve varsayilani YOK: halka arz olan sirketin katilim uygunlugunu
+    # bilmiyoruz (bilanco yok, KAP Katilim formu da yok — sirket henuz yukumlu
+    # degil). Varsayilan olarak False yazmak "uygun degil" demektir, yani
+    # bilmedigimiz bir seyi iddia etmek olur; purification_rate yer tutucusunda
+    # yapilan hatanin aynisi. None kalir, arayuz "degerlendirilmedi" der.
+    is_katilim_compliant = Column(Boolean, nullable=True, default=None)
     lot_distribution_type = Column(String(50), nullable=True)
+    lot_count = Column(BigInteger, nullable=True)
+    broker = Column(String(120), nullable=True)      # aracı kurum
+    market = Column(String(40), nullable=True)       # Yıldız Pazar vb.
+    # Tekilleştirme bunun üzerinden yapılır; şirket adı yazımı değişebilir,
+    # kaynak bağlantısı sabittir.
+    source_url = Column(String(500), nullable=True, unique=True)
+    updated_at = Column(DateTime, nullable=True)
 
 
 # ---------------------------------------------------------------------------

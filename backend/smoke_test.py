@@ -187,7 +187,7 @@ test("Kurumsal: iceriden ogrenen", PROD, "/api/stocks/{}/insider-trades".format(
 test("Kurumsal: yabanci takas trendi", PROD, "/api/stocks/{}/foreign-holding-trend".format(S), kontrol=dolu(1))
 test("Kurumsal: temettu gecmisi", PROD, "/api/stocks/{}/dividend-history".format(S), kontrol=dolu(1))
 test("Takvim: bilanco takvimi", PROD, "/api/earnings-calendar", kontrol=dolu(1))
-test("Takvim: halka arzlar", PROD, "/api/ipos", kontrol=dolu(1))
+test("Takvim: halka arzlar", PROD, "/api/ipos", kontrol=dolu(1, "company_name"))
 test("Fonlar: liste", PROD, "/api/funds", kontrol=dolu(10))
 test("Haber: piyasa akisi", PROD, "/api/market/news", kontrol=dolu(10, "title"))
 test("Haber: kaynak listesi", PROD, "/api/market/news/sources", kontrol=dolu(5))

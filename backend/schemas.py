@@ -655,9 +655,16 @@ class IpoResponse(BaseModel):
     symbol: Optional[str]
     offer_price: Optional[float]
     demand_collection_dates: Optional[str]
-    is_katilim_compliant: bool
+    # BOOL DEĞİL OPTIONAL: halka arz olan şirketin katılım uygunluğu
+    # bilinmiyor (bilanço yok, KAP Katılım formu yok). False göndermek
+    # "uygun değil" demek olurdu — bilmediğimizi iddia etmeyiz.
+    is_katilim_compliant: Optional[bool] = None
     katilim_status: Optional[str] = None  # UYGUN | UYGUN_DEGIL | BELIRSIZ
     lot_distribution_type: Optional[str]
+    lot_count: Optional[int] = None
+    broker: Optional[str] = None
+    market: Optional[str] = None
+    source_url: Optional[str] = None
 
     class Config:
         from_attributes = True
