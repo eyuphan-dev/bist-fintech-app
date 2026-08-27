@@ -30,6 +30,7 @@ from schemas import (
     TechnicalSignalItem, SectorSummaryItem, StockSectorComparison, WatchlistUpdateRequest,
     DividendPaymentItem, DividendHistoryResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
+    CounterfactualResponse,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
@@ -59,6 +60,7 @@ from analysis_engine import (
     calculate_pivot_levels, get_foreign_holding_trend,
 )
 from insider_client import fetch_insider_trades, get_recent_insider_buys, refresh_all_insider_trades
+from dividend_stability import compute_dividend_stability
 from text_utils import tr_lower
 from sentiment import score_sentiment
 from yfinance_client import fetch_stock_news
@@ -2226,6 +2228,33 @@ def get_portfolio_scorecard(
     return ScorecardResponse(**build_scorecard(db, current_user.id, year))
 
 
+@app.get("/api/portfolio/counterfactual", response_model=CounterfactualResponse)
+def get_portfolio_counterfactual(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    "Sen olmasan ne olurdu?" karnesi — kullanıcının gerçek portföy değerini
+    üç alternatif senaryoyla kıyaslar (bkz. counterfactual.py):
+    hiç işlem yapmasaydı, sermayeyi toptan BIST 100'e yatırsaydı, ya da
+    aylık eşit parçalarla (DCA) yatırsaydı.
+
+    Yeterli veri yoksa (yeni hesap, endeks verisi henüz birikmemiş)
+    available=False döner — uydurma bir sayı göstermek yerine özellik
+    tümüyle gizlenir.
+    """
+    from counterfactual import compute_counterfactual
+
+    actual_value = _portfolio_value(db, current_user.id, False, float(current_user.virtual_balance))
+    sonuc = compute_counterfactual(db, current_user, actual_value)
+    if sonuc is None:
+        return CounterfactualResponse(
+            available=False,
+            reason="Kıyaslama için yeterli işlem/endeks geçmişi henüz yok.",
+        )
+    return CounterfactualResponse(available=True, **sonuc)
+
+
 @app.get("/api/notifications", response_model=List[NotificationResponse])
 def list_notifications(
     current_user: models.User = Depends(get_current_user),
@@ -3369,6 +3398,12 @@ def get_dividend_history(symbol: str, db: Session = Depends(get_db)):
         else:
             trend = "Değişken"
 
+    # İstikrar sınıfı: yearly zaten str anahtarlı (JSON uyumu için), fonksiyon
+    # int yıl bekliyor.
+    istikrar = compute_dividend_stability(
+        {int(y): v for y, v in yearly.items()}, current_year=current_year,
+    )
+
     return DividendHistoryResponse(
         symbol=stock.symbol,
         company_name=stock.company_name,
@@ -3378,6 +3413,11 @@ def get_dividend_history(symbol: str, db: Session = Depends(get_db)):
         last_payment_date=payments[0].pay_date if payments else None,
         average_last_3y=avg3,
         trend=trend,
+        stability_class=istikrar["stability_class"],
+        stability_label=istikrar["stability_label"],
+        consecutive_paid_years=istikrar["consecutive_paid_years"],
+        consecutive_increase_years=istikrar["consecutive_increase_years"],
+        ever_cut=istikrar["ever_cut"],
     )
 
 

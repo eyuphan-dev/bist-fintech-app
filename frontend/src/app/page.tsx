@@ -14,6 +14,7 @@ import PortfolioAnalytics from "./components/PortfolioAnalytics";
 import DividendIncomePanel from "./components/DividendIncomePanel";
 import PortfolioRiskPanel from "./components/PortfolioRiskPanel";
 import PortfolioPerformanceChart from "./components/PortfolioPerformanceChart";
+import CounterfactualPanel from "./components/CounterfactualPanel";
 import { useAuth, API_BASE } from "./context/AuthContext";
 
 interface PortfolioItem {
@@ -309,6 +310,8 @@ export default function Home() {
               <PortfolioAnalytics refreshKey={refreshTrigger} />
 
               <PortfolioRiskPanel refreshKey={refreshTrigger} />
+
+              <CounterfactualPanel refreshKey={refreshTrigger} />
 
               <DividendIncomePanel refreshKey={refreshTrigger} />
 

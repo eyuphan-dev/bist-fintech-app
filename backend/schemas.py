@@ -368,6 +368,14 @@ class DividendHistoryResponse(BaseModel):
     average_last_3y: Optional[float] = None
     trend: Optional[str] = None         # "Artıyor" / "Azalıyor" / "Değişken"
 
+    # İstikrar sınıfı (bkz. dividend_stability.py). None = yeterli tam yıl yok.
+    # Gizli ağırlıklı bir "skor" DEĞİLDİR — sabit, açık kurallardan üretilir.
+    stability_class: Optional[str] = None          # "A" / "B" / "C" / "D"
+    stability_label: Optional[str] = None
+    consecutive_paid_years: int = 0
+    consecutive_increase_years: int = 0
+    ever_cut: bool = False
+
 
 class SectorSummaryItem(BaseModel):
     """
@@ -505,6 +513,24 @@ class PortfolioBenchmarkResponse(BaseModel):
 class BotPerformancePoint(BaseModel):
     date: date
     total_portfolio_value: float
+
+class CounterfactualScenarioItem(BaseModel):
+    key: str
+    label: str
+    final_value: float
+    return_pct: float
+
+
+class CounterfactualResponse(BaseModel):
+    """"Sen olmasan ne olurdu?" karnesi (bkz. counterfactual.py)."""
+    available: bool
+    reason: Optional[str] = None
+    actual_value: Optional[float] = None
+    actual_return_pct: Optional[float] = None
+    baseline_capital: Optional[float] = None
+    scenarios: List[CounterfactualScenarioItem] = []
+    note: Optional[str] = None
+
 
 class LeaderboardItem(BaseModel):
     username: str

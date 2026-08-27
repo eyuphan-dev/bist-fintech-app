@@ -19,7 +19,18 @@ interface Data {
   last_payment_date: string | null;
   average_last_3y: number | null;
   trend: string | null;
+  stability_class: string | null;
+  stability_label: string | null;
+  consecutive_paid_years: number;
 }
+
+/** dividend_stability.py'deki sabit kurallarla BİREBİR eşleşir — bkz. backend. */
+const STABILITY_STYLE: Record<string, { color: string; bg: string; label: string }> = {
+  A: { color: "#10B981", bg: "rgba(16,185,129,0.12)", label: "A · Çok İstikrarlı" },
+  B: { color: "#34D399", bg: "rgba(52,211,153,0.10)", label: "B · İstikrarlı" },
+  C: { color: "#F59E0B", bg: "rgba(245,158,11,0.10)", label: "C · Düzensiz" },
+  D: { color: "#F43F5E", bg: "rgba(244,63,94,0.10)", label: "D · Kesintili" },
+};
 
 const TREND_STYLE: Record<string, { color: string; Icon: React.ElementType }> = {
   "Artıyor": { color: "#10B981", Icon: TrendingUp },
@@ -55,6 +66,7 @@ export default function DividendHistoryPanel({ symbol }: { symbol: string }) {
   const maxTotal = Math.max(...years.map((y) => data.yearly_totals[y]), 0.0001);
   const currentYear = new Date().getFullYear();
   const trendStyle = data.trend ? TREND_STYLE[data.trend] : null;
+  const stabilityStyle = data.stability_class ? STABILITY_STYLE[data.stability_class] : null;
 
   return (
     <div className="bg-[#151921] border border-[#242B35] rounded-lg p-3 space-y-3">
@@ -73,6 +85,21 @@ export default function DividendHistoryPanel({ symbol }: { symbol: string }) {
           </span>
         )}
       </div>
+
+      {stabilityStyle && (
+        <div
+          className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2"
+          style={{ backgroundColor: stabilityStyle.bg }}
+          title={data.stability_label ?? undefined}
+        >
+          <span className="text-xs font-bold" style={{ color: stabilityStyle.color }}>
+            {stabilityStyle.label}
+          </span>
+          <span className="text-[10px] text-gray-400 tabular-nums">
+            {data.consecutive_paid_years} yıl kesintisiz
+          </span>
+        </div>
+      )}
 
       {/* Yıl bazında toplam — bir yılda birden fazla taksit olabildiği için
           tek tek ödeme yerine yıllık toplam gösterilir. */}
@@ -115,10 +142,15 @@ export default function DividendHistoryPanel({ symbol }: { symbol: string }) {
         </div>
       </div>
 
+      {data.stability_label && (
+        <p className="text-[9px] text-gray-600">{data.stability_label}</p>
+      )}
       <p className="text-[9px] text-gray-600">
         Hisse başına brüt tutarlar. Yıllık toplamlardır — bir şirket aynı yıl birden
         fazla taksit ödeyebilir. İçinde bulunulan yıl henüz tamamlanmadığı için gri
-        gösterilir ve trend hesabına katılmaz. Geçmiş ödeme geleceği garanti etmez.
+        gösterilir ve trend hesabına katılmaz. İstikrar sınıfı sabit kurallardan
+        (kesintisiz ödeme/artış serisi) türetilir, tahmin veya öneri değildir.
+        Geçmiş ödeme geleceği garanti etmez.
       </p>
     </div>
   );
