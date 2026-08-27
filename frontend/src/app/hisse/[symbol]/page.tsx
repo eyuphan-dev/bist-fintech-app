@@ -45,13 +45,6 @@ const SECTIONS: { key: SectionKey; label: string; icon: any }[] = [
   { key: "topluluk", label: "Topluluk", icon: Users },
 ];
 
-/**
- * İşlem komisyonu oranı (%). Backend'deki constants.KOMISYON_ORANI_PCT ile AYNI
- * olmalıdır — burada yalnızca kullanıcı işlemden önce ne ödeyeceğini görsün diye
- * önizleme hesabı yapılıyor. Gerçek kesinti her zaman backend'de yapılır.
- */
-const KOMISYON_ORANI_PCT = 0.02;
-
 export default function StockDetailPage() {
   const params = useParams<{ symbol: string }>();
   const router = useRouter();
@@ -60,6 +53,12 @@ export default function StockDetailPage() {
 
   const [stockList, setStockList] = useState<any[]>([]);
   const [stockDetail, setStockDetail] = useState<any>(null);
+  // Backend'den gelir (/api/backtest/strategies) — sabit yerel bir sayı DEĞİLDİR,
+  // aksi halde backend'deki constants.KOMISYON_ORANI_PCT değişirse arayüz eski
+  // değeri göstermeye devam ederdi (bkz. transactions.py'deki "tek yerde tanımlı
+  // olsun" ilkesi). Fetch tamamlanana kadar mevcut oran gösterilir, işlem her
+  // zaman backend'in o anki değeriyle kesilir.
+  const [komisyonOraniPct, setKomisyonOraniPct] = useState(0.02);
   // İşlem panelinde kullanılabilir bakiye ve elde tutulan lot gösterilebilsin diye.
   const [portfolio, setPortfolio] = useState<any>(null);
   const [kapDisclosures, setKapDisclosures] = useState<any>(null);
@@ -95,6 +94,23 @@ export default function StockDetailPage() {
     };
     fetchList();
   }, [refreshTrigger]);
+
+  // Komisyon oranı bir kez çekilir — sayfa oturumu boyunca değişmesi beklenmez.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/backtest/strategies`);
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.default_commission_pct === "number") {
+            setKomisyonOraniPct(data.default_commission_pct);
+          }
+        }
+      } catch (err) {
+        console.error("Komisyon oranı alınamadı, önizlemede varsayılan kullanılıyor:", err);
+      }
+    })();
+  }, []);
 
   const summary = stockList.find((s) => s.symbol === symbol);
 
@@ -773,12 +789,12 @@ export default function StockDetailPage() {
             </div>
 
             {/* Komisyon işlem ÖNCESİNDE gösterilir. Alımda bakiyeden brüt tutar +
-                komisyon düşer; satımda gelirden komisyon kesilir. Oran backend'de
-                constants.KOMISYON_ORANI_PCT ile tek yerde tanımlı, burada yalnızca
-                önizleme amaçlı tekrarlanıyor — kesin tutarı her zaman backend belirler. */}
+                komisyon düşer; satımda gelirden komisyon kesilir. Oran backend'den
+                (/api/backtest/strategies) çekilir, burada yalnızca önizleme amaçlı
+                tekrarlanıyor — kesin tutarı her zaman backend belirler. */}
             {(() => {
               const brut = tradeQty * stockDetail.current_price;
-              const komisyon = brut * KOMISYON_ORANI_PCT / 100;
+              const komisyon = brut * komisyonOraniPct / 100;
               const tl = (v: number) =>
                 v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
               return (
@@ -788,7 +804,7 @@ export default function StockDetailPage() {
                     <span className="text-gray-300 tabular-nums">{tl(brut)} TL</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Komisyon (%{KOMISYON_ORANI_PCT}):</span>
+                    <span className="text-gray-500">Komisyon (%{komisyonOraniPct}):</span>
                     <span className="text-gray-500 tabular-nums">{tl(komisyon)} TL</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-[#242B35] pt-1">
