@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw, CalendarDays, Newspaper, ExternalLink, Landmark, Search, X } from "lucide-react";
 import { API_BASE } from "../context/AuthContext";
+import TemettuTakvimi from "../components/TemettuTakvimi";
 
 interface EarningsItem {
   symbol: string;
@@ -82,11 +83,16 @@ export default function TakvimPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-8">
       <div>
-        <h1 className="text-xl font-bold text-white">Bilanço & KAP Takvimi</h1>
+        <h1 className="text-xl font-bold text-white">Bilanço, Temettü & KAP Takvimi</h1>
         <p className="text-xs text-gray-500 mt-1">
-          Yaklaşan çeyreklik bilanço açıklama tarihleri ve şirketlerin son KAP bildirimleri.
+          Yaklaşan bilanço açıklamaları, nakit temettü ödemeleri ve şirketlerin son KAP bildirimleri.
         </p>
       </div>
+
+      {/* Temettü takvimi en üstte: katılım finansı odaklı bir uygulamada
+          temettü merkezî bir kavram ve kullanıcı bugüne kadar yalnızca
+          GEÇMİŞ ödemeleri görebiliyordu. */}
+      <TemettuTakvimi />
 
       <section className="space-y-3">
         <h2 className="text-sm font-bold text-white flex items-center gap-1.5">

@@ -517,6 +517,37 @@ class DividendHistory(Base):
     stock = relationship("Stock")
 
 
+class DividendEvent(Base):
+    """
+    YAKLAŞAN temettü ödemeleri (KAP "Hak Kullanımı" bildirimlerinden).
+
+    `dividend_history` GEÇMİŞ ödemeleri tutar; bu tablo GELECEĞİ tutar.
+    İkisi ayrı: geçmiş, gerçekleşmiş ödemenin kaydıdır ve yfinance'tan gelir;
+    burası ise şirketin KAP'a bildirdiği ödeme PLANIDIR ve ödeme tarihi
+    gelmeden önce değişebilir.
+
+    Hem ORAN hem hesaplanan TL saklanır. Oran, KAP'ın bildirdiği ham değerdir;
+    TL, 1 TL nominale göre yüzdeden türetilir (oran/100). Dönüşüm iki bağımsız
+    kontrolle doğrulandı — bkz. temettu_takvimi.py başlığı.
+    """
+    __tablename__ = "dividend_events"
+    __table_args__ = (UniqueConstraint("symbol", "payment_date", name="uq_dividend_event_symbol_date"),)
+
+    id = Column(Integer, primary_key=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol = Column(String(10), nullable=False, index=True)
+    event_type = Column(String(60), nullable=True)          # "Nakit Temettü Ödeme"
+    payment_date = Column(Date, nullable=False, index=True)
+    gross_rate_pct = Column(Numeric(12, 6), nullable=True)   # KAP'ın bildirdiği brüt oran
+    net_rate_pct = Column(Numeric(12, 6), nullable=True)     # KAP'ın bildirdiği net oran
+    gross_amount_per_share = Column(Numeric(12, 6), nullable=True)  # oran/100
+    currency = Column(String(8), nullable=True, default="TRY")
+    source_url = Column(String(500), nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+    stock = relationship("Stock")
+
+
 class ForeignHoldingSnapshot(Base):
     """
     Her derin analiz tazelemesinde yfinance'tan alınan kurumsal/yabancı sahiplik

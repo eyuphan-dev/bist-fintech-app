@@ -211,6 +211,27 @@ class KatilimInfoResponse(BaseModel):
     kap_varlik_esik: float = 33.0
     kap_borc_esik: float = 33.0
 
+class DividendEventItem(BaseModel):
+    """Yaklaşan temettü ödemesi (KAP "Hak Kullanımı" bildiriminden)."""
+    symbol: str
+    company_name: Optional[str] = None
+    event_type: Optional[str] = None
+    payment_date: date
+    gross_rate_pct: Optional[float] = None
+    net_rate_pct: Optional[float] = None
+    gross_amount_per_share: Optional[float] = None
+    currency: Optional[str] = "TRY"
+    source_url: Optional[str] = None
+    # Güncel fiyata göre brüt verim (%). Fiyat yoksa None — uydurulmaz.
+    gross_yield_pct: Optional[float] = None
+    # Ödemeye kaç gün kaldığı; geçmiş ödemede negatif.
+    days_until: Optional[int] = None
+
+    @field_serializer("payment_date")
+    def _odeme(self, value: date) -> Optional[str]:
+        return value.isoformat() if value else None
+
+
 class MarketNewsItem(BaseModel):
     """Genel piyasa haberi (Türkçe RSS kaynakları)."""
     title: str

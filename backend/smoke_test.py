@@ -188,6 +188,10 @@ test("Kurumsal: yabanci takas trendi", PROD, "/api/stocks/{}/foreign-holding-tre
 test("Kurumsal: temettu gecmisi", PROD, "/api/stocks/{}/dividend-history".format(S), kontrol=dolu(1))
 test("Takvim: bilanco takvimi", PROD, "/api/earnings-calendar", kontrol=dolu(1))
 test("Takvim: halka arzlar", PROD, "/api/ipos", kontrol=dolu(1, "company_name"))
+test("Takvim: temettu (tumu)", PROD, "/api/dividend-calendar?upcoming_only=false", kontrol=dolu(1, "symbol"))
+kod, g, _ = cagir(PROD, "/api/dividend-calendar")
+kaydet("TAMAM" if kod == 200 else "HATA", "Takvim: temettu (yaklasan)",
+       "HTTP {} -> {} kayit".format(kod, len(g) if isinstance(g, list) else "?"))
 test("Fonlar: liste", PROD, "/api/funds", kontrol=dolu(10))
 test("Haber: piyasa akisi", PROD, "/api/market/news", kontrol=dolu(10, "title"))
 test("Haber: kaynak listesi", PROD, "/api/market/news/sources", kontrol=dolu(5))

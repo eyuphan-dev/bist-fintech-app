@@ -25,6 +25,7 @@ from insider_client import refresh_all_insider_trades
 from katilim_kap import kap_katilim_formlarini_senkronize_et
 from haber_kaynaklari import haberleri_senkronize_et
 from ipo_client import halka_arzlari_senkronize_et
+from temettu_takvimi import temettu_takvimini_senkronize_et
 from tefas_client import sync_tefas
 from analysis_engine import refresh_earnings_calendar
 from daily_history import refresh_daily_history, refresh_index_history
@@ -232,6 +233,15 @@ def refresh_market_data_job():
             refresh_all_insider_trades(db)
         except Exception as e:
             print(f"[Scheduler] İçeriden öğrenenler tazeleme hatası: {e}")
+            db.rollback()
+
+        print("[Scheduler] Temettü takvimi tazeleniyor...")
+        try:
+            # KAP bildirimleri yukarıda tazelendi; temettü tablosu onların
+            # detay sayfalarından okunuyor, bu yüzden sıra önemli.
+            temettu_takvimini_senkronize_et(db)
+        except Exception as e:
+            print(f"[Scheduler] Temettü takvimi hatası: {e}")
             db.rollback()
 
         print("[Scheduler] Halka arz takvimi tazeleniyor...")

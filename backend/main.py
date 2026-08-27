@@ -37,7 +37,7 @@ from schemas import (
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
     DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest,
     PendingOrderCreate, PendingOrderUpdate, PendingOrderResponse, StockNewsItem,
-    MarketNewsItem,
+    MarketNewsItem, DividendEventItem,
     PivotLevelsResponse, ForeignHoldingTrendResponse, EarningsCalendarItem,
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
     WatchlistItemResponse, ScreenerItemResponse,
@@ -1493,6 +1493,57 @@ def get_major_holder_news(db: Session = Depends(get_db)):
     # çalışır ("Pay Bazında Devre Kesici" gibi 60+ gürültü kaydı elenir).
     filtered = [n for n in notifications if is_major_holder_news(n.title)]
     return filtered[:30]
+
+
+# --- TEMETTÜ TAKVİMİ ---
+
+@app.get("/api/dividend-calendar", response_model=List[DividendEventItem])
+def get_dividend_calendar(
+    upcoming_only: bool = True,
+    days: int = Query(90, ge=1, le=365),
+    db: Session = Depends(get_db),
+):
+    """
+    Yaklaşan nakit temettü ödemeleri (bkz. temettu_takvimi.py).
+
+    `dividend_history` GEÇMİŞ ödemeleri tutar; burası şirketin KAP'a bildirdiği
+    ödeme PLANIDIR. Uygulama katılım finansı odaklı olduğu için temettü merkezî
+    bir kavram, ama kullanıcı bugüne kadar yalnızca geçmişi görebiliyordu.
+    """
+    bugun = bugun_tr()
+    query = db.query(models.DividendEvent, models.Stock).join(
+        models.Stock, models.Stock.id == models.DividendEvent.stock_id
+    )
+    if upcoming_only:
+        query = query.filter(models.DividendEvent.payment_date >= bugun)
+    query = query.filter(models.DividendEvent.payment_date <= bugun + timedelta(days=days))
+    rows = query.order_by(models.DividendEvent.payment_date.asc()).all()
+    if not rows:
+        return []
+
+    fiyatlar = _bulk_price_and_change(db, [stock.id for _, stock in rows])
+
+    sonuc = []
+    for olay, stock in rows:
+        brut_tl = float(olay.gross_amount_per_share) if olay.gross_amount_per_share is not None else None
+        fiyat, _ = fiyatlar.get(stock.id, (0.0, None))
+        # Verim yalnızca HEM tutar HEM fiyat varken hesaplanır; birinin
+        # eksikliğinde 0 ya da tahmin göstermek yanlış bilgi olurdu.
+        verim = round((brut_tl / fiyat) * 100, 3) if (brut_tl and fiyat and fiyat > 0) else None
+        sonuc.append(DividendEventItem(
+            symbol=olay.symbol,
+            company_name=stock.company_name,
+            event_type=olay.event_type,
+            payment_date=olay.payment_date,
+            gross_rate_pct=float(olay.gross_rate_pct) if olay.gross_rate_pct is not None else None,
+            net_rate_pct=float(olay.net_rate_pct) if olay.net_rate_pct is not None else None,
+            gross_amount_per_share=brut_tl,
+            currency=olay.currency or "TRY",
+            source_url=olay.source_url,
+            gross_yield_pct=verim,
+            days_until=(olay.payment_date - bugun).days,
+        ))
+    return sonuc
 
 
 # --- GENEL PİYASA HABERLERİ ---
