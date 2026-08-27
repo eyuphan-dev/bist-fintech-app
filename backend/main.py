@@ -1395,6 +1395,17 @@ _MAJOR_HOLDER_KEYWORDS = [
 ]
 
 
+@app.get("/api/kap/search", response_model=List[KapNotificationResponse])
+def search_kap_news(q: str = "", db: Session = Depends(get_db)):
+    """
+    KAP bildirimlerinde tam metin arama (bkz. kap_search.py). Üretimde
+    PostgreSQL'in Türkçe metin arama yapılandırması kullanılır; boş sorguda
+    boş liste döner (tüm 498 kaydı listelemek arama değildir).
+    """
+    from kap_search import search_kap_notifications
+    return search_kap_notifications(db, q)
+
+
 @app.get("/api/kap/major-holder-news", response_model=List[KapNotificationResponse])
 def get_major_holder_news(db: Session = Depends(get_db)):
     """

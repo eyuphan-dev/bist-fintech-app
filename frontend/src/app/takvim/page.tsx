@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { RefreshCw, CalendarDays, Newspaper, ExternalLink, Landmark } from "lucide-react";
+import { RefreshCw, CalendarDays, Newspaper, ExternalLink, Landmark, Search, X } from "lucide-react";
 import { API_BASE } from "../context/AuthContext";
 
 interface EarningsItem {
@@ -31,6 +31,10 @@ export default function TakvimPage() {
   const [earnings, setEarnings] = useState<EarningsItem[] | null>(null);
   const [news, setNews] = useState<KapNewsItem[] | null>(null);
   const [majorHolderNews, setMajorHolderNews] = useState<KapNewsItem[] | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<KapNewsItem[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -52,6 +56,28 @@ export default function TakvimPage() {
     };
     fetchAll();
   }, []);
+
+  // Sorgu değişince 400ms bekleyip arar — her tuş vuruşunda istek atmamak için.
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const zamanlayici = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/kap/search?q=${encodeURIComponent(searchQuery)}`);
+        if (res.ok && !cancelled) setSearchResults(await res.json());
+      } catch (err) {
+        console.error("KAP arama başarısız:", err);
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(zamanlayici); };
+  }, [searchQuery]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-8">
@@ -161,6 +187,73 @@ export default function TakvimPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+          <Search className="w-4 h-4 text-[#F59E0B]" /> KAP Bildirimlerinde Ara
+        </h2>
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              setSearchQuery(e.target.value);
+            }}
+            placeholder="Örn. temettü, sermaye artırımı, birleşme..."
+            className="w-full bg-[#151921] border border-[#242B35] focus:border-[#F59E0B] rounded-xl pl-9 pr-9 py-2.5 text-sm text-white outline-none transition"
+          />
+          {searchInput && (
+            <button
+              onClick={() => { setSearchInput(""); setSearchQuery(""); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {searchQuery.trim() && (
+          <div className="space-y-2">
+            {searching ? (
+              <div className="flex items-center justify-center py-6 text-gray-500 text-xs">
+                <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#F59E0B]" />
+                Aranıyor...
+              </div>
+            ) : searchResults === null || searchResults.length === 0 ? (
+              <p className="text-xs text-gray-500 py-6 text-center bg-[#151921] border border-[#242B35] rounded-xl">
+                "{searchQuery}" ile eşleşen bir KAP bildirimi bulunamadı.
+              </p>
+            ) : (
+              searchResults.map((item) => (
+                <div key={item.id} className="bg-[#151921] border border-[#F59E0B]/30 rounded-xl p-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/hisse/${item.symbol}`} className="text-xs font-bold text-[#10B981]">
+                          {item.symbol}
+                        </Link>
+                        <span className="text-[10px] text-gray-500 tabular-nums">
+                          {new Date(item.publish_date).toLocaleDateString("tr-TR")}
+                        </span>
+                      </div>
+                      <p className="text-sm text-white mt-1">{item.title}</p>
+                      {item.summary && <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">{item.summary}</p>}
+                    </div>
+                    {item.kap_url && (
+                      <a href={item.kap_url} target="_blank" rel="noopener noreferrer"
+                         className="text-gray-500 hover:text-white shrink-0" title="KAP'ta görüntüle">
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </section>
