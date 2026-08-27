@@ -31,6 +31,7 @@ from schemas import (
     DividendPaymentItem, DividendHistoryResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     CounterfactualResponse,
+    SeasonalityResponse,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
     InsiderTradeResponse, KapNotificationResponse, FundResponse, FundPriceResponse,
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
@@ -1108,6 +1109,25 @@ def get_pivot_levels(symbol: str, db: Session = Depends(get_db)):
     data = calculate_pivot_levels(symbol)
     _pivot_cache[symbol] = {"data": data, "cached_at": datetime.utcnow()}
     return data
+
+
+@app.get("/api/stocks/{symbol}/seasonality", response_model=SeasonalityResponse)
+def get_stock_seasonality(symbol: str, db: Session = Depends(get_db)):
+    """
+    Aylık mevsimsellik: hisse tarihsel olarak hangi ayda ortalama nasıl hareket
+    etmiş (bkz. seasonality.py). En az 3 tam yıllık günlük veri gerektirir;
+    yoksa available=false döner.
+    """
+    symbol = symbol.upper()
+    stock = db.query(models.Stock).filter_by(symbol=symbol, is_active=True).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Hisse bulunamadı.")
+
+    from seasonality import compute_seasonality
+    aylar = compute_seasonality(db, stock.id)
+    if aylar is None:
+        return SeasonalityResponse(available=False, symbol=symbol, months=[])
+    return SeasonalityResponse(available=True, symbol=symbol, months=aylar)
 
 
 @app.get("/api/stocks/{symbol}/foreign-holding-trend", response_model=ForeignHoldingTrendResponse)

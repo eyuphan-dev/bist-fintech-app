@@ -12,6 +12,7 @@ import KatilimBadge from "../../components/KatilimBadge";
 import DerinAnalizTab from "../../components/DerinAnalizTab";
 import FinancialStatementsPanel from "../../components/FinancialStatementsPanel";
 import DividendHistoryPanel from "../../components/DividendHistoryPanel";
+import SeasonalityPanel from "../../components/SeasonalityPanel";
 import BacktestPanel from "../../components/BacktestPanel";
 import ExtraIndicatorsPanel from "../../components/ExtraIndicatorsPanel";
 import InsiderTrackerBadge from "../../components/InsiderTrackerBadge";
@@ -640,6 +641,8 @@ export default function StockDetailPage() {
               <FinancialStatementsPanel symbol={symbol} />
 
               <DividendHistoryPanel symbol={symbol} />
+
+              <SeasonalityPanel symbol={symbol} />
 
               <ExtraIndicatorsPanel symbol={symbol} />
 

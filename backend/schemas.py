@@ -532,6 +532,26 @@ class CounterfactualResponse(BaseModel):
     note: Optional[str] = None
 
 
+class SeasonalityMonthItem(BaseModel):
+    month: int
+    month_name: str
+    years_observed: int
+    avg_return_pct: float
+    positive_year_ratio: float
+
+
+class SeasonalityResponse(BaseModel):
+    """Aylık mevsimsellik (bkz. seasonality.py) — tahmin aracı değildir."""
+    available: bool
+    symbol: str
+    months: List[SeasonalityMonthItem] = []
+    note: str = (
+        "Geçmişte bir ayın sık yükselmiş/düşmüş olması, gelecekte de öyle "
+        "olacağı anlamına gelmez. Az sayıda gözleme (genelde yıl sayısı kadar) "
+        "dayanır. Yatırım tavsiyesi değildir."
+    )
+
+
 class LeaderboardItem(BaseModel):
     username: str
     total_portfolio_value: float
