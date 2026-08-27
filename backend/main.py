@@ -55,7 +55,7 @@ from bot import (
     open_bot_session, close_open_bot_session,
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
-from market_hours import get_market_status_dict, is_market_open
+from market_hours import get_market_status_dict, is_market_open, bugun_tr
 from transactions import record_transaction, alim_maliyeti, satim_geliri
 from analysis_engine import (
     calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError,
@@ -414,7 +414,11 @@ def _bulk_price_and_change(db: Session, stock_ids: List[int]) -> Dict[int, tuple
         .all()
     }
 
-    today = date.today()
+    # PİYASA GÜNÜ SINIRI TÜRKİYE SAATİYLE: sunucu UTC'de çalışıyor ve TSİ
+    # 00:00–03:00 arasında `date.today()` dünü döndürüyor. O aralıkta referans
+    # kapanış bir gün eskiye kayıyor, yani her hissenin günlük % değişimi
+    # yanlış hesaplanıyordu (bkz. market_hours.bugun_tr).
+    today = bugun_tr()
     latest_daily_subq = (
         db.query(
             models.StockPriceDaily.stock_id,
@@ -803,7 +807,7 @@ def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
     # Önceki kapanış: önce Yahoo'nun resmi referansı (stocks.previous_close), yoksa
     # stock_prices_daily'deki bugünden ÖNCEKİ en son gün (bkz. _bulk_price_and_change
     # docstring'indeki öncelik sırası ve GUNDG örneği).
-    today = date.today()
+    today = bugun_tr()  # UTC değil TR — bkz. market_hours.bugun_tr
     if stock.previous_close is not None:
         previous_close = float(stock.previous_close)
     else:
@@ -1404,7 +1408,9 @@ def get_earnings_calendar(db: Session = Depends(get_db)):
     aktif hisseleri, tarihe göre artan sırada döner. Tarih bilgisi scheduler
     tarafından günlük olarak (refresh_earnings_calendar) yfinance'tan tazelenir.
     """
-    today = date.today()
+    # TR tarihi: UTC ile TSİ 00:00–03:00 arasında dünkü açıklama "yaklaşan"
+    # görünüyordu (bkz. market_hours.bugun_tr).
+    today = bugun_tr()
     rows = (
         db.query(models.Stock, models.CompanyAnalysis)
         .join(models.CompanyAnalysis, models.CompanyAnalysis.stock_id == models.Stock.id)

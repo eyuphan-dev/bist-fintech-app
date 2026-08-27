@@ -9,12 +9,16 @@ NEDEN
 yalnızca 29'unda haber vardı, en yenisi 5 gün eskiydi; 136 hisse sayfası haber
 bölümü boş açılıyordu.
 
-18 aday kaynak canlı olarak denendi; 10'u kullanılıyor ve tek turda ~330 haber
+18 aday kaynak canlı olarak denendi; 9'u kullanılıyor ve tek turda ~310 haber
 veriyor. Elenenler:
   • Bigpara, Mynet, Patronlar Dünyası, Borsa Gündem — 404 / RSS'i kaldırmışlar.
   • Milliyet — RSS'inde <link> ETİKETİ HİÇ YOK, yalnızca sayısal
     <guid isPermaLink="false">. Yani habere giden bir adres vermiyor.
     Tıklanamayan haber kartı göstermek yerine kaynak listeden çıkarıldı.
+  • NTV — teknik olarak çalışıyor ama BESLEME BAYAT: 20 haberin tamamı
+    14 günden eski (ölçüldü: en yenisi 12 Ağustos, en eskisi Mayıs).
+    Saklama politikası hepsini zaten siliyordu; her turda boşuna bir
+    istek atmak anlamsız.
 
 İKİ AYRI ÜRÜN
 -------------
@@ -65,7 +69,6 @@ KAYNAKLAR = (
     ("Dünya", "https://www.dunya.com/rss?dunya"),
     ("Ekonomim", "https://www.ekonomim.com/rss"),
     ("Bloomberg HT", "https://www.bloomberght.com/rss"),
-    ("NTV", "https://www.ntv.com.tr/ekonomi.rss"),
     ("Investing", "https://tr.investing.com/rss/news_25.rss"),
     ("Sabah", "https://www.sabah.com.tr/rss/ekonomi.xml"),
 )

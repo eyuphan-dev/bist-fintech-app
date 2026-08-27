@@ -17,6 +17,7 @@ Cron Job Önerileri (Sunucu seviyesinde):
 """
 
 from datetime import datetime, date, time
+from datetime import date as date_type
 from typing import Tuple
 import pytz
 
@@ -189,3 +190,24 @@ def market_guard(func):
     wrapper.__name__ = func.__name__
     wrapper.__doc__ = func.__doc__
     return wrapper
+
+
+def bugun_tr() -> "date_type":
+    """
+    Türkiye saatine göre BUGÜNÜN tarihi.
+
+    NEDEN GEREKLİ: sunucu UTC'de çalışıyor. TSİ 00:00–03:00 arasında UTC hâlâ
+    bir önceki gündedir, yani `date.today()` DÜNÜ döndürür. Piyasa günü sınırı
+    bu tarihe göre belirlenen her yerde bu, bir gün bayat sonuç demektir:
+
+      • Pivot seviyeleri kapanmış son seansı "bugün" sayıp eler (ölçüldü:
+        TSİ 01:54'te üretim 26 Ağustos barını kullanırken TSİ'deki yerel
+        makine 27 Ağustos barını kullanıyordu — aynı kod, farklı sonuç).
+      • Günlük % değişimin referans kapanışı bir gün eskiye kayar.
+      • Bilanço takvimi dünkü açıklamayı "yaklaşan" olarak gösterir.
+
+    Piyasa Türkiye'de olduğu için gün sınırı da Türkiye saatiyle belirlenir.
+    Kayan pencerelerde (son 30 gün, son 1 yıl) bir günlük fark önemsizdir;
+    orada `date.today()` bırakılabilir.
+    """
+    return datetime.now(TR_TZ).date()

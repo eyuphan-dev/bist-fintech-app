@@ -26,12 +26,13 @@ eksik OHLC sayısı sıfır — ölçüldü). Dış çağrı yok, gün seçimi a
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 import models
+from market_hours import TR_TZ
 
 # Fibonacci aralığı için kaç günlük pencereye bakılır.
 FIB_PENCERE_GUN = 20
@@ -54,9 +55,16 @@ def hesapla(db: Session, stock_id: int, symbol: str,
     """
     Verilen hisse için pivot ve Fibonacci seviyelerini hesaplar.
 
-    `bugun` yalnızca test için parametredir; üretimde `date.today()` kullanılır.
+    `bugun` yalnızca test için parametredir; üretimde TÜRKİYE tarihi kullanılır.
+
+    NEDEN date.today() DEĞİL: sunucu UTC'de çalışıyor. TSİ 00:00–03:00 arasında
+    UTC hâlâ bir önceki gündedir; bu aralıkta `date.today()` dünü döndürür,
+    kapanmış olan son seans "bugün" sayılıp elenir ve pivot BİR GÜN BAYAT
+    çıkar. Ölçüldü: TSİ 01:54'te üretim 26 Ağustos barını kullanırken yerel
+    makine (TSİ) 27 Ağustos barını kullanıyordu — aynı kod, farklı sonuç.
+    Piyasa Türkiye'de olduğu için gün sınırı da Türkiye saatiyle belirlenir.
     """
-    bugun = bugun or date.today()
+    bugun = bugun or datetime.now(TR_TZ).date()
 
     # BUGÜN HARİÇ tutulur: klasik pivot bir ÖNCEKİ tam işlem gününe dayanır.
     # Bugünün barı seans sürerken yarımdır, seans sonrası da "önceki gün"
