@@ -58,7 +58,8 @@ from analysis_engine import (
     calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError,
     calculate_pivot_levels, get_foreign_holding_trend,
 )
-from insider_client import fetch_insider_trades, get_recent_insider_buys
+from insider_client import fetch_insider_trades, get_recent_insider_buys, refresh_all_insider_trades
+from text_utils import tr_lower
 from sentiment import score_sentiment
 from yfinance_client import fetch_stock_news
 from cache import get_cached_news, set_cached_news
@@ -1386,7 +1387,9 @@ def get_major_holder_news(db: Session = Depends(get_db)):
     )
     filtered = [
         n for n in notifications
-        if any(kw in n.title.lower() for kw in _MAJOR_HOLDER_KEYWORDS)
+        # tr_lower: KAP başlıkları büyük "İ" içerebilir, .lower() bunu bozar
+        # (bkz. text_utils.py, insider_client.py'de aynı hata ölçülerek bulundu).
+        if any(kw in tr_lower(n.title) for kw in _MAJOR_HOLDER_KEYWORDS)
     ]
     return filtered[:30]
 

@@ -19,6 +19,7 @@ from cache import set_latest_price
 from datetime import datetime, timedelta, date
 from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
+from insider_client import refresh_all_insider_trades
 from tefas_client import update_tefas_funds
 from analysis_engine import refresh_earnings_calendar
 from daily_history import refresh_daily_history, refresh_index_history
@@ -214,6 +215,18 @@ def refresh_market_data_job():
             fetch_kap_news(db)
         except Exception as e:
             print(f"[Scheduler] KAP tazeleme hatası: {e}")
+            db.rollback()
+
+        # İçeriden öğrenenler ticareti — eskiden yalnızca kullanıcı bir hissenin
+        # detay sayfasını açtığında çekiliyordu, ziyaret edilmeyen hisselerde
+        # hiç veri birikmiyordu (165 hissede yalnızca 5'inde 7 kayıt vardı).
+        # KAP'ın genel bildirim akışı zaten burada (fetch_kap_news) çekildiği
+        # için aynı aralıkla TEK ek sorguyla tüm katalog taranır.
+        print("[Scheduler] İçeriden öğrenenler ticareti tazeleniyor...")
+        try:
+            refresh_all_insider_trades(db)
+        except Exception as e:
+            print(f"[Scheduler] İçeriden öğrenenler tazeleme hatası: {e}")
             db.rollback()
 
         print("[Scheduler] TEFAS fon fiyatları tazeleniyor...")

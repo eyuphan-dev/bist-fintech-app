@@ -7,6 +7,8 @@ Harici bir ML servisi gerektirmez; hafif ve deterministiktir.
 """
 
 import re
+
+from text_utils import tr_lower
 from typing import List
 
 POSITIVE_WORDS = [
@@ -27,7 +29,11 @@ def score_sentiment(text: str) -> float:
     if not text:
         return 0.0
 
-    normalized = re.sub(r"[^\wçğıöşü\s]", " ", text.lower(), flags=re.UNICODE)
+    # tr_lower KULLAN, .lower() DEĞİL: büyük "İ" ile başlayan bir yorum
+    # (örn. "İyi hisse.") .lower() ile ASCII "i" değil görünmez birleştirici
+    # işaretli bir karaktere dönüşüyor ve "iyi" pozitif kelimesiyle hiç
+    # eşleşmiyordu (bkz. text_utils.py).
+    normalized = re.sub(r"[^\wçğıöşü\s]", " ", tr_lower(text), flags=re.UNICODE)
     tokens: List[str] = normalized.split()
 
     pos_hits = sum(1 for t in tokens if t in POSITIVE_WORDS)
