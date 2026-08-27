@@ -217,6 +217,8 @@ bekle("Islem: olmayan hisse reddi", (400, 404, 422), LOCAL, "/api/trade", "POST"
 test("Portfoy: dolu portfoy", LOCAL, "/api/portfolio", token=TOKEN)
 test("Portfoy: analitik", LOCAL, "/api/portfolio/analytics", token=TOKEN)
 test("Portfoy: risk paneli", LOCAL, "/api/portfolio/risk", token=TOKEN)
+test("Portfoy: katilim karnesi", LOCAL, "/api/portfolio/katilim", token=TOKEN)
+bekle("Guvenlik: katilim karnesi tokensiz reddi", (401, 403), LOCAL, "/api/portfolio/katilim")
 test("Portfoy: performans", LOCAL, "/api/portfolio/performance", token=TOKEN)
 test("Portfoy: XU100 kiyasi", LOCAL, "/api/portfolio/benchmark", token=TOKEN)
 test("Portfoy: performans karnesi", LOCAL, "/api/portfolio/scorecard", token=TOKEN)

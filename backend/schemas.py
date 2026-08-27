@@ -211,6 +211,44 @@ class KatilimInfoResponse(BaseModel):
     kap_varlik_esik: float = 33.0
     kap_borc_esik: float = 33.0
 
+class KatilimPozisyonu(BaseModel):
+    """Portföydeki tek bir pozisyonun katılım görünümü."""
+    symbol: str
+    company_name: Optional[str] = None
+    value: float
+    weight_pct: float
+    katilim_status: Optional[str] = None       # UYGUN | UYGUN_DEGIL | BELIRSIZ
+    kap_gelir_pct: Optional[float] = None      # KAP beyanı: uygun olmayan gelir oranı
+    kap_donem: Optional[str] = None
+    kap_url: Optional[str] = None
+
+
+class PortfolioKatilimResponse(BaseModel):
+    """
+    Portföyün katılım (faizsiz) uyum karnesi.
+
+    Uygulamanın ayırt edici özelliği katılım odağı ama kullanıcı bugüne kadar
+    portföyünün NE KADARININ uygun olduğunu göremiyordu — yalnızca hisse
+    bazında rozet vardı.
+    """
+    total_value: float
+    uygun_value: float
+    uygun_pct: float
+    uygun_degil_value: float
+    uygun_degil_pct: float
+    belirsiz_value: float
+    belirsiz_pct: float
+    # KAP beyanı bulunan pozisyonların portföy içindeki ağırlığı. Aşağıdaki
+    # arındırma oranı YALNIZCA bu kısmı temsil eder; kapsamı gizlemek,
+    # kullanıcıya tüm portföyü kapsıyormuş izlenimi verirdi.
+    kap_kapsam_pct: float
+    # KAP'a bildirilen "uygun olmayan gelir" oranlarının, kapsanan pozisyonlar
+    # içinde DEĞERE GÖRE ağırlıklı ortalaması. Arındırılması önerilen kısmın
+    # portföy düzeyindeki karşılığı. Kapsam sıfırsa None.
+    agirlikli_arindirma_pct: Optional[float] = None
+    positions: List[KatilimPozisyonu] = []
+
+
 class DividendEventItem(BaseModel):
     """Yaklaşan temettü ödemesi (KAP "Hak Kullanımı" bildiriminden)."""
     symbol: str

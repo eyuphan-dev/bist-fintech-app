@@ -37,7 +37,7 @@ from schemas import (
     IpoResponse, StockCommentCreate, StockCommentResponse, CommunitySentimentResponse,
     DividendGoalRequest, DcaBacktestRequest, BalanceUpdateRequest, UserBotResponse, UserBotSettingsRequest,
     PendingOrderCreate, PendingOrderUpdate, PendingOrderResponse, StockNewsItem,
-    MarketNewsItem, DividendEventItem,
+    MarketNewsItem, DividendEventItem, PortfolioKatilimResponse, KatilimPozisyonu,
     PivotLevelsResponse, ForeignHoldingTrendResponse, EarningsCalendarItem,
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
     WatchlistItemResponse, ScreenerItemResponse,
@@ -3767,6 +3767,106 @@ def get_technical_signals(db: Session = Depends(get_db)):
 
 
 TRADING_DAYS_PER_YEAR = 252  # BIST'te yaklaşık işlem günü sayısı
+
+
+@app.get("/api/portfolio/katilim", response_model=PortfolioKatilimResponse)
+def get_portfolio_katilim(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Portföyün katılım (faizsiz) uyum karnesi.
+
+    NEDEN: uygulamanın ayırt edici özelliği katılım odağı ama kullanıcı
+    portföyünün NE KADARININ uygun olduğunu hiçbir yerde göremiyordu —
+    yalnızca hisse bazında rozet vardı. "Portföyümün %70'i uygun" cümlesini
+    kurabilmek, tek tek 12 rozete bakmaktan farklı bir şey.
+
+    ARINDIRMA ORANI VE KAPSAM BİRLİKTE DÖNER. Ağırlıklı ortalama yalnızca
+    KAP beyanı OLAN pozisyonlar üzerinden hesaplanır; kapsamı ayrıca
+    bildirmezsek kullanıcı bunun tüm portföyü temsil ettiğini sanır.
+    Üretimde 165 hissenin 36'sında beyan var, yani kapsam çoğu portföyde
+    kısmi olacak ve bunu gizlemek yanlış olur.
+    """
+    pozisyonlar = (
+        db.query(models.Portfolio, models.Stock)
+        .join(models.Stock, models.Stock.id == models.Portfolio.stock_id)
+        .filter(models.Portfolio.user_id == current_user.id,
+                models.Portfolio.is_bot_portfolio.is_(False))
+        .all()
+    )
+    if not pozisyonlar:
+        return PortfolioKatilimResponse(
+            total_value=0.0, uygun_value=0.0, uygun_pct=0.0,
+            uygun_degil_value=0.0, uygun_degil_pct=0.0,
+            belirsiz_value=0.0, belirsiz_pct=0.0,
+            kap_kapsam_pct=0.0, agirlikli_arindirma_pct=None, positions=[],
+        )
+
+    fiyatlar = _bulk_price_and_change(db, [st.id for _, st in pozisyonlar])
+
+    kalemler = []
+    toplam = 0.0
+    for poz, stock in pozisyonlar:
+        fiyat, _ = fiyatlar.get(stock.id, (0.0, None))
+        # Fiyat yoksa ortalama maliyet kullanılır; pozisyonu 0 TL saymak
+        # portföy ağırlıklarını sessizce çarpıtırdı.
+        deger = float(poz.quantity) * (fiyat or float(poz.average_cost))
+        toplam += deger
+        kalemler.append((stock, deger))
+
+    if toplam <= 0:
+        return PortfolioKatilimResponse(
+            total_value=0.0, uygun_value=0.0, uygun_pct=0.0,
+            uygun_degil_value=0.0, uygun_degil_pct=0.0,
+            belirsiz_value=0.0, belirsiz_pct=0.0,
+            kap_kapsam_pct=0.0, agirlikli_arindirma_pct=None, positions=[],
+        )
+
+    kova = {"UYGUN": 0.0, "UYGUN_DEGIL": 0.0, "BELIRSIZ": 0.0}
+    kap_deger = 0.0
+    arindirma_agirlikli_toplam = 0.0
+    cikti = []
+
+    for stock, deger in sorted(kalemler, key=lambda x: -x[1]):
+        durum = stock.katilim_status or "BELIRSIZ"
+        if durum not in kova:
+            durum = "BELIRSIZ"
+        kova[durum] += deger
+
+        gelir = (float(stock.kap_katilim_gelir_pct)
+                 if stock.kap_katilim_gelir_pct is not None else None)
+        if gelir is not None:
+            kap_deger += deger
+            arindirma_agirlikli_toplam += gelir * deger
+
+        cikti.append(KatilimPozisyonu(
+            symbol=stock.symbol,
+            company_name=stock.company_name,
+            value=round(deger, 2),
+            weight_pct=round(deger / toplam * 100, 2),
+            katilim_status=stock.katilim_status,
+            kap_gelir_pct=gelir,
+            kap_donem=stock.kap_katilim_donem,
+            kap_url=stock.kap_katilim_url,
+        ))
+
+    return PortfolioKatilimResponse(
+        total_value=round(toplam, 2),
+        uygun_value=round(kova["UYGUN"], 2),
+        uygun_pct=round(kova["UYGUN"] / toplam * 100, 2),
+        uygun_degil_value=round(kova["UYGUN_DEGIL"], 2),
+        uygun_degil_pct=round(kova["UYGUN_DEGIL"] / toplam * 100, 2),
+        belirsiz_value=round(kova["BELIRSIZ"], 2),
+        belirsiz_pct=round(kova["BELIRSIZ"] / toplam * 100, 2),
+        kap_kapsam_pct=round(kap_deger / toplam * 100, 2),
+        # Ortalama KAPSANAN değere bölünür, toplam portföye değil: aksi hâlde
+        # beyanı olmayan hisseler "sıfır arındırma" gibi davranıp oranı
+        # sistematik olarak aşağı çekerdi.
+        agirlikli_arindirma_pct=(round(arindirma_agirlikli_toplam / kap_deger, 3)
+                                 if kap_deger > 0 else None),
+        positions=cikti,
+    )
 
 
 @app.get("/api/portfolio/risk", response_model=PortfolioRiskResponse)

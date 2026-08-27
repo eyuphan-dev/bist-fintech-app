@@ -13,6 +13,7 @@ import PendingOrdersSection from "./components/PendingOrdersSection";
 import PortfolioAnalytics from "./components/PortfolioAnalytics";
 import DividendIncomePanel from "./components/DividendIncomePanel";
 import PortfolioRiskPanel from "./components/PortfolioRiskPanel";
+import KatilimKarnesi from "./components/KatilimKarnesi";
 import PortfolioPerformanceChart from "./components/PortfolioPerformanceChart";
 import CounterfactualPanel from "./components/CounterfactualPanel";
 import { useAuth, API_BASE } from "./context/AuthContext";
@@ -313,6 +314,11 @@ export default function Home() {
               <PortfolioPerformanceChart refreshKey={refreshTrigger} />
 
               <PortfolioAnalytics refreshKey={refreshTrigger} />
+
+              {/* Katılım karnesi analitiğin hemen ardında: uygulamanın ayırt
+                  edici özelliği bu ve kullanıcı portföyünün ne kadarının
+                  uygun olduğunu başka hiçbir yerde göremiyordu. */}
+              <KatilimKarnesi refreshKey={refreshTrigger} />
 
               <PortfolioRiskPanel refreshKey={refreshTrigger} />
 
