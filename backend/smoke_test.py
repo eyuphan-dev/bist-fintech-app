@@ -32,15 +32,27 @@ NOT: PROD sabiti canli siteye bakar; testler salt-okunurdur ama yine de
 uretime istek atar. Cevrimdisi calisirken PROD'u LOCAL yapabilirsin.
 """
 import json
+import os
 import random
 import string
+import sys
 import time
 import urllib.error
 import urllib.request
 from collections import Counter
 
-PROD = "https://borsa-trader.duckdns.org"
-LOCAL = "http://127.0.0.1:4000"
+# CI MODU: --ci (ya da SMOKE_CI=1) verildiginde salt-okunur testler de YERELE
+# yonlendirilir ve "veri bos" bulgulari BASARISIZLIK SAYILMAZ.
+#
+# Nedeni: CI'daki veritabani bostur (165 hisse tohumlanir, fiyat/haber/KAP
+# verisi yoktur). Orada "fon sayisi >= 10" gibi bir sarti aramak, kodu degil
+# veriyi test etmek olur. CI'in isi soezlesmeyi korumaktir: uc ayakta mi,
+# dogru HTTP kodunu donuyor mu, kimlik ve dogrulama kurallari calisiyor mu.
+# Veri bollugu ayri bir soru ve onu elle kosarak (PROD'a karsi) izliyoruz.
+CI = "--ci" in sys.argv or os.getenv("SMOKE_CI") == "1"
+
+LOCAL = os.getenv("SMOKE_LOCAL_URL", "http://127.0.0.1:4000")
+PROD = LOCAL if CI else os.getenv("SMOKE_PROD_URL", "https://borsa-trader.duckdns.org")
 sonuclar = []
 
 
@@ -278,3 +290,10 @@ print()
 c = Counter(d for d, *_ in sonuclar)
 print("TOPLAM {} test | tamam {} | HATA {} | BOS {} | uyari {}".format(
     len(sonuclar), c["TAMAM"], c["HATA"], c["BOS"], c["UYARI"]))
+if CI:
+    print("(CI modu: tum testler {} adresine kosuldu, 'BOS' bulgulari "
+          "basarisizlik sayilmaz)".format(LOCAL))
+
+# CIKIS KODU: yalnizca HATA basarisizliktir. BOS bir veri boru hatti sorunudur,
+# sozlesme ihlali degil; CI'i kirmasi yanlis alarm uretir.
+sys.exit(1 if c["HATA"] else 0)

@@ -166,6 +166,15 @@ def startup_event():
     from yf_retry import configure_yfinance
     configure_yfinance()
     init_database()
+
+    # CI'da zamanlanmış işler ÇALIŞTIRILMAZ. Scheduler başlarken Yahoo, KAP,
+    # TEFAS ve haber kaynaklarına ağ isteği atıyor; test koşumunda bu hem
+    # gereksiz hem de testi dış servislerin o anki durumuna bağımlı kılar
+    # (uçun 200 dönüp dönmediğini ölçüyoruz, Yahoo'nun ayakta olup olmadığını
+    # değil). DISABLE_SCHEDULER=1 yalnızca CI ve test içindir.
+    if os.getenv("DISABLE_SCHEDULER") == "1":
+        print("[Startup] DISABLE_SCHEDULER=1 — zamanlanmış işler atlandı.")
+        return
     start_scheduler()
 
 # --- AUTHENTICATION ---
