@@ -170,6 +170,13 @@ test("Analiz: sinyal taramasi", PROD, "/api/signals", kontrol=dolu(1))
 test("Analiz: tarayici", PROD, "/api/screener", kontrol=dolu(1))
 test("Analiz: sektorler", PROD, "/api/sectors", kontrol=dolu(1))
 test("Piyasa: seans durumu", PROD, "/api/market/status", kontrol=dolu(alan="is_open"))
+saglik = test("Sistem: veri sagligi", PROD, "/api/health", kontrol=dolu(alan="durum"))
+if isinstance(saglik, dict):
+    for hat in saglik.get("hatlar", []):
+        if hat.get("durum") not in ("TAMAM", None):
+            kaydet("BOS" if hat["durum"] == "BOS" else "UYARI",
+                   "  veri hatti: " + hat["ad"],
+                   "{} - {}".format(hat["durum"], hat.get("mesaj") or ""))
 test("Piyasa: kur/altin", PROD, "/api/market/quotes", kontrol=dolu(3, "price"))
 test("Backtest: strateji listesi", PROD, "/api/backtest/strategies", kontrol=dolu(1))
 test("Backtest: DCA", PROD, "/api/stocks/{}/dca-backtest".format(S), "POST",

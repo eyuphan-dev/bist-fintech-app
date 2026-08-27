@@ -1495,6 +1495,25 @@ def get_major_holder_news(db: Session = Depends(get_db)):
     return filtered[:30]
 
 
+# --- VERİ SAĞLIĞI ---
+
+@app.get("/api/health")
+def get_health(db: Session = Depends(get_db)):
+    """
+    Her veri boru hattının taze olup olmadığını raporlar (bkz. veri_sagligi.py).
+
+    NEDEN VAR: bu uygulamanın arızalarının çoğu "kod patladı" değil, "veri
+    sessizce gelmiyor" biçiminde — hepsi 200 dönen boş yanıtlar. Bir gecelik
+    elle denetimde bulunanlar: pay sahibi akışı aylardır 0 kayıt, fon kataloğu
+    3 fonda takılı, halka arz tablosu hiç dolmamış, haberler 5 gün bayat.
+    Hiçbiri hata logu üretmiyordu. Bu uç o denetimi kalıcı hale getirir.
+
+    Gizli veri dönmez: yalnızca satır sayısı ve tarih.
+    """
+    from veri_sagligi import rapor
+    return rapor(db)
+
+
 # --- TEMETTÜ TAKVİMİ ---
 
 @app.get("/api/dividend-calendar", response_model=List[DividendEventItem])
