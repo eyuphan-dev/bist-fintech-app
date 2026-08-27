@@ -28,8 +28,8 @@ def configure_yfinance() -> None:
     """
     Uygulama başlangıcında bir kez çağrılır.
 
-    Render gibi paylaşımlı bulut sağlayıcıların egress IP'leri, çok sayıda
-    yfinance kullanıcısı tarafından paylaşıldığından Yahoo Finance tarafında
+    Veri merkezi IP'leri (bizimki DigitalOcean Frankfurt) çok sayıda yfinance
+    kullanıcısı tarafından paylaşıldığından Yahoo Finance tarafında
     kalıcı/uzun süreli olarak engellenebiliyor (basit rate-limit'ten farklı:
     yeniden denemek bile çözmüyor, "boş yanıt" ya da 429 dönmeye devam ediyor).
     Bu durumda tek gerçek çözüm istekleri farklı bir IP üzerinden (proxy)

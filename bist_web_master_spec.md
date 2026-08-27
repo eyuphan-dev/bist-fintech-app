@@ -261,10 +261,10 @@ Kullanıcı kişisel AI Botunu başlatırken çalışacağı zaman dilimini ve s
 *   **Masaüstü (> 1024px):** 3 Kolonlu profesyonel borsa terminali düzeni (Sol: Takip Listesi, Orta: Canlı Grafik ve Bilanço, Sağ: Kişisel Bot & Emir Paneli). Alt navigasyon gizlenir.
 *   **Mobil İnfaz Önleme:** Mobil cihazlarda metin kutularına odaklanıldığında ekranın istemsiz yakınlaşmasını (zoom) önlemek için minimum 16px font boyutu standardı.
 
-### 15.2. Güvenlik & Yetkisiz Erişim Koruması (Vercel / Render Hardening)
+### 15.2. Güvenlik & Yetkisiz Erişim Koruması (VPS Hardening)
 *   **Sıfır Güven (Zero-Trust Payload):** API isteklerinde gelen `user_id` bilgisine asla güvenilmez; tüm yetkiler doğrulanmış JWT token/oturum üzerinden okunur. Kullanıcılar yalnızca kendi bakiyelerini ve kendi kişisel botlarını yönetebilir.
 *   **Atomik İşlem Güvenliği (Double-Spending Koruması):** Sanal bakiye düşüşleri ve alım-satım emirleri SQLite `BEGIN IMMEDIATE` işlemleriyle kilitlenir. Negatif lot veya geçersiz sayısal değerler (NaN, Infinity) Pydantic/Zod şemalarıyla engellenir.
-*   **API Hız Limiti (Rate Limiting):** Render sunucusunun çökmesini ve spam emirleri engellemek için IP/Kullanıcı bazlı kısıtlama:
+*   **API Hız Limiti (Rate Limiting):** Sunucunun çökmesini ve spam emirleri engellemek için IP/Kullanıcı bazlı kısıtlama:
     *   Alım/Satım Emirleri: Dakikada maksimum 10 işlem.
     *   Bakiye Sıfırlama: Dakikada maksimum 3 işlem.
     *   Bilanço Tazeleme: Dakikada maksimum 5 işlem.

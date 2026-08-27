@@ -6,10 +6,13 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Render/Heroku tarzı platformlar bazen "postgres://" şemasıyla verir; SQLAlchemy 2.x
-# "postgresql://" bekler. DATABASE_URL tanımlıysa (Neon/Supabase/Render Postgres)
-# kalıcı Postgres'e bağlanılır; tanımlı değilse (yerel geliştirme) SQLite dosyasına
-# düşülür — Render'ın ephemeral disk'i nedeniyle SQLite production'da KULLANILMAMALIDIR.
+# Üretim: kendi VPS'imizde (DigitalOcean, Frankfurt) çalışan PostgreSQL.
+# DATABASE_URL tanımlıysa ona bağlanılır; tanımlı değilse (yerel geliştirme)
+# SQLite dosyasına düşülür. SQLite ÜRETİMDE KULLANILMAMALIDIR — eşzamanlı
+# yazmada kilitlenir ve scheduler ile API aynı anda yazar.
+#
+# Bazı barındırma sağlayıcıları URL'yi "postgres://" şemasıyla verir, SQLAlchemy
+# 2.x ise "postgresql://" bekler; aşağıdaki normalleştirme bunun içindir.
 _database_url = os.environ.get("DATABASE_URL")
 IS_SQLITE = not _database_url
 

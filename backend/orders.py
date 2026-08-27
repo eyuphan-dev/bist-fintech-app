@@ -9,8 +9,8 @@ Tasarım notları:
   tamamlandıktan hemen sonra AYNI arka plan thread'inde çağrılır (ayrı bir cron job
   DEĞİLDİR). Böylece AI bot (run_quant_bot) ile aynı tetiklemede sırayla çalışır —
   iki ayrı scheduler job'ının aynı anda farklı thread'lerde koşup birbirine
-  çarpması ihtimali yapısal olarak ortadan kalkar; Render gibi tek instance'lı,
-  kısıtlı kaynaklı bir ortamda ekstra thread/kaynak yükü de oluşturmaz.
+  çarpması ihtimali yapısal olarak ortadan kalkar; tek instance'lı, kısıtlı
+  kaynaklı VPS'imizde ekstra thread/kaynak yükü de oluşturmaz.
 - Emirler kullanıcının KENDİ manuel bakiyesi/portföyü üzerinde çalışır
   (User.virtual_balance, Portfolio.is_bot_portfolio=False) — AI bot'un bakiyesi
   (UserBot.virtual_balance) ve pozisyonları (is_bot_portfolio=True) tamamen ayrı

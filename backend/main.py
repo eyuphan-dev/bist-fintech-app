@@ -110,8 +110,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- Production CORS Hardening ---
 # Geliştirme ortamında (FRONTEND_URL / NEXT_PUBLIC_FRONTEND_URL tanımlı değilse) yerel
-# origin'lere izin verilir. Üretimde (Render) ise SADECE Vercel'deki frontend origin'i
-# kabul edilir. Wildcard ('*') KASITLI OLARAK desteklenmez: allow_credentials=True ile
+# origin'lere izin verilir. Üretimde ise SADECE FRONTEND_URL ile belirtilen
+# origin kabul edilir (borsa-trader.duckdns.org, nginx arkasında aynı VPS'te). Wildcard ('*') KASITLI OLARAK desteklenmez: allow_credentials=True ile
 # wildcard birlikte kullanılırsa tarayıcılar isteği zaten reddeder ve herhangi bir
 # origin'in kimlik doğrulamalı isteği taklit etmesine izin vermiş oluruz.
 _frontend_url = os.environ.get("FRONTEND_URL") or os.environ.get("NEXT_PUBLIC_FRONTEND_URL")
@@ -152,8 +152,8 @@ async def add_no_store_to_api(request: Request, call_next):
 # Uygulama başlarken tablo/veri kontrolü + APScheduler
 @app.on_event("startup")
 def startup_event():
-    # Render gibi ortamlarda bist_app.db her deploy'da boş/yok olabilir (repo'da .gitignore
-    # ile tutulmuyor). init_database() idempotent'tir: create_all() var olan tabloları
+    # Yerel geliştirmede bist_app.db repoda tutulmaz (.gitignore), yani temiz bir
+    # klonda hiç yoktur. init_database() idempotent'tir: create_all() var olan tabloları
     # bozmaz, seed adımları zaten var olan kayıtları atlar — bu yüzden her başlangıçta
     # güvenle çağrılabilir. Scheduler'ın cache doldurma adımı 'stocks' tablosunu
     # sorguladığı için bu çağrı start_scheduler()'dan ÖNCE tamamlanmış olmalı.
