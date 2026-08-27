@@ -151,7 +151,7 @@ export default function OnboardingHelpModal() {
             <div className="px-5 py-3 border-t border-[#242B35]">
               <button
                 onClick={() => setIsOpen(false)}
-                className="w-full bg-[#F59E0B] hover:bg-[#d98a08] text-[#0B0E14] font-bold text-xs py-2 rounded-lg transition"
+                className="w-full bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-bold text-xs py-2 rounded-lg transition"
               >
                 Anladım
               </button>

@@ -8,12 +8,16 @@
    yesil "kazanc" anlamini yitirip dekorasyona donusuyordu (liderlik
    tablosunda 10 satirin 9'u yesil +0.00% goruntusu bundandi).
 
-   Kural: yesil ve kirmizi YALNIZCA piyasa yonu icindir. Marka, gezinme ve
-   tiklanabilir her sey MAVI kullanir. Mavi bilerek secildi: yesile de
-   kirmiziya da renk cemberinde maksimum uzaklikta, bu yuzden mobilde 10-11px
-   yazilarda bile anlam karismaz. Kehribar ise yalnizca UYARI rengidir --
-   kirmiziya komsu bir ton oldugu icin marka rengi olarak kullanildiginda
-   dususle karisma riski tasiyordu.
+   Marka rengi YESIL'dir (urun kimligi karari). Kehribar yalnizca UYARI
+   rengidir -- kirmiziya komsu bir ton oldugu icin birincil eylem butonlarinda
+   kullanildiginda hem dususle karisiyor hem de ayni ekrandaki yasal uyari
+   bandiyla ayni rengi paylasip uyarinin dikkat cekiciligini zayiflatiyordu.
+
+   Marka rengi bir ara maviye tasindi, sonra urun karariyla yesile geri alindi.
+   Kalici olan kisim su: DEGISIM OLMAYAN durum (0.00%) artik yesil DEGIL, notr
+   gri. Onceden 20 yerde `deger >= 0 ? yesil : kirmizi` yaziliydi ve sifir
+   kazanc yesil gorunuyordu; liderlik tablosunda 10 satirin 9'unun yesil
+   "+0.00%" cikmasinin sebebi buydu. Bkz. lib/marketColor.ts.
    ========================================================================== */
 :root {
   --background: #0B0E14;
@@ -31,11 +35,11 @@
   --text-muted: #64748B;
 
   /* Marka / etkilesim — MAVI */
-  --brand: #4A87C7;
-  --brand-hover: #5C99D6;
-  --brand-active: #3D74AD;
-  --brand-soft: rgba(74, 135, 199, 0.12);
-  --brand-line: rgba(74, 135, 199, 0.35);
+  --brand: #10B981;
+  --brand-hover: #34D399;
+  --brand-active: #0EA271;
+  --brand-soft: rgba(16, 185, 129, 0.12);
+  --brand-line: rgba(16, 185, 129, 0.35);
 
   /* Piyasa yonu — SADECE burada */
   --up: #10B981;
@@ -64,7 +68,7 @@
   --color-obs-positive: #10B981;
   --color-obs-negative: #F43F5E;
   --color-obs-gold: #F59E0B;
-  --color-brand: #4A87C7;
+  --color-brand: #10B981;
 }
 
 /* Fiyat/rakam alanları için hizalı, kaymayan basamaklar */

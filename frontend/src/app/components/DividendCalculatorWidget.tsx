@@ -84,7 +84,7 @@ export default function DividendCalculatorWidget({ symbol }: DividendCalculatorW
         <button
           onClick={handleCalculate}
           disabled={loading}
-          className="mt-5 bg-[#F59E0B] hover:bg-[#d98a08] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-1.5"
+          className="mt-5 bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50 flex items-center gap-1.5"
         >
           {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           Hesapla

@@ -108,7 +108,7 @@ export default function DcaBacktestWidget({ symbol }: DcaBacktestWidgetProps) {
       <button
         onClick={handleRun}
         disabled={loading}
-        className="w-full bg-[#F59E0B] hover:bg-[#d98a08] text-[#0B0E14] font-bold text-xs py-2 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+        className="w-full bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-bold text-xs py-2 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5"
       >
         {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
         Simülasyonu Çalıştır

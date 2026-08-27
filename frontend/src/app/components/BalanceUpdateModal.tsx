@@ -93,7 +93,7 @@ export default function BalanceUpdateModal({
             <button
               onClick={() => handleSubmit(value)}
               disabled={loading}
-              className="flex-1 bg-[#F59E0B] hover:bg-[#d98a08] text-[#0B0E14] font-bold text-[11px] py-2 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+              className="flex-1 bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-bold text-[11px] py-2 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5"
             >
               {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Kaydet
@@ -104,7 +104,7 @@ export default function BalanceUpdateModal({
             <div
               className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium border ${
                 feedback.type === "success"
-                  ? "bg-[#4A87C7]/10 border-[#4A87C7]/25 text-[#4A87C7]"
+                  ? "bg-[#10B981]/10 border-[#10B981]/25 text-[#10B981]"
                   : "bg-[#F43F5E]/10 border-[#F43F5E]/25 text-[#F43F5E]"
               }`}
             >
