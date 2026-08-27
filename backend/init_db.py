@@ -217,6 +217,10 @@ MIGRATIONS = {
         "source_url": "VARCHAR(500)",
         "updated_at": "TIMESTAMP",
     },
+    "kap_notifications": {
+        # bkz. models.KapNotification.dividend_parsed_at
+        "dividend_parsed_at": "TIMESTAMP",
+    },
     "stock_news": {
         # bkz. models.StockNews.provider — Yahoo işi RSS kayıtlarını siliyordu.
         "provider": "VARCHAR(12)",

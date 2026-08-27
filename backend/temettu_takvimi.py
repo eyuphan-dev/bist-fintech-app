@@ -195,7 +195,8 @@ def _index_coz(kap_url: Optional[str]) -> Optional[int]:
 
 
 def temettu_takvimini_senkronize_et(db: Session, geriye_gun: int = 60,
-                                    gecikme_sn: float = 0.6) -> Dict[str, int]:
+                                    gecikme_sn: float = 0.6,
+                                    zorla: bool = False) -> Dict[str, int]:
     """
     Son `geriye_gun` gündeki "Hak Kullanımı" bildirimlerini gezip nakit temettü
     ödemelerini `dividend_events` tablosuna yazar.
@@ -223,13 +224,24 @@ def temettu_takvimini_senkronize_et(db: Session, geriye_gun: int = 60,
         if idx and idx not in indexler:
             indexler[idx] = b
 
+    # DAHA ÖNCE İŞLENMİŞ BİLDİRİM YENİDEN İNDİRİLMEZ. KAP bildirimi
+    # yayımlandıktan sonra değişmez (düzeltme AYRI bildirim olarak çıkar).
+    # Her gece 14 bildirimi yeniden indirmek KAP istek sınırını zorluyordu —
+    # ölçüldü: aynı turda katılım formları "429 Request Limit Exceeded" aldı.
     hisse_id = {s.symbol: s.id for s in db.query(models.Stock).all()}
-    sayac = {"bildirim": len(indexler), "satir": 0, "yeni": 0, "guncellenen": 0, "atlanan": 0}
+    sayac = {"bildirim": len(indexler), "satir": 0, "yeni": 0, "guncellenen": 0,
+             "atlanan": 0, "degismemis": 0}
     # YENİ eklenen olaylar ayrıca izlenir: bildirim yalnızca bunlar için
     # gönderilir, yoksa her gece aynı temettü tekrar duyurulur.
     yeni_olaylar: List[models.DividendEvent] = []
 
     for idx, bildirim in indexler.items():
+        # İşaretli bildirim yeniden indirilmez — temettü İÇERMEYENLER de
+        # işaretlenir, yoksa kayıt bırakmadıkları için sonsuza dek yeniden
+        # indirilirler (bkz. models.KapNotification.dividend_parsed_at).
+        if not zorla and bildirim.dividend_parsed_at is not None:
+            sayac["degismemis"] += 1
+            continue
         for kayit in bildirimi_cek(idx):
             sayac["satir"] += 1
             sembol = kayit["symbol"]
@@ -264,6 +276,9 @@ def temettu_takvimini_senkronize_et(db: Session, geriye_gun: int = 60,
             mevcut.source_url = bildirim.kap_url
             mevcut.updated_at = datetime.utcnow()
 
+        # Satır çıksa da çıkmasa da işlendi say: amacı tekrar indirmemek.
+        bildirim.dividend_parsed_at = datetime.utcnow()
+
         if gecikme_sn:
             time.sleep(gecikme_sn)
 
@@ -271,5 +286,6 @@ def temettu_takvimini_senkronize_et(db: Session, geriye_gun: int = 60,
     # commit'ten SONRA okunur; id'ler ancak yazıldıktan sonra oluşur.
     sayac["yeni_olay_idleri"] = [o.id for o in yeni_olaylar if o.id is not None]
     print(f"[Temettü] {sayac['bildirim']} bildirim tarandı, {sayac['satir']} satır, "
-          f"{sayac['yeni']} yeni, {sayac['guncellenen']} güncellendi, {sayac['atlanan']} atlandı.")
+          f"{sayac['yeni']} yeni, {sayac['guncellenen']} güncellendi, "
+          f"{sayac['atlanan']} atlandı, {sayac['degismemis']} daha önce işlenmiş.")
     return sayac

@@ -216,7 +216,8 @@ def index_coz(kap_url: Optional[str]) -> Optional[int]:
 
 
 def kap_katilim_formlarini_senkronize_et(db, limit: Optional[int] = None,
-                                         gecikme_sn: float = 0.7) -> Dict[str, int]:
+                                         gecikme_sn: float = 0.7,
+                                         zorla: bool = False) -> Dict[str, int]:
     """
     Veritabanındaki "Katılım Finansı İlkeleri Bilgi Formu" KAP bildirimlerini
     gezip her hisse için en YENİ formu indirir, ayrıştırır ve `stocks`
@@ -250,7 +251,7 @@ def kap_katilim_formlarini_senkronize_et(db, limit: Optional[int] = None,
     if limit:
         semboller = semboller[:limit]
 
-    sayac = {"islenen": 0, "yazilan": 0, "atlanan": 0, "hatali": 0}
+    sayac = {"islenen": 0, "yazilan": 0, "atlanan": 0, "hatali": 0, "degismemis": 0}
     for sembol in semboller:
         bildirim = en_yeni[sembol]
         index = index_coz(bildirim.kap_url)
@@ -264,9 +265,27 @@ def kap_katilim_formlarini_senkronize_et(db, limit: Optional[int] = None,
             sayac["atlanan"] += 1
             continue
 
+        # DEĞİŞMEYEN FORM YENİDEN İNDİRİLMEZ. KAP bildirimleri yayımlandıktan
+        # sonra değişmez (düzeltme AYRI bir bildirim olarak çıkar), bu yüzden
+        # aynı bildirimi her gece yeniden indirmenin hiçbir faydası yok ama
+        # maliyeti var: KAP istek sınırı uyguluyor ve ölçüldü — 36 formun
+        # tamamı tek turda "429 Request Limit Exceeded" alıp ayrıştırılamadı.
+        # Durağan durumda bu döngü artık sıfır istek atar.
+        if not zorla and stock.kap_katilim_url == bildirim.kap_url:
+            sayac["degismemis"] = sayac.get("degismemis", 0) + 1
+            continue
+
         sayac["islenen"] += 1
         form = formu_cek(index)
-        if form is None or not form.tam_mi:
+        if form is None:
+            # 429 gibi bir hatada devam etmek yalnızca sınırı daha da zorlar;
+            # kalan formlar bir sonraki turda alınır (kayıt kaybı olmaz,
+            # çünkü değişmeyen form kontrolü sayesinde tur kısa sürüyor).
+            sayac["hatali"] += 1
+            print("[KatilimKAP] İndirme başarısız, tur erken sonlandırıldı "
+                  "(muhtemelen istek sınırı).")
+            break
+        if not form.tam_mi:
             # Eksik form YAZILMAZ: yarım veri, veri yokluğundan daha kötüdür —
             # kullanıcı eksik oranı "sıfır" sanır.
             sayac["hatali"] += 1
@@ -284,5 +303,6 @@ def kap_katilim_formlarini_senkronize_et(db, limit: Optional[int] = None,
 
     db.commit()
     print(f"[KatilimKAP] {sayac['islenen']} form işlendi, {sayac['yazilan']} hisse "
-          f"güncellendi, {sayac['hatali']} ayrıştırılamadı, {sayac['atlanan']} atlandı.")
+          f"güncellendi, {sayac['hatali']} ayrıştırılamadı, {sayac['atlanan']} atlandı, "
+          f"{sayac['degismemis']} değişmemiş (indirilmedi).")
     return sayac

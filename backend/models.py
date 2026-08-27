@@ -597,6 +597,17 @@ class KapNotification(Base):
     summary = Column(Text, nullable=True)
     kap_url = Column(String(500), nullable=True)
     publish_date = Column(DateTime, nullable=False, index=True)
+    # Temettü ayrıştırıcısının bu bildirimi İŞLEDİĞİ an. KAP bildirimi
+    # yayımlandıktan sonra değişmez (düzeltme ayrı bildirim olarak çıkar),
+    # bu yüzden bir kez işlenen bildirim bir daha indirilmez.
+    #
+    # NEDEN AYRI İŞARET: "temettü kaydı var mı" diye bakmak yetmiyordu —
+    # "Hak Kullanımı" bildirimlerinin bir kısmı bedelsiz sermaye artırımı
+    # ya da rüçhan hakkıdır ve NAKİT TEMETTÜ İÇERMEZ. Onlar hiç kayıt
+    # bırakmadığı için her gece yeniden indiriliyordu (ölçüldü: 2. turda
+    # hâlâ 5 istek). KAP istek sınırı uyguluyor; bu istekler bedavaya
+    # sınırı yiyordu.
+    dividend_parsed_at = Column(DateTime, nullable=True)
 
     stock = relationship("Stock")
 
