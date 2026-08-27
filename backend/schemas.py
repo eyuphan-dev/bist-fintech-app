@@ -196,6 +196,20 @@ class KatilimInfoResponse(BaseModel):
     threshold: float = 33.0
     detail: Optional[str] = None
     checked_at: Optional[datetime] = None
+    # --- KAP Katılım Finansı İlkeleri Bilgi Formu (ŞİRKETİN RESMİ BEYANI) ---
+    # Tahmin değil beyan; bu yüzden kaynak bağlantısıyla birlikte gösterilir.
+    # Eskiden bu bölümün yerinde uydurma bir `purification_rate` vardı ve
+    # kullanıcıya "kazancınızın bu kadarını bağışlayın" deniyordu.
+    kap_gelir_pct: Optional[float] = None    # Uygun olmayan gelirlerin oranı (%)
+    kap_varlik_pct: Optional[float] = None   # Uygun olmayan varlıkların oranı (%)
+    kap_borc_pct: Optional[float] = None     # Uygun olmayan borçların oranı (%)
+    kap_donem: Optional[str] = None          # "2026 / 6 Aylık"
+    kap_url: Optional[str] = None            # Kaynak KAP bildirimi
+    kap_updated_at: Optional[datetime] = None
+    # Resmi eşikler: gelir %5, varlık ve borç %33.
+    kap_gelir_esik: float = 5.0
+    kap_varlik_esik: float = 33.0
+    kap_borc_esik: float = 33.0
 
 class StockProResponse(BaseModel):
     symbol: str

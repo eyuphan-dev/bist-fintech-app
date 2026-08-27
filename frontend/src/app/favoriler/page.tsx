@@ -131,13 +131,13 @@ export default function FavorilerPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
           Favoriler yükleniyor...
         </div>
       ) : items.length === 0 ? (
         <div className="text-center text-gray-500 text-xs py-16 space-y-2">
           <p>Henüz favori hisseniz yok.</p>
-          <Link href="/piyasalar" className="text-[#4A87C7] font-semibold hover:text-[#34d399]">
+          <Link href="/piyasalar" className="text-[#10B981] font-semibold hover:text-[#34d399]">
             Piyasalara göz atın →
           </Link>
         </div>
@@ -146,7 +146,7 @@ export default function FavorilerPage() {
           {items.map((item) => (
             <div
               key={item.symbol}
-              className="bg-[#151921] p-4 rounded-2xl border border-[#242B35] hover:border-[#4A87C7]/40 transition flex flex-col gap-3 relative"
+              className="bg-[#151921] p-4 rounded-2xl border border-[#242B35] hover:border-[#10B981]/40 transition flex flex-col gap-3 relative"
             >
               <button
                 onClick={() => handleRemove(item.symbol)}
@@ -181,7 +181,7 @@ export default function FavorilerPage() {
                   <p className="font-bold text-sm text-white tabular-nums">{item.current_price} TL</p>
                 </div>
 
-                <KatilimBadge isCompliant={item.is_katilim_compliant} status={item.katilim_status} purificationRate={item.purification_rate} size="sm" />
+                <KatilimBadge isCompliant={item.is_katilim_compliant} status={item.katilim_status} size="sm" />
               </Link>
 
               {/* Hedef fiyat & not */}
@@ -194,7 +194,7 @@ export default function FavorilerPage() {
                     value={draftTarget}
                     onChange={(e) => setDraftTarget(e.target.value)}
                     placeholder="Hedef fiyat (TL)"
-                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
+                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
                   />
                   <input
                     type="text"
@@ -202,14 +202,14 @@ export default function FavorilerPage() {
                     value={draftNote}
                     onChange={(e) => setDraftNote(e.target.value)}
                     placeholder="Not (örn. bilanço sonrası tekrar bak)"
-                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
+                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={() => saveEditor(item.symbol)}
                       disabled={saving}
                       type="button"
-                      className="flex-1 bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] font-bold text-[11px] py-2.5 rounded-lg transition disabled:opacity-50"
+                      className="flex-1 bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-[11px] py-2.5 rounded-lg transition disabled:opacity-50"
                     >
                       {saving ? "Kaydediliyor..." : "Kaydet"}
                     </button>

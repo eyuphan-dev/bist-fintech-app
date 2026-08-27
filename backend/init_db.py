@@ -212,6 +212,13 @@ MIGRATIONS = {
     "stocks": {
         "is_katilim_compliant": "INTEGER DEFAULT 0",
         "purification_rate": "NUMERIC(5, 2) DEFAULT 0.00",
+        # KAP Katılım Finansı İlkeleri Bilgi Formu (bkz. katilim_kap.py)
+        "kap_katilim_gelir_pct": "NUMERIC(6, 2)",
+        "kap_katilim_varlik_pct": "NUMERIC(6, 2)",
+        "kap_katilim_borc_pct": "NUMERIC(6, 2)",
+        "kap_katilim_donem": "VARCHAR(40)",
+        "kap_katilim_url": "VARCHAR(500)",
+        "kap_katilim_updated_at": "TIMESTAMP",
         "non_compliance_reason": "TEXT",
         "sector": "TEXT",
         "previous_close": "NUMERIC(10, 2)",

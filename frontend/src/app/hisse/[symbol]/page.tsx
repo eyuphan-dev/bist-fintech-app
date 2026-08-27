@@ -348,7 +348,7 @@ export default function StockDetailPage() {
           <ArrowLeft className="w-3.5 h-3.5" /> Piyasalara Dön
         </button>
         <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
           {symbol} yükleniyor...
         </div>
       </div>
@@ -386,7 +386,6 @@ export default function StockDetailPage() {
               <KatilimBadge
                 isCompliant={summary.is_katilim_compliant}
                 status={summary.katilim_status}
-                purificationRate={summary.purification_rate}
               />
             </div>
           )}
@@ -433,7 +432,7 @@ export default function StockDetailPage() {
           </div>
           <div>
             <p className="text-gray-500">Gün İçi Yüksek</p>
-            <p className="font-semibold text-[#4A87C7] tabular-nums">
+            <p className="font-semibold text-[#10B981] tabular-nums">
               {stockDetail.day_high !== null && stockDetail.day_high !== undefined ? `${stockDetail.day_high} TL` : "—"}
             </p>
           </div>
@@ -465,7 +464,7 @@ export default function StockDetailPage() {
               key={s.key}
               onClick={() => setSection(s.key)}
               className={`flex-1 min-w-[110px] flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition ${
-                section === s.key ? "bg-[#4A87C7] text-[#0B0E14]" : "text-gray-400 hover:text-white"
+                section === s.key ? "bg-[#10B981] text-[#0B0E14]" : "text-gray-400 hover:text-white"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -498,7 +497,7 @@ export default function StockDetailPage() {
                       onClick={() => setChartRange(r.key)}
                       className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tabular-nums transition ${
                         chartRange === r.key
-                          ? "bg-[#4A87C7] text-[#0B0E14]"
+                          ? "bg-[#10B981] text-[#0B0E14]"
                           : "text-gray-400 hover:text-white hover:bg-[#0B0E14]"
                       }`}
                     >
@@ -509,7 +508,7 @@ export default function StockDetailPage() {
                 </div>
                 {chartLoading && chartData.length === 0 ? (
                   <div className="flex items-center justify-center h-[320px] text-xs text-gray-500">
-                    <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+                    <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
                     Grafik yükleniyor...
                   </div>
                 ) : chartData.length === 0 ? (
@@ -566,7 +565,7 @@ export default function StockDetailPage() {
                     <Newspaper className="w-3.5 h-3.5" /> KAP Bildirimleri
                   </span>
                   {kapDisclosures?.kap_url && (
-                    <a href={kapDisclosures.kap_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#4A87C7] hover:text-[#34d399] transition font-medium">
+                    <a href={kapDisclosures.kap_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#10B981] hover:text-[#34d399] transition font-medium">
                       Tümünü Gör →
                     </a>
                   )}
@@ -574,7 +573,7 @@ export default function StockDetailPage() {
 
                 {kapLoading ? (
                   <div className="flex items-center gap-2 text-[11px] text-gray-500 py-3">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#4A87C7]" />
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#10B981]" />
                     KAP bildirimleri yükleniyor...
                   </div>
                 ) : kapDisclosures?.disclosures?.length > 0 ? (
@@ -609,7 +608,7 @@ export default function StockDetailPage() {
 
                 {newsLoading ? (
                   <div className="flex items-center gap-2 text-[11px] text-gray-500 py-3">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#4A87C7]" />
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#10B981]" />
                     Haberler yükleniyor...
                   </div>
                 ) : news.length > 0 ? (
@@ -651,7 +650,7 @@ export default function StockDetailPage() {
                                   href={n.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#4A87C7] hover:text-[#34d399] transition"
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#10B981] hover:text-[#34d399] transition"
                                 >
                                   Devamını Oku <ExternalLink className="w-3 h-3" />
                                 </a>
@@ -711,12 +710,12 @@ export default function StockDetailPage() {
                       // min-w-0 şart: flex öğesinin varsayılan min-width:auto değeri,
                       // input'un uzun placeholder metninin altına inmesini engelliyordu;
                       // input şişip "Gönder" butonunu dar ekranlarda sağa taşırıyordu.
-                      className="flex-1 min-w-0 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3 py-2 text-white text-xs outline-none transition"
+                      className="flex-1 min-w-0 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3 py-2 text-white text-xs outline-none transition"
                     />
                     <button
                       onClick={handlePostComment}
                       disabled={commentLoading || commentText.trim().length < 2}
-                      className="shrink-0 bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50"
+                      className="shrink-0 bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50"
                     >
                       Gönder
                     </button>

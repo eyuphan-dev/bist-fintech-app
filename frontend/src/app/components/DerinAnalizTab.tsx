@@ -77,6 +77,12 @@ interface StockProData {
   checked_at?: string | null;
     purification_rate: number;
     non_compliance_reason: string | null;
+    // KAP Katılım Finansı İlkeleri Bilgi Formu (şirketin resmi beyanı).
+    kap_gelir_pct?: number | null;
+    kap_varlik_pct?: number | null;
+    kap_borc_pct?: number | null;
+    kap_donem?: string | null;
+    kap_url?: string | null;
   };
   analysis: CompanyAnalysis | null;
 }
@@ -93,7 +99,7 @@ function RefreshFeedback({ feedback }: { feedback: { type: "success" | "error"; 
     <div
       className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium border ${
         isSuccess
-          ? "bg-[#4A87C7]/10 border-[#4A87C7]/25 text-[#4A87C7]"
+          ? "bg-[#10B981]/10 border-[#10B981]/25 text-[#10B981]"
           : "bg-[#F43F5E]/10 border-[#F43F5E]/25 text-[#F43F5E]"
       }`}
     >
@@ -226,14 +232,14 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
 
   const altmanZone = analysis?.altman_zone ?? null;
   const altmanZoneMeta: Record<string, { label: string; color: string }> = {
-    SAFE: { label: "Güvenli Bölge", color: "text-[#4A87C7]" },
+    SAFE: { label: "Güvenli Bölge", color: "text-[#10B981]" },
     GREY: { label: "Gri Bölge", color: "text-[#F59E0B]" },
     DISTRESS: { label: "Riskli Bölge", color: "text-[#F43F5E]" },
   };
   const altmanMeta = altmanZone ? altmanZoneMeta[altmanZone] : null;
 
   const fxPositionMeta: Record<string, { label: string; color: string }> = {
-    POZITIF: { label: "Pozitif", color: "text-[#4A87C7]" },
+    POZITIF: { label: "Pozitif", color: "text-[#10B981]" },
     NEGATIF: { label: "Negatif", color: "text-[#F43F5E]" },
     NOTR: { label: "Nötr", color: "text-gray-300" },
   };
@@ -272,8 +278,14 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
           <KatilimBadge
             isCompliant={katilim.is_katilim_compliant}
             status={katilim.katilim_status}
-            purificationRate={katilim.purification_rate}
             nonComplianceReason={katilim.non_compliance_reason}
+            kap={{
+              gelir_pct: katilim.kap_gelir_pct ?? null,
+              varlik_pct: katilim.kap_varlik_pct ?? null,
+              borc_pct: katilim.kap_borc_pct ?? null,
+              donem: katilim.kap_donem ?? null,
+              url: katilim.kap_url ?? null,
+            }}
           />
           <button
             onClick={() => setShowGuide(true)}
@@ -523,14 +535,14 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
                     </div>
                     <div className="relative h-1.5 rounded-full bg-[#0B0E14] border border-[#242B35]">
                       <div
-                        className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[#4A87C7] border border-[#0B0E14]"
+                        className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[#10B981] border border-[#0B0E14]"
                         style={{ left: `calc(${pos}% - 4px)` }}
                         title={`Bandın %${pos.toFixed(0)} noktasında`}
                       />
                     </div>
                     <div className="flex justify-between text-[10px] text-gray-300 tabular-nums mt-1">
                       <span>{lo.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}</span>
-                      <span className="text-[#4A87C7] font-semibold">
+                      <span className="text-[#10B981] font-semibold">
                         %{pos.toFixed(0)} noktasında
                       </span>
                       <span>{hi.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}</span>
@@ -583,7 +595,7 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
                     <div key={r.label} className="flex items-center justify-between text-[11px]">
                       <span className="text-gray-400">{r.label}</span>
                       <div className="flex items-center gap-2 tabular-nums">
-                        <span className="font-bold" style={{ color: better ? "#4A87C7" : "#8A99AD" }}>
+                        <span className="font-bold" style={{ color: better ? "#10B981" : "#8A99AD" }}>
                           {r.own.toFixed(2)}{r.suffix ?? ""}
                         </span>
                         <span className="text-gray-600 text-[10px]">
@@ -676,17 +688,17 @@ export default function DerinAnalizTab({ symbol, currentPrice }: DerinAnalizTabP
                     <span className="text-[8px] text-gray-500 uppercase font-bold">Pivot</span>
                     <p className="text-[11px] font-bold text-[#F59E0B] tabular-nums">{pivotLevels.pivot?.toFixed(2) ?? "—"}</p>
                   </div>
-                  <div className="bg-[#0B0E14] border border-[#4A87C7]/20 rounded-lg p-1.5">
+                  <div className="bg-[#0B0E14] border border-[#10B981]/20 rounded-lg p-1.5">
                     <span className="text-[8px] text-gray-500 uppercase font-bold">S1</span>
-                    <p className="text-[11px] font-bold text-[#4A87C7] tabular-nums">{pivotLevels.s1?.toFixed(2) ?? "—"}</p>
+                    <p className="text-[11px] font-bold text-[#10B981] tabular-nums">{pivotLevels.s1?.toFixed(2) ?? "—"}</p>
                   </div>
-                  <div className="bg-[#0B0E14] border border-[#4A87C7]/20 rounded-lg p-1.5">
+                  <div className="bg-[#0B0E14] border border-[#10B981]/20 rounded-lg p-1.5">
                     <span className="text-[8px] text-gray-500 uppercase font-bold">S2</span>
-                    <p className="text-[11px] font-bold text-[#4A87C7] tabular-nums">{pivotLevels.s2?.toFixed(2) ?? "—"}</p>
+                    <p className="text-[11px] font-bold text-[#10B981] tabular-nums">{pivotLevels.s2?.toFixed(2) ?? "—"}</p>
                   </div>
-                  <div className="bg-[#0B0E14] border border-[#4A87C7]/20 rounded-lg p-1.5 col-start-1">
+                  <div className="bg-[#0B0E14] border border-[#10B981]/20 rounded-lg p-1.5 col-start-1">
                     <span className="text-[8px] text-gray-500 uppercase font-bold">S3</span>
-                    <p className="text-[11px] font-bold text-[#4A87C7] tabular-nums">{pivotLevels.s3?.toFixed(2) ?? "—"}</p>
+                    <p className="text-[11px] font-bold text-[#10B981] tabular-nums">{pivotLevels.s3?.toFixed(2) ?? "—"}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5 mt-2">

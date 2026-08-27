@@ -62,8 +62,26 @@ class Stock(Base):
     katilim_asset_ratio = Column(Numeric(6, 2), nullable=True)   # Nakit + finansal yatırımlar / toplam varlık (%)
     katilim_checked_at = Column(DateTime, nullable=True)
     katilim_detail = Column(Text, nullable=True)                 # Kullanıcıya gösterilecek gerekçe
-    purification_rate = Column(Numeric(5, 2), default=0.00)  # Arınma Oranı (%)
+    # UYDURMA VERİ UYARISI: `purification_rate` başlangıçta elle yazılmış bir
+    # yer tutucuydu. Ölçüldü — 43 hisseye verilen 31 farklı değer 0,4 ile 3,0
+    # arasında neredeyse kusursuz 0,1'lik adımlarla diziliydi; bu bir finansal
+    # dağılım değil, aritmetik bir dizidir. Kalan 122 hissede hiç değer yoktu.
+    # Yerine KAP'ın resmi "Katılım Finansı İlkeleri Bilgi Formu" verisi geldi
+    # (aşağıdaki kap_* alanları, bkz. katilim_kap.py). Bu alan geriye dönük
+    # uyumluluk için duruyor; YENİ KOD BUNU KULLANMAMALIDIR.
+    purification_rate = Column(Numeric(5, 2), default=0.00)  # BAYAT — kap_* alanlarını kullan
     non_compliance_reason = Column(String, nullable=True)
+
+    # --- KAP Katılım Finansı İlkeleri Bilgi Formu (ŞİRKETİN RESMİ BEYANI) ---
+    # Kaynak: kap.org.tr, şirketin kendi bildirdiği form (bkz. katilim_kap.py).
+    # Tahmin değil beyandır; bu yüzden kullanıcıya kaynak bağlantısıyla birlikte
+    # gösterilebilir.
+    kap_katilim_gelir_pct = Column(Numeric(6, 2), nullable=True)   # Uygun olmayan gelirlerin oranı (%)
+    kap_katilim_varlik_pct = Column(Numeric(6, 2), nullable=True)  # Uygun olmayan varlıkların oranı (%)
+    kap_katilim_borc_pct = Column(Numeric(6, 2), nullable=True)    # Uygun olmayan borçların oranı (%)
+    kap_katilim_donem = Column(String(40), nullable=True)          # "2026 / 6 Aylık"
+    kap_katilim_url = Column(String(500), nullable=True)           # Kaynak KAP bildirimi
+    kap_katilim_updated_at = Column(DateTime, nullable=True)
 
     # Yahoo Finance'ın resmi "önceki kapanış" referansı (fast_info.previousClose),
     # scheduler her fiyat güncellemesinde tazeler. Günlük % değişim hesabında

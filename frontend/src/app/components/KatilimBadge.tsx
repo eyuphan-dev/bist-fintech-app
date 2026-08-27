@@ -3,13 +3,28 @@
 import React, { useState } from "react";
 import { CheckCircle2, XCircle, Info, HelpCircle } from "lucide-react";
 
+/** KAP "Katılım Finansı İlkeleri Bilgi Formu" — şirketin kendi resmi beyanı. */
+export interface KapKatilimVerisi {
+  gelir_pct: number | null;
+  varlik_pct: number | null;
+  borc_pct: number | null;
+  donem: string | null;
+  url: string | null;
+}
+
 interface KatilimBadgeProps {
   isCompliant: boolean;
-  purificationRate: number;
+  /**
+   * @deprecated Uydurma veriydi — kullanılmıyor, geriye dönük uyum için duruyor.
+   * Gerçek oranlar `kap` prop'undan gelir.
+   */
+  purificationRate?: number;
   nonComplianceReason?: string | null;
   size?: "sm" | "md";
   /** 'UYGUN' | 'UYGUN_DEGIL' | 'BELIRSIZ'. Verilmezse isCompliant kullanılır. */
   status?: string | null;
+  /** KAP resmi beyanı; yoksa oran bölümü hiç gösterilmez. */
+  kap?: KapKatilimVerisi | null;
 }
 
 /**
@@ -21,12 +36,29 @@ interface KatilimBadgeProps {
  * DEĞİL" göstermek, bilmediğimiz bir şeyi iddia etmek olurdu — bu yüzden nötr
  * gri "değerlendirilmedi" rozeti gösterilir.
  */
+/** Tek bir oran satırı: değer, eşik ve eşiğin altında mı üstünde mi. */
+function OranSatiri({ etiket, deger, esik }: { etiket: string; deger: number | null; esik: number }) {
+  if (deger === null) return null;
+  const asiyor = deger > esik;
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-[10px] text-gray-400">{etiket}</dt>
+      <dd className="flex items-baseline gap-1">
+        <span className={`text-xs font-bold tabular-nums ${asiyor ? "text-[#F43F5E]" : "text-[#10B981]"}`}>
+          %{deger.toFixed(2)}
+        </span>
+        <span className="text-[9px] text-gray-600 tabular-nums">/ %{esik}</span>
+      </dd>
+    </div>
+  );
+}
+
 export default function KatilimBadge({
   isCompliant,
-  purificationRate,
   nonComplianceReason,
   size = "md",
   status,
+  kap = null,
 }: KatilimBadgeProps) {
   const [showPopover, setShowPopover] = useState(false);
 
@@ -89,7 +121,7 @@ export default function KatilimBadge({
     <div className="relative inline-block">
       <button
         onClick={() => setShowPopover((v) => !v)}
-        className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide bg-[#4A87C7]/10 text-[#4A87C7] border border-[#4A87C7]/25 ${sizeClasses}`}
+        className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/25 ${sizeClasses}`}
       >
         <CheckCircle2 className="w-3 h-3" />
         ✓ KATILIM ENDEKSİNE UYGUN
@@ -100,17 +132,52 @@ export default function KatilimBadge({
           className="absolute z-40 top-full mt-2 left-0 w-64 bg-[#151921] border border-[#242B35] rounded-xl p-3"
           onMouseLeave={() => setShowPopover(false)}
         >
+          {/* ÖNEMLİ: burada eskiden UYDURMA bir "arınma oranı" gösteriliyor ve
+              kullanıcıya "kazancınızın bu kadarını bağışlayın" deniyordu.
+              Sayı elle yazılmış bir yer tutucuydu. Artık yalnızca KAP'a
+              bildirilen resmi beyan gösterilir; beyan yoksa HİÇBİR ORAN
+              GÖSTERİLMEZ. */}
           <div className="flex items-start gap-2">
             <Info className="w-3.5 h-3.5 text-[#F59E0B] shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[11px] font-semibold text-white">Arınma (Purification) Oranı</p>
-              <p className="text-lg font-bold text-[#F59E0B] tabular-nums mt-0.5">
-                %{purificationRate.toFixed(2)}
-              </p>
-              <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
-                Kazancınızın bu oranı, şirketin faizli/gayri helal gelir kalemlerinden
-                arındırılması için hayır kurumuna bağışlanması önerilen kısımdır.
-              </p>
+            <div className="min-w-0">
+              {kap && (kap.gelir_pct !== null || kap.varlik_pct !== null || kap.borc_pct !== null) ? (
+                <>
+                  <p className="text-[11px] font-semibold text-white">
+                    Katılım Finansı İlkeleri Bilgi Formu
+                  </p>
+                  <p className="text-[10px] text-gray-500 mb-1.5">
+                    Şirketin KAP&apos;a bildirdiği resmi beyan
+                    {kap.donem ? ` · ${kap.donem}` : ""}
+                  </p>
+                  <dl className="space-y-1">
+                    <OranSatiri etiket="Uygun olmayan gelir" deger={kap.gelir_pct} esik={5} />
+                    <OranSatiri etiket="Uygun olmayan varlık" deger={kap.varlik_pct} esik={33} />
+                    <OranSatiri etiket="Uygun olmayan borç" deger={kap.borc_pct} esik={33} />
+                  </dl>
+                  <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
+                    Uygun olmayan gelir oranı, kazancınızdan arındırılması önerilen
+                    kısmı gösterir.
+                  </p>
+                  {kap.url && (
+                    <a
+                      href={kap.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-[#10B981] hover:underline mt-1.5 inline-block"
+                    >
+                      KAP bildirimini aç →
+                    </a>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] font-semibold text-white">Oran verisi yok</p>
+                  <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                    Bu şirket için KAP&apos;a bildirilmiş Katılım Finansı İlkeleri Bilgi
+                    Formu bulunamadı. Uydurma bir oran göstermek yerine boş bırakıyoruz.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
