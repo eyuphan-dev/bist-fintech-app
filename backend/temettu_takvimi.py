@@ -225,6 +225,9 @@ def temettu_takvimini_senkronize_et(db: Session, geriye_gun: int = 60,
 
     hisse_id = {s.symbol: s.id for s in db.query(models.Stock).all()}
     sayac = {"bildirim": len(indexler), "satir": 0, "yeni": 0, "guncellenen": 0, "atlanan": 0}
+    # YENİ eklenen olaylar ayrıca izlenir: bildirim yalnızca bunlar için
+    # gönderilir, yoksa her gece aynı temettü tekrar duyurulur.
+    yeni_olaylar: List[models.DividendEvent] = []
 
     for idx, bildirim in indexler.items():
         for kayit in bildirimi_cek(idx):
@@ -247,6 +250,7 @@ def temettu_takvimini_senkronize_et(db: Session, geriye_gun: int = 60,
             if mevcut is None:
                 mevcut = models.DividendEvent(symbol=sembol, payment_date=odeme)
                 db.add(mevcut)
+                yeni_olaylar.append(mevcut)
                 sayac["yeni"] += 1
             else:
                 sayac["guncellenen"] += 1
@@ -264,6 +268,8 @@ def temettu_takvimini_senkronize_et(db: Session, geriye_gun: int = 60,
             time.sleep(gecikme_sn)
 
     db.commit()
+    # commit'ten SONRA okunur; id'ler ancak yazıldıktan sonra oluşur.
+    sayac["yeni_olay_idleri"] = [o.id for o in yeni_olaylar if o.id is not None]
     print(f"[Temettü] {sayac['bildirim']} bildirim tarandı, {sayac['satir']} satır, "
           f"{sayac['yeni']} yeni, {sayac['guncellenen']} güncellendi, {sayac['atlanan']} atlandı.")
     return sayac

@@ -290,3 +290,87 @@ def check_ai_signal_triggers(db: Session) -> None:
 
     db.commit()
     _flush(db, outbox)
+
+
+def temettu_bildirimlerini_gonder(db: Session, yeni_olay_idleri: Iterable[int]) -> int:
+    """
+    Yeni açıklanan temettü ödemeleri için, o hisseyi TUTAN ya da FAVORİLEYEN
+    kullanıcılara bildirim üretir. Gönderilen bildirim sayısını döner.
+
+    NEDEN YALNIZCA "YENİ" OLAYLAR: `temettu_takvimini_senkronize_et` her turda
+    aynı bildirimleri yeniden okuyor ve mevcut kayıtları güncelliyor. Bu
+    fonksiyona yalnızca YENİ EKLENEN olayların id'leri verilir; yoksa her
+    gece aynı temettü için tekrar tekrar bildirim gider ve kullanıcı
+    bildirimleri kapatır.
+
+    NEDEN YALNIZCA GELECEKTEKİ ÖDEMELER: geçmişte kalmış bir ödeme için
+    "temettü açıklandı" demek kullanıcıya yapabileceği bir şey sunmaz;
+    üstelik KAP penceresi geriye baktığı için ilk senkronizasyonda eski
+    ödemeler de yakalanıyor. Onlar sessizce kaydedilir, duyurulmaz.
+    """
+    yeni_olay_idleri = list(yeni_olay_idleri)
+    if not yeni_olay_idleri:
+        return 0
+
+    from market_hours import bugun_tr
+    bugun = bugun_tr()
+
+    olaylar = (
+        db.query(models.DividendEvent)
+        .filter(models.DividendEvent.id.in_(yeni_olay_idleri),
+                models.DividendEvent.payment_date >= bugun)
+        .all()
+    )
+    if not olaylar:
+        return 0
+
+    outbox: list = []
+    gonderilen = 0
+
+    for olay in olaylar:
+        stock = db.query(models.Stock).filter_by(id=olay.stock_id).first()
+        if not stock:
+            continue
+
+        # İlgilenen kullanıcılar: pozisyonu olanlar + favorileyenler.
+        # set kullanılıyor, çünkü ikisinde birden olan kullanıcıya İKİ
+        # bildirim gitmemeli.
+        ilgili_ids = {
+            uid for (uid,) in db.query(models.Portfolio.user_id)
+            .filter(models.Portfolio.stock_id == stock.id,
+                    models.Portfolio.is_bot_portfolio.is_(False))
+            .distinct().all()
+        }
+        ilgili_ids |= {
+            uid for (uid,) in db.query(models.Watchlist.user_id)
+            .filter(models.Watchlist.stock_id == stock.id)
+            .distinct().all()
+        }
+        if not ilgili_ids:
+            continue
+
+        kalan_gun = (olay.payment_date - bugun).days
+        ne_zaman = "bugün" if kalan_gun == 0 else f"{kalan_gun} gün sonra"
+
+        # Tutar varsa TL, yoksa oran yazılır; ikisi de yoksa sayı verilmez.
+        if olay.gross_amount_per_share is not None:
+            tutar = f"pay başına brüt {float(olay.gross_amount_per_share):.4f} TL"
+        elif olay.gross_rate_pct is not None:
+            tutar = f"brüt oran %{float(olay.gross_rate_pct):.2f}"
+        else:
+            tutar = "tutar bildirilmedi"
+
+        baslik = f"{stock.symbol} temettü ödemesi"
+        mesaj = (f"{stock.symbol} {olay.payment_date.strftime('%d.%m.%Y')} tarihinde "
+                 f"nakit temettü ödeyecek ({ne_zaman}) — {tutar}.")
+
+        for uid in ilgili_ids:
+            _create_notification(
+                db, uid, stock.id, "TEMETTU", baslik, mesaj,
+                outbox=outbox, url=f"/hisse/{stock.symbol}",
+            )
+            gonderilen += 1
+
+    db.commit()
+    _flush(db, outbox)
+    return gonderilen

@@ -239,7 +239,13 @@ def refresh_market_data_job():
         try:
             # KAP bildirimleri yukarıda tazelendi; temettü tablosu onların
             # detay sayfalarından okunuyor, bu yüzden sıra önemli.
-            temettu_takvimini_senkronize_et(db)
+            sonuc = temettu_takvimini_senkronize_et(db)
+            # Bildirim YALNIZCA yeni eklenen ve GELECEKTEKİ ödemeler için gider
+            # (bkz. notifications.temettu_bildirimlerini_gonder).
+            from notifications import temettu_bildirimlerini_gonder
+            n = temettu_bildirimlerini_gonder(db, sonuc.get("yeni_olay_idleri", []))
+            if n:
+                print(f"[Scheduler] {n} temettü bildirimi gönderildi.")
         except Exception as e:
             print(f"[Scheduler] Temettü takvimi hatası: {e}")
             db.rollback()
