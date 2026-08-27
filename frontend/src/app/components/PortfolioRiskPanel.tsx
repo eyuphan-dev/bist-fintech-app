@@ -21,7 +21,7 @@ interface RiskData {
 }
 
 const RISK_COLORS: Record<string, string> = {
-  "Düşük": "#4A87C7",
+  "Düşük": "#10B981",
   "Orta": "#F59E0B",
   "Yüksek": "#F43F5E",
 };
@@ -122,7 +122,7 @@ export default function PortfolioRiskPanel({ refreshKey }: { refreshKey?: number
         <div className="flex items-center gap-4 text-[10px] text-gray-500">
           <span>
             En iyi gün:{" "}
-            <span className="text-[#4A87C7] font-semibold tabular-nums">
+            <span className="text-[#10B981] font-semibold tabular-nums">
               +%{data.best_day_pct?.toFixed(2)}
             </span>
           </span>

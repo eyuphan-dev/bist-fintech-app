@@ -118,7 +118,7 @@ export default function PortfolioAnalytics({ refreshKey }: { refreshKey?: number
           <span className="text-[9px] text-gray-500 uppercase font-bold flex items-center gap-1">
             <ShieldCheck className="w-2.5 h-2.5" /> Katılım
           </span>
-          <p className="text-sm font-bold text-[#4A87C7] tabular-nums mt-0.5">
+          <p className="text-sm font-bold text-[#10B981] tabular-nums mt-0.5">
             %{data.katilim_compliant_pct}
           </p>
           <p className="text-[9px] text-gray-500 mt-0.5">uyumlu hisse</p>

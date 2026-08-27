@@ -95,7 +95,7 @@ export default function TakvimPage() {
 
         {earnings === null ? (
           <div className="flex items-center justify-center py-10 text-gray-500 text-xs">
-            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
             Yükleniyor...
           </div>
         ) : earnings.length === 0 ? (
@@ -149,7 +149,7 @@ export default function TakvimPage() {
 
         {majorHolderNews === null ? (
           <div className="flex items-center justify-center py-10 text-gray-500 text-xs">
-            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
             Yükleniyor...
           </div>
         ) : majorHolderNews.length === 0 ? (
@@ -234,7 +234,7 @@ export default function TakvimPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <Link href={`/hisse/${item.symbol}`} className="text-xs font-bold text-[#4A87C7]">
+                        <Link href={`/hisse/${item.symbol}`} className="text-xs font-bold text-[#10B981]">
                           {item.symbol}
                         </Link>
                         <span className="text-[10px] text-gray-500 tabular-nums">
@@ -260,12 +260,12 @@ export default function TakvimPage() {
 
       <section className="space-y-3">
         <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
-          <Newspaper className="w-4 h-4 text-[#4A87C7]" /> Son KAP Bildirimleri
+          <Newspaper className="w-4 h-4 text-[#10B981]" /> Son KAP Bildirimleri
         </h2>
 
         {news === null ? (
           <div className="flex items-center justify-center py-10 text-gray-500 text-xs">
-            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
             Yükleniyor...
           </div>
         ) : news.length === 0 ? (
@@ -279,7 +279,7 @@ export default function TakvimPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Link href={`/hisse/${item.symbol}`} className="text-xs font-bold text-[#4A87C7]">
+                      <Link href={`/hisse/${item.symbol}`} className="text-xs font-bold text-[#10B981]">
                         {item.symbol}
                       </Link>
                       <span className="text-[10px] text-gray-500 tabular-nums">

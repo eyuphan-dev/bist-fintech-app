@@ -120,7 +120,7 @@ export default function Home() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <RefreshCw className="w-10 h-10 text-[#4A87C7] animate-spin mb-4" />
+        <RefreshCw className="w-10 h-10 text-[#10B981] animate-spin mb-4" />
         <p className="text-gray-400 font-medium">BIST Simülasyonu Yükleniyor...</p>
       </div>
     );
@@ -139,8 +139,8 @@ export default function Home() {
 
         <div className="w-full max-w-md p-8 rounded-2xl bg-[#151921] border border-[#242B35]">
           <div className="flex flex-col items-center mb-6">
-            <div className="w-12 h-12 bg-[#4A87C7]/10 rounded-xl flex items-center justify-center mb-3">
-              <LineChart className="w-7 h-7 text-[#4A87C7]" />
+            <div className="w-12 h-12 bg-[#10B981]/10 rounded-xl flex items-center justify-center mb-3">
+              <LineChart className="w-7 h-7 text-[#10B981]" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white">BIST Simülasyonu</h1>
             <p className="text-gray-400 text-sm mt-1">Yapay Zeka Destekli Borsa Deneyimi</p>
@@ -152,7 +152,7 @@ export default function Home() {
               <input
                 type="text"
                 required
-                className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
+                className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
                 value={authForm.username}
                 onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
               />
@@ -164,7 +164,7 @@ export default function Home() {
                 <input
                   type="email"
                   required
-                  className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
+                  className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
                   value={authForm.email}
                   onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
                 />
@@ -176,7 +176,7 @@ export default function Home() {
               <input
                 type="password"
                 required
-                className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
+                className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
                 value={authForm.password}
                 onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
               />
@@ -191,7 +191,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={authLoading}
-              className="w-full bg-[#4A87C7] hover:bg-[#0da271] active:scale-95 text-[#0B0E14] font-semibold py-2.5 rounded-lg transition duration-200 flex items-center justify-center text-sm disabled:opacity-50"
+              className="w-full bg-[#10B981] hover:bg-[#0da271] active:scale-95 text-[#0B0E14] font-semibold py-2.5 rounded-lg transition duration-200 flex items-center justify-center text-sm disabled:opacity-50"
             >
               {authLoading ? (
                 <RefreshCw className="w-5 h-5 animate-spin" />
@@ -209,7 +209,7 @@ export default function Home() {
                 setIsRegister(!isRegister);
                 setAuthError("");
               }}
-              className="text-[#4A87C7] hover:text-[#34d399] text-xs font-medium transition"
+              className="text-[#10B981] hover:text-[#34d399] text-xs font-medium transition"
             >
               {isRegister ? "Zaten hesabınız var mı? Giriş Yapın" : "Hesabınız yok mu? Yeni Hesap Oluşturun"}
             </button>
@@ -264,7 +264,7 @@ export default function Home() {
         <div className="md:col-span-2 lg:col-span-2 space-y-6">
           {dashLoading || !portfolio ? (
             <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-              <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+              <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
               Portföy yükleniyor...
             </div>
           ) : (
@@ -328,7 +328,7 @@ export default function Home() {
                     <p className="text-gray-400 text-xs">Portföyünüzde henüz hisse bulunmamaktadır.</p>
                     <Link
                       href="/piyasalar"
-                      className="mt-3 inline-flex items-center gap-1 text-[#4A87C7] hover:text-[#34d399] text-xs font-semibold transition"
+                      className="mt-3 inline-flex items-center gap-1 text-[#10B981] hover:text-[#34d399] text-xs font-semibold transition"
                     >
                       Piyasalardan hisse alın <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
@@ -352,7 +352,7 @@ export default function Home() {
                         {portfolio.items.map((item) => (
                           <tr key={item.symbol} className="hover:bg-[#0B0E14]/60 transition">
                             <td className="py-3 font-bold text-white">
-                              <Link href={`/hisse/${item.symbol}`} className="hover:text-[#4A87C7] transition">
+                              <Link href={`/hisse/${item.symbol}`} className="hover:text-[#10B981] transition">
                                 {item.symbol}
                               </Link>
                               <span className="block text-[10px] text-gray-500 font-normal">{item.company_name}</span>
@@ -398,7 +398,7 @@ export default function Home() {
                   key={player.username}
                   className={`flex items-center justify-between text-xs p-2.5 rounded-lg border ${
                     user && (player.username === user.username || player.username === `${user.username} — Kişisel Bot`)
-                      ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 font-semibold"
+                      ? "bg-[#10B981]/10 border-[#10B981]/30 font-semibold"
                       : "bg-[#0B0E14] border-[#242B35]"
                   }`}
                 >

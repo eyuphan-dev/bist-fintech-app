@@ -114,7 +114,7 @@ export default function PerformanceScorecard() {
               type="button"
               onClick={() => setYear(null)}
               className={`px-2.5 min-h-[32px] rounded-lg text-[11px] font-semibold transition ${
-                year === null ? "bg-[#4A87C7] text-[#0B0E14]" : "text-gray-400 hover:text-white"
+                year === null ? "bg-[#10B981] text-[#0B0E14]" : "text-gray-400 hover:text-white"
               }`}
             >
               Tümü
@@ -125,7 +125,7 @@ export default function PerformanceScorecard() {
                 type="button"
                 onClick={() => setYear(y)}
                 className={`px-2.5 min-h-[32px] rounded-lg text-[11px] font-semibold tabular-nums transition ${
-                  year === y ? "bg-[#4A87C7] text-[#0B0E14]" : "text-gray-400 hover:text-white"
+                  year === y ? "bg-[#10B981] text-[#0B0E14]" : "text-gray-400 hover:text-white"
                 }`}
               >
                 {y}
@@ -196,7 +196,7 @@ export default function PerformanceScorecard() {
                   <div className="w-1/2">
                     {pozitif && (
                       <div
-                        className="h-2 rounded-r-full bg-[#4A87C7]"
+                        className="h-2 rounded-r-full bg-[#10B981]"
                         style={{ width: `${(s.pnl / enBuyuk) * 100}%` }}
                       />
                     )}

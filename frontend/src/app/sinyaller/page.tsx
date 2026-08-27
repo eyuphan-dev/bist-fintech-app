@@ -47,7 +47,7 @@ export default function SignalsPage() {
   if (authLoading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <RefreshCw className="w-10 h-10 text-[#4A87C7] animate-spin mb-4" />
+        <RefreshCw className="w-10 h-10 text-[#10B981] animate-spin mb-4" />
         <p className="text-gray-400 font-medium">Yükleniyor...</p>
       </div>
     );
@@ -109,7 +109,7 @@ export default function SignalsPage() {
                 type="button"
                 className={`px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold transition ${
                   filter === key
-                    ? "bg-[#4A87C7] text-[#0B0E14]"
+                    ? "bg-[#10B981] text-[#0B0E14]"
                     : "bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white"
                 }`}
               >
@@ -125,7 +125,7 @@ export default function SignalsPage() {
                 <Link
                   key={`${s.symbol}-${s.signal_type}-${i}`}
                   href={`/hisse/${s.symbol}`}
-                  className="bg-[#151921] border border-[#242B35] hover:border-[#4A87C7]/40 rounded-2xl p-4 transition block"
+                  className="bg-[#151921] border border-[#242B35] hover:border-[#10B981]/40 rounded-2xl p-4 transition block"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">

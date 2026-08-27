@@ -116,7 +116,7 @@ export default function DividendIncomePanel({ refreshKey }: { refreshKey?: numbe
                     <td className="py-2 px-3 text-right tabular-nums text-gray-400">
                       %{i.dividend_yield?.toFixed(2)}
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums font-semibold text-[#4A87C7]">
+                    <td className="py-2 px-3 text-right tabular-nums font-semibold text-[#10B981]">
                       {i.yield_on_cost === null ? "—" : `%${i.yield_on_cost.toFixed(2)}`}
                     </td>
                     <td className="py-2 pl-3 text-right tabular-nums font-semibold text-white">

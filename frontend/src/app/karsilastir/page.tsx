@@ -202,7 +202,7 @@ export default function ComparePage() {
                         <th key={it.symbol} className="pb-3 px-3 text-right">
                           <Link
                             href={`/hisse/${it.symbol}`}
-                            className="font-bold text-white hover:text-[#4A87C7] transition inline-flex items-center gap-1"
+                            className="font-bold text-white hover:text-[#10B981] transition inline-flex items-center gap-1"
                           >
                             {it.symbol} <ArrowRight className="w-3 h-3" />
                           </Link>
@@ -230,7 +230,7 @@ export default function ComparePage() {
                               <td
                                 key={it.symbol}
                                 className={`py-2.5 px-3 text-right tabular-nums font-semibold ${
-                                  isBest ? "text-[#4A87C7]" : "text-gray-300"
+                                  isBest ? "text-[#10B981]" : "text-gray-300"
                                 }`}
                               >
                                 {isNum ? `${raw}${metric.suffix ?? ""}` : "—"}
@@ -245,7 +245,7 @@ export default function ComparePage() {
                       {items.map((it) => (
                         <td key={it.symbol} className="py-2.5 px-3 text-right">
                           {it.is_katilim_compliant ? (
-                            <span className="text-[10px] font-bold text-[#4A87C7] bg-[#4A87C7]/10 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] font-bold text-[#10B981] bg-[#10B981]/10 px-1.5 py-0.5 rounded">
                               Uygun
                             </span>
                           ) : (

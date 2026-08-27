@@ -307,7 +307,7 @@ export default function PersonalBotPanel() {
       )}
 
       {toast && (
-        <div className="flex items-center gap-2 bg-[#4A87C7]/10 border border-[#4A87C7]/25 text-[#4A87C7] rounded-lg px-3 py-2 text-[11px] font-medium">
+        <div className="flex items-center gap-2 bg-[#10B981]/10 border border-[#10B981]/25 text-[#10B981] rounded-lg px-3 py-2 text-[11px] font-medium">
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
           {toast}
         </div>
@@ -323,7 +323,7 @@ export default function PersonalBotPanel() {
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${
               status.is_active
-                ? "bg-[#4A87C7]/10 text-[#4A87C7] border-[#4A87C7]/25"
+                ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/25"
                 : "bg-[#F43F5E]/10 text-[#F43F5E] border-[#F43F5E]/25"
             }`}>
               {status.is_active ? "AKTİF" : "PASİF"}
@@ -475,7 +475,7 @@ export default function PersonalBotPanel() {
                         {sessionNo}. Oturum
                       </span>
                       {s.is_active && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#4A87C7]/10 text-[#4A87C7]">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#10B981]/10 text-[#10B981]">
                           AKTİF
                         </span>
                       )}

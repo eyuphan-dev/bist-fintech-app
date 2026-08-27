@@ -77,7 +77,7 @@ export default function KatilimScreenPanel({
   return (
     <div className="bg-[#151921] border border-[#242B35] rounded-xl p-3 space-y-3">
       <div className="flex items-center gap-2">
-        <ShieldCheck className="w-3.5 h-3.5 text-[#4A87C7]" />
+        <ShieldCheck className="w-3.5 h-3.5 text-[#10B981]" />
         <p className="text-[9px] text-gray-500 uppercase font-bold">Katılım Ön Taraması</p>
       </div>
 

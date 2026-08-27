@@ -56,7 +56,7 @@ export default function InsiderTrackerBadge({ symbol }: InsiderTrackerBadgeProps
         onClick={() => setExpanded((v) => !v)}
         className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 border text-xs font-bold transition ${
           recentBuys.length > 0
-            ? "bg-[#4A87C7]/10 border-[#4A87C7]/25 text-[#4A87C7]"
+            ? "bg-[#10B981]/10 border-[#10B981]/25 text-[#10B981]"
             : "bg-[#F43F5E]/10 border-[#F43F5E]/25 text-[#F43F5E]"
         }`}
       >

@@ -84,7 +84,7 @@ export default function LegalDisclaimerModal({ onAccept, onClose }: LegalDisclai
             <div
               onClick={() => setAccepted((v) => !v)}
               className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                accepted ? "bg-[#4A87C7] border-[#4A87C7]" : "bg-transparent border-[#242B35] group-hover:border-[#4A87C7]"
+                accepted ? "bg-[#10B981] border-[#10B981]" : "bg-transparent border-[#242B35] group-hover:border-[#10B981]"
               }`}
             >
               {accepted && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
@@ -102,7 +102,7 @@ export default function LegalDisclaimerModal({ onAccept, onClose }: LegalDisclai
             disabled={!accepted}
             className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
               accepted
-                ? "bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] active:scale-[0.98]"
+                ? "bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] active:scale-[0.98]"
                 : "bg-[#242B35] text-gray-600 cursor-not-allowed"
             }`}
           >

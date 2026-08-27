@@ -112,7 +112,7 @@ export default function NotificationBell() {
           <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-[#242B35]">
             <span className="text-xs font-bold text-white">Bildirimler</span>
             {unreadCount > 0 && (
-              <button onClick={handleMarkAllRead} className="text-[10px] text-[#4A87C7] hover:text-[#34d399] font-semibold">
+              <button onClick={handleMarkAllRead} className="text-[10px] text-[#10B981] hover:text-[#34d399] font-semibold">
                 Tümünü okundu işaretle
               </button>
             )}
@@ -129,7 +129,7 @@ export default function NotificationBell() {
                 const content = (
                   <div
                     className={`flex items-start gap-2.5 px-3.5 py-3 border-b border-[#242B35] last:border-0 ${
-                      n.is_read ? "" : "bg-[#4A87C7]/5"
+                      n.is_read ? "" : "bg-[#10B981]/5"
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5 text-[#F59E0B] shrink-0 mt-0.5" />
@@ -140,7 +140,7 @@ export default function NotificationBell() {
                         {new Date(n.created_at).toLocaleString("tr-TR")}
                       </p>
                     </div>
-                    {!n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-[#4A87C7] shrink-0 mt-1" />}
+                    {!n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] shrink-0 mt-1" />}
                   </div>
                 );
                 return n.stock_symbol ? (

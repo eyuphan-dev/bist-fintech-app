@@ -90,7 +90,7 @@ export default function MobileBottomNav() {
 
   const itemClass = (active: boolean) =>
     `flex flex-col items-center justify-center gap-1 py-2.5 min-h-[44px] text-[10px] font-semibold tracking-wide transition ${
-      active ? "text-[#4A87C7]" : "text-gray-500 hover:text-white"
+      active ? "text-[#10B981]" : "text-gray-500 hover:text-white"
     }`;
 
   return (
@@ -100,7 +100,7 @@ export default function MobileBottomNav() {
         <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-[#0B0E14]">
           <div className="flex items-center justify-between px-4 h-16 border-b border-[#242B35] shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-9 h-9 rounded-full bg-[#4A87C7] text-[#0B0E14] font-bold text-sm flex items-center justify-center shrink-0">
+              <span className="w-9 h-9 rounded-full bg-[#10B981] text-[#0B0E14] font-bold text-sm flex items-center justify-center shrink-0">
                 {(user?.username?.[0] ?? "?").toUpperCase()}
               </span>
               <div className="min-w-0">
@@ -136,7 +136,7 @@ export default function MobileBottomNav() {
                         href={link.href}
                         className={`flex items-center gap-3 px-4 min-h-[52px] text-sm font-semibold transition ${
                           i > 0 ? "border-t border-[#242B35]" : ""
-                        } ${active ? "text-[#4A87C7] bg-[#4A87C7]/5" : "text-gray-200 active:bg-[#0B0E14]"}`}
+                        } ${active ? "text-[#10B981] bg-[#10B981]/5" : "text-gray-200 active:bg-[#0B0E14]"}`}
                       >
                         <Icon className="w-4 h-4 shrink-0" strokeWidth={1.5} />
                         {link.label}

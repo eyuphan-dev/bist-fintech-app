@@ -26,7 +26,7 @@ interface Data {
 
 /** dividend_stability.py'deki sabit kurallarla BİREBİR eşleşir — bkz. backend. */
 const STABILITY_STYLE: Record<string, { color: string; bg: string; label: string }> = {
-  A: { color: "#4A87C7", bg: "rgba(16,185,129,0.12)", label: "A · Çok İstikrarlı" },
+  A: { color: "#10B981", bg: "rgba(16,185,129,0.12)", label: "A · Çok İstikrarlı" },
   B: { color: "#34D399", bg: "rgba(52,211,153,0.10)", label: "B · İstikrarlı" },
   C: { color: "#F59E0B", bg: "rgba(245,158,11,0.10)", label: "C · Düzensiz" },
   D: { color: "#F43F5E", bg: "rgba(244,63,94,0.10)", label: "D · Kesintili" },

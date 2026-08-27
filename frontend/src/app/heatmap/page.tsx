@@ -198,7 +198,7 @@ export default function HeatmapPage() {
             onClick={() => setView("heatmap")}
             className={`flex items-center gap-1.5 px-3.5 py-3 md:py-2 rounded-lg text-xs font-semibold border transition ${
               view === "heatmap"
-                ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 text-[#4A87C7]"
+                ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
                 : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
             }`}
           >
@@ -208,7 +208,7 @@ export default function HeatmapPage() {
             onClick={() => setView("table")}
             className={`flex items-center gap-1.5 px-3.5 py-3 md:py-2 rounded-lg text-xs font-semibold border transition ${
               view === "table"
-                ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 text-[#4A87C7]"
+                ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
                 : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
             }`}
           >
@@ -219,7 +219,7 @@ export default function HeatmapPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
           Hisseler yükleniyor...
         </div>
       ) : stocks.length === 0 ? (
@@ -260,7 +260,7 @@ export default function HeatmapPage() {
                 <tr key={s.symbol} className="border-t border-[#242B35] hover:bg-[#151921]/60">
                   <td className="px-3 py-2 text-gray-400">{s.sector || UNCATEGORIZED}</td>
                   <td className="px-3 py-2">
-                    <Link href={`/hisse/${s.symbol}`} className="font-bold text-white hover:text-[#4A87C7]">
+                    <Link href={`/hisse/${s.symbol}`} className="font-bold text-white hover:text-[#10B981]">
                       {s.symbol}
                     </Link>
                   </td>

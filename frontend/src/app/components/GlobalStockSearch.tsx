@@ -141,7 +141,7 @@ export default function GlobalStockSearch() {
           placeholder="Hisse ara..."
           aria-label="Hisse ara"
           // Mobilde min 44px dokunma yuksekligi (py-3), masaustunde kompakt kalir.
-          className="w-full bg-[#151921] border border-[#242B35] focus:border-[#4A87C7]/50 rounded-lg pl-8 pr-7 py-3 md:py-1.5 text-xs text-white placeholder-gray-500 outline-none transition"
+          className="w-full bg-[#151921] border border-[#242B35] focus:border-[#10B981]/50 rounded-lg pl-8 pr-7 py-3 md:py-1.5 text-xs text-white placeholder-gray-500 outline-none transition"
         />
         {query && (
           <button
@@ -181,7 +181,7 @@ export default function GlobalStockSearch() {
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-white">{item.symbol}</span>
                   {item.is_katilim_compliant && (
-                    <span className="text-[9px] font-bold text-[#4A87C7] bg-[#4A87C7]/10 px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] font-bold text-[#10B981] bg-[#10B981]/10 px-1.5 py-0.5 rounded">
                       Katılım
                     </span>
                   )}

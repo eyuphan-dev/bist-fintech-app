@@ -104,7 +104,7 @@ export default function ExtraIndicatorsPanel({ symbol }: { symbol: string }) {
   }
 
   const adx = data.adx;
-  const adxRenk = adx === null || adx === undefined ? "#8A99AD" : adx >= 25 ? "#4A87C7" : adx < 20 ? "#F59E0B" : "#8A99AD";
+  const adxRenk = adx === null || adx === undefined ? "#8A99AD" : adx >= 25 ? "#10B981" : adx < 20 ? "#F59E0B" : "#8A99AD";
   const adxYorum =
     adx === null || adx === undefined
       ? "—"

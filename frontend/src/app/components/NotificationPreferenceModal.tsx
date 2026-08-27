@@ -145,7 +145,7 @@ export default function NotificationPreferenceModal({ symbol, currentPrice, onCl
                 value={priceAbove}
                 onChange={(e) => setPriceAbove(e.target.value)}
                 placeholder="örn. 100.00"
-                className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3 py-2 text-white text-sm outline-none transition"
+                className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3 py-2 text-white text-sm outline-none transition"
               />
               <p className="text-[10px] text-gray-600 mt-1">Fiyat bu seviyeye ulaşınca bir kez bildirim alırsınız.</p>
             </div>
@@ -158,7 +158,7 @@ export default function NotificationPreferenceModal({ symbol, currentPrice, onCl
                 value={priceBelow}
                 onChange={(e) => setPriceBelow(e.target.value)}
                 placeholder="örn. 80.00"
-                className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3 py-2 text-white text-sm outline-none transition"
+                className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3 py-2 text-white text-sm outline-none transition"
               />
               <p className="text-[10px] text-gray-600 mt-1">Fiyat bu seviyenin altına inince bir kez bildirim alırsınız.</p>
             </div>
@@ -172,7 +172,7 @@ export default function NotificationPreferenceModal({ symbol, currentPrice, onCl
                 value={pctChange}
                 onChange={(e) => setPctChange(e.target.value)}
                 placeholder="örn. 5"
-                className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3 py-2 text-white text-sm outline-none transition"
+                className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3 py-2 text-white text-sm outline-none transition"
               />
               <p className="text-[10px] text-gray-600 mt-1">Hisse gün içinde ± bu yüzdeden fazla hareket ederse (günde en fazla bir kez) bildirim alırsınız.</p>
             </div>
@@ -182,7 +182,7 @@ export default function NotificationPreferenceModal({ symbol, currentPrice, onCl
                 type="checkbox"
                 checked={notifyKap}
                 onChange={(e) => setNotifyKap(e.target.checked)}
-                className="w-4 h-4 accent-[#4A87C7]"
+                className="w-4 h-4 accent-[#10B981]"
               />
               <span className="text-xs text-gray-300">Yeni KAP bildirimi geldiğinde haber ver</span>
             </label>
@@ -192,7 +192,7 @@ export default function NotificationPreferenceModal({ symbol, currentPrice, onCl
                 type="checkbox"
                 checked={notifyAiSignal}
                 onChange={(e) => setNotifyAiSignal(e.target.checked)}
-                className="w-4 h-4 accent-[#4A87C7]"
+                className="w-4 h-4 accent-[#10B981]"
               />
               <span className="text-xs text-gray-300">AI strateji sinyali (AL/SAT) üretildiğinde haber ver</span>
             </label>
@@ -201,7 +201,7 @@ export default function NotificationPreferenceModal({ symbol, currentPrice, onCl
               <div
                 className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium border ${
                   feedback.type === "success"
-                    ? "bg-[#4A87C7]/10 border-[#4A87C7]/25 text-[#4A87C7]"
+                    ? "bg-[#10B981]/10 border-[#10B981]/25 text-[#10B981]"
                     : "bg-[#F43F5E]/10 border-[#F43F5E]/25 text-[#F43F5E]"
                 }`}
               >
@@ -214,7 +214,7 @@ export default function NotificationPreferenceModal({ symbol, currentPrice, onCl
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs py-2.5 rounded-lg transition disabled:opacity-50"
+                className="flex-1 bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs py-2.5 rounded-lg transition disabled:opacity-50"
               >
                 {saving ? "Kaydediliyor..." : "Kaydet"}
               </button>

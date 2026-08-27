@@ -88,7 +88,7 @@ export default function AnalysisGuideModal({ onClose }: AnalysisGuideModalProps)
             <div className="bg-[#0B0E14] border border-[#242B35] rounded-xl p-3 space-y-2">
               {CHECKLIST_ITEMS.map((text, i) => (
                 <p key={i} className="text-[11px] text-gray-400 leading-relaxed flex items-start gap-2">
-                  <span className="text-[#4A87C7] font-bold shrink-0">✓</span>
+                  <span className="text-[#10B981] font-bold shrink-0">✓</span>
                   {text}
                 </p>
               ))}

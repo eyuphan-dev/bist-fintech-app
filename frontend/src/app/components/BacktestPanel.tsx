@@ -64,7 +64,7 @@ function Egri({ points }: { points: Point[] }) {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24" preserveAspectRatio="none">
       <path d={yol((p) => p.buy_hold)} fill="none" stroke="#8A99AD" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <path d={yol((p) => p.strategy)} fill="none" stroke="#4A87C7" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      <path d={yol((p) => p.strategy)} fill="none" stroke="#10B981" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -122,7 +122,7 @@ export default function BacktestPanel({ symbol }: { symbol: string }) {
             type="button"
             onClick={() => setStrategy(s.key)}
             className={`px-2.5 min-h-[32px] rounded-lg text-[11px] font-semibold transition ${
-              strategy === s.key ? "bg-[#4A87C7] text-[#0B0E14]" : "bg-[#0B0E14] text-gray-400 hover:text-white"
+              strategy === s.key ? "bg-[#10B981] text-[#0B0E14]" : "bg-[#0B0E14] text-gray-400 hover:text-white"
             }`}
           >
             {s.label}
@@ -135,7 +135,7 @@ export default function BacktestPanel({ symbol }: { symbol: string }) {
             type="button"
             onClick={() => setYears(y)}
             className={`px-2.5 min-h-[32px] rounded-lg text-[11px] font-semibold tabular-nums transition ${
-              years === y ? "bg-[#4A87C7] text-[#0B0E14]" : "bg-[#0B0E14] text-gray-400 hover:text-white"
+              years === y ? "bg-[#10B981] text-[#0B0E14]" : "bg-[#0B0E14] text-gray-400 hover:text-white"
             }`}
           >
             {y} yıl
@@ -182,7 +182,7 @@ export default function BacktestPanel({ symbol }: { symbol: string }) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="flex items-center gap-1 text-[9px] text-gray-500">
-                  <span className="w-2.5 h-0.5 bg-[#4A87C7]" /> Strateji
+                  <span className="w-2.5 h-0.5 bg-[#10B981]" /> Strateji
                 </span>
                 <span className="flex items-center gap-1 text-[9px] text-gray-500">
                   <span className="w-2.5 h-px bg-[#8A99AD]" /> Al ve tut
