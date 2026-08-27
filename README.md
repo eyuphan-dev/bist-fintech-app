@@ -38,4 +38,4 @@ cd frontend && npm install && npm run dev
 
 > Yatırım tavsiyesi değildir. Gerçek para kullanılmaz, veriler gecikmelidir.
 >
-> Design by Eyüphan İpek Hazretleri (ks)
+

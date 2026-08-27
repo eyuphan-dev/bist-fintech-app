@@ -196,10 +196,17 @@ class Transaction(Base):
     kâr/zarar hesaplanabiliyordu. Bot tarafında bu izi `bot_logs` tutuyor;
     burası onun kullanıcı tarafındaki karşılığıdır.
 
-    `realized_pnl` yalnızca SAT satırlarında doludur ve satış anındaki
-    ortalama maliyet üzerinden hesaplanır: (satış fiyatı - ortalama maliyet) * adet.
-    Bu değer sonradan yeniden hesaplanamaz (ortalama maliyet zamanla değişir),
-    bu yüzden işlem anında yazılır.
+    `realized_pnl` yalnızca SAT satırlarında doludur, satış anındaki ortalama
+    maliyet üzerinden hesaplanır ve KOMİSYONDAN SONRADIR. Bu değer sonradan
+    yeniden hesaplanamaz (ortalama maliyet zamanla değişir), bu yüzden işlem
+    anında yazılır.
+
+    `commission` 2026-08-27'de eklendi. Ondan ÖNCEKİ satırlarda NULL'dur —
+    o dönem gerçek işlemlerde komisyon hiç kesilmiyordu (backtest kesiyordu,
+    bu yüzden kullanıcının kendi işlemleri stratejilerden haksız yere kârlı
+    görünüyordu). Geriye dönük düzeltme YAPILMADI: geçmiş bakiye hareketleri
+    o günkü kurallara göre gerçekleşti, sonradan değiştirmek işlem geçmişiyle
+    bakiyeyi tutarsız hale getirirdi.
     """
     __tablename__ = "transactions"
 
@@ -209,8 +216,13 @@ class Transaction(Base):
     action_type = Column(String(10), nullable=False)  # 'AL' / 'SAT'
     quantity = Column(Numeric(12, 4), nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
+    # BRÜT tutar (adet x fiyat). Komisyon DAHİL DEĞİLDİR — o ayrı kolonda.
     total_amount = Column(Numeric(15, 2), nullable=False)
+    # Bu işlemde alınan komisyon (TL). Alımda maliyeti artırır, satımda geliri azaltır.
+    commission = Column(Numeric(12, 2), nullable=True)
     # SAT işlemlerinde gerçekleşen kâr/zarar (TL). AL işlemlerinde NULL.
+    # KOMİSYONDAN SONRADIR: alım komisyonu average_cost'a gömülü, satım
+    # komisyonu birim fiyattan düşülmüş haldedir.
     realized_pnl = Column(Numeric(15, 2), nullable=True)
     # Satış anındaki ortalama maliyet — kullanıcıya "hangi maliyetten sattın" gösterebilmek için.
     average_cost_at_trade = Column(Numeric(10, 2), nullable=True)

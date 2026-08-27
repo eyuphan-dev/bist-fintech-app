@@ -16,6 +16,8 @@ interface TransactionItem {
   quantity: number;
   price: number;
   total_amount: number;
+  /** 2026-08-27 öncesi işlemlerde null — o dönem komisyon kesilmiyordu. */
+  commission: number | null;
   realized_pnl: number | null;
   realized_pnl_pct: number | null;
   average_cost_at_trade: number | null;
@@ -292,6 +294,7 @@ export default function TransactionsPage() {
                     <th className="pb-3 px-3 font-semibold text-right">Adet</th>
                     <th className="pb-3 px-3 font-semibold text-right">Fiyat</th>
                     <th className="pb-3 px-3 font-semibold text-right">Tutar</th>
+                    <th className="pb-3 px-3 font-semibold text-right">Komisyon</th>
                     <th className="pb-3 pl-3 font-semibold text-right">Gerçekleşen K/Z</th>
                   </tr>
                 </thead>
@@ -341,6 +344,15 @@ export default function TransactionsPage() {
                         </td>
                         <td className="py-2.5 px-3 text-right tabular-nums text-white font-semibold">
                           {fmtTL(t.total_amount)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-gray-500">
+                          {t.commission === null ? (
+                            // Komisyon öncesi dönemin işlemi. "0,00" yazmak yanıltıcı
+                            // olurdu — kesilmedi, bilinmiyor değil.
+                            <span title="Bu işlem komisyon uygulanmadan önce yapıldı">—</span>
+                          ) : (
+                            fmtTL(t.commission)
+                          )}
                         </td>
                         <td className="py-2.5 pl-3 text-right tabular-nums font-semibold">
                           {!hasPnl ? (

@@ -9,11 +9,42 @@ main.py <-> orders.py arasında dairesel import riski olmasın diye bu modül
 ikisinden de bağımsız durur; yalnızca models'a bağlıdır.
 """
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 import models
+from constants import KOMISYON_ORANI_PCT
+
+
+def komisyon_hesapla(quantity: float, price: float) -> float:
+    """İşlem tutarı üzerinden komisyon. Alımda ve satımda ayrı ayrı alınır."""
+    return round(quantity * price * KOMISYON_ORANI_PCT / 100.0, 2)
+
+
+def alim_maliyeti(quantity: float, price: float) -> Tuple[float, float, float]:
+    """
+    (brüt_tutar, komisyon, bakiyeden_düşülecek_toplam)
+
+    Alımda komisyon maliyeti ARTIRIR: bakiyeden brüt tutar + komisyon düşülür.
+    Komisyon ortalama maliyete de dahil edilir (bkz. `alim_maliyeti` çağrıldığı
+    yerler) — gerçek muhasebe böyle çalışır ve kâr/zarar ancak bu şekilde
+    dürüst olur. Aksi halde komisyon hiçbir yerde görünmeden kaybolurdu.
+    """
+    brut = round(quantity * price, 2)
+    komisyon = komisyon_hesapla(quantity, price)
+    return brut, komisyon, round(brut + komisyon, 2)
+
+
+def satim_geliri(quantity: float, price: float) -> Tuple[float, float, float]:
+    """
+    (brüt_tutar, komisyon, bakiyeye_eklenecek_net)
+
+    Satımda komisyon geliri AZALTIR.
+    """
+    brut = round(quantity * price, 2)
+    komisyon = komisyon_hesapla(quantity, price)
+    return brut, komisyon, round(brut - komisyon, 2)
 
 
 def record_transaction(
@@ -26,6 +57,7 @@ def record_transaction(
     price: float,
     average_cost: Optional[float] = None,
     source: str = "MANUAL",
+    commission: Optional[float] = None,
 ) -> models.Transaction:
     """
     Gerçekleşmiş bir alım/satımı işlem geçmişine ekler.
@@ -42,10 +74,17 @@ def record_transaction(
     """
     action_type = action_type.upper()
     total_amount = round(quantity * price, 2)
+    if commission is None:
+        commission = komisyon_hesapla(quantity, price)
 
+    # GERÇEKLEŞEN K/Z KOMİSYONDAN SONRADIR.
+    # Alım komisyonu zaten `average_cost` içine gömülüdür (bkz. alim_maliyeti);
+    # burada bir de satım komisyonu birim fiyattan düşülür. İkisi hesaba
+    # katılmazsa kullanıcı, aslında zarar ettiği bir işlemi kâr sanabilir.
     realized_pnl = None
     if action_type == "SAT" and average_cost is not None:
-        realized_pnl = round((price - average_cost) * quantity, 2)
+        net_birim_fiyat = price - (commission / quantity if quantity else 0.0)
+        realized_pnl = round((net_birim_fiyat - average_cost) * quantity, 2)
 
     entry = models.Transaction(
         user_id=user_id,
@@ -54,6 +93,7 @@ def record_transaction(
         quantity=quantity,
         price=price,
         total_amount=total_amount,
+        commission=commission,
         realized_pnl=realized_pnl,
         average_cost_at_trade=round(average_cost, 2) if average_cost is not None else None,
         source=source,

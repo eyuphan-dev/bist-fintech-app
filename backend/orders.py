@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 import models
 from database import begin_write_transaction
 from market_hours import is_market_open
-from transactions import record_transaction
+from transactions import record_transaction, alim_maliyeti, satim_geliri
 
 
 def _get_latest_price(db: Session, stock_id: int) -> float:
@@ -89,9 +89,13 @@ def _execute_single_order(db: Session, order_id: int) -> None:
         ).first()
 
         if order.order_type in ("LIMIT_BUY", "SCHEDULED_BUY"):
-            total_cost = quantity * current_price
+            # Komisyon anlık işlemle AYNI kurala tabidir (bkz. transactions.py).
+            # Bekleyen emir yolunun komisyonsuz kalması, aynı alımı limit emirle
+            # yapmayı ücretsiz hale getirirdi.
+            _brut, komisyon, total_cost = alim_maliyeti(quantity, current_price)
             if float(user.virtual_balance) < total_cost:
-                _fail_order(db, order, f"Yetersiz bakiye (gerekli: {total_cost:.2f} TL).")
+                _fail_order(db, order, f"Yetersiz bakiye (gerekli: {total_cost:.2f} TL, "
+                                       f"komisyon dahil).")
                 return
 
             user.virtual_balance = float(user.virtual_balance) - total_cost
@@ -104,12 +108,15 @@ def _execute_single_order(db: Session, order_id: int) -> None:
             else:
                 db.add(models.Portfolio(
                     user_id=user.id, stock_id=order.stock_id,
-                    quantity=quantity, average_cost=current_price, is_bot_portfolio=False,
+                    # Komisyon DAHİL birim maliyet.
+                    quantity=quantity, average_cost=total_cost / quantity,
+                    is_bot_portfolio=False,
                 ))
 
             record_transaction(
                 db, user_id=user.id, stock_id=order.stock_id, action_type="AL",
                 quantity=quantity, price=current_price, source="LIMIT_ORDER",
+                commission=komisyon,
             )
 
         else:  # LIMIT_SELL / STOP_LOSS_SELL — ikisi de satis, yalnizca tetikleme kosullari farkli
@@ -117,7 +124,7 @@ def _execute_single_order(db: Session, order_id: int) -> None:
                 _fail_order(db, order, "Yetersiz hisse miktarı.")
                 return
 
-            revenue = quantity * current_price
+            _brut, komisyon, revenue = satim_geliri(quantity, current_price)
             user.virtual_balance = float(user.virtual_balance) + revenue
             # Ortalama maliyet satıştan ÖNCE okunur; pozisyon kapanırsa satır silinir.
             avg_cost_before_sale = float(portfolio_entry.average_cost)
@@ -131,6 +138,7 @@ def _execute_single_order(db: Session, order_id: int) -> None:
                 db, user_id=user.id, stock_id=order.stock_id, action_type="SAT",
                 quantity=quantity, price=current_price,
                 average_cost=avg_cost_before_sale, source="LIMIT_ORDER",
+                commission=komisyon,
             )
 
         order.status = "EXECUTED"

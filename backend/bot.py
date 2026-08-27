@@ -8,6 +8,7 @@ from ta.momentum import RSIIndicator
 from ta.trend import MACD, SMAIndicator, EMAIndicator
 
 import models
+from transactions import alim_maliyeti, satim_geliri
 from market_hours import is_market_open
 
 # ---------------------------------------------------------------------------
@@ -512,14 +513,24 @@ def _execute_bot_trading_cycle(
                     # BIST'te kesirli lot alınamaz; bütçeye sığan en fazla tam adet hesaplanır.
                     quantity = float(int(trade_allocation // latest_price))
                     if quantity >= 1:
-                        cost = quantity * latest_price
+                        # Komisyon: bot da kullanicinin kendi islemiyle AYNI kurala
+                        # tabidir. Aksi halde bot performansi haksiz yere iyi
+                        # gorunur ve kullanici botu yanlis bir kiyasla degerlendirirdi.
+                        _brut, komisyon, cost = alim_maliyeti(quantity, latest_price)
+                        if cost > available_cash:
+                            # Komisyon eklenince butceyi asti: bir lot azalt.
+                            quantity -= 1
+                            if quantity < 1:
+                                continue
+                            _brut, komisyon, cost = alim_maliyeti(quantity, latest_price)
                         balance_holder.virtual_balance = float(balance_holder.virtual_balance) - cost
 
                         db.add(models.Portfolio(
                             user_id=owner_user_id,
                             stock_id=stock.id,
                             quantity=quantity,
-                            average_cost=latest_price,
+                            # Komisyon DAHIL birim maliyet.
+                            average_cost=cost / quantity,
                             is_bot_portfolio=is_bot_portfolio,
                         ))
 
@@ -538,11 +549,20 @@ def _execute_bot_trading_cycle(
         elif action == "SAT":
             if portfolio_entry:
                 quantity = float(portfolio_entry.quantity)
-                revenue = quantity * latest_price
+                # SIRA ONEMLI: ortalama maliyet SILMEDEN ONCE okunur. Eskiden
+                # db.delete()'ten SONRA okunuyordu; SQLAlchemy silinen nesnenin
+                # ozniteligini flush'a kadar hala verdigi icin calisiyordu, ama
+                # arada bir autoflush tetiklenirse patlardi.
+                avg_cost_before_sale = float(portfolio_entry.average_cost)
+
+                _brut, komisyon, revenue = satim_geliri(quantity, latest_price)
                 balance_holder.virtual_balance = float(balance_holder.virtual_balance) + revenue
                 db.delete(portfolio_entry)
 
-                profit_loss = (latest_price - float(portfolio_entry.average_cost)) / float(portfolio_entry.average_cost) * 100
+                # Kar/zarar komisyondan SONRA: alim komisyonu average_cost'a
+                # gomulu, satim komisyonu birim fiyattan dusuluyor.
+                net_birim = latest_price - (komisyon / quantity if quantity else 0.0)
+                profit_loss = (net_birim - avg_cost_before_sale) / avg_cost_before_sale * 100
                 reason = forced_reason or (
                     f"[{config['label']} / {risk_config['label']}] Strateji SAT sinyali verdi "
                     f"(Güven: %{confidence * 100:.0f}). Kâr/Zarar: %{profit_loss:.2f}. Pozisyon kapatıldı."

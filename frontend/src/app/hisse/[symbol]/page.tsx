@@ -44,6 +44,13 @@ const SECTIONS: { key: SectionKey; label: string; icon: any }[] = [
   { key: "topluluk", label: "Topluluk", icon: Users },
 ];
 
+/**
+ * İşlem komisyonu oranı (%). Backend'deki constants.KOMISYON_ORANI_PCT ile AYNI
+ * olmalıdır — burada yalnızca kullanıcı işlemden önce ne ödeyeceğini görsün diye
+ * önizleme hesabı yapılıyor. Gerçek kesinti her zaman backend'de yapılır.
+ */
+const KOMISYON_ORANI_PCT = 0.02;
+
 export default function StockDetailPage() {
   const params = useParams<{ symbol: string }>();
   const router = useRouter();
@@ -762,12 +769,36 @@ export default function StockDetailPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400 font-medium">Toplam Tutar:</span>
-              <span className="font-bold text-white tabular-nums">
-                {(tradeQty * stockDetail.current_price).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL
-              </span>
-            </div>
+            {/* Komisyon işlem ÖNCESİNDE gösterilir. Alımda bakiyeden brüt tutar +
+                komisyon düşer; satımda gelirden komisyon kesilir. Oran backend'de
+                constants.KOMISYON_ORANI_PCT ile tek yerde tanımlı, burada yalnızca
+                önizleme amaçlı tekrarlanıyor — kesin tutarı her zaman backend belirler. */}
+            {(() => {
+              const brut = tradeQty * stockDetail.current_price;
+              const komisyon = brut * KOMISYON_ORANI_PCT / 100;
+              const tl = (v: number) =>
+                v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              return (
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 font-medium">Tutar:</span>
+                    <span className="text-gray-300 tabular-nums">{tl(brut)} TL</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Komisyon (%{KOMISYON_ORANI_PCT}):</span>
+                    <span className="text-gray-500 tabular-nums">{tl(komisyon)} TL</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-[#242B35] pt-1">
+                    <span className="text-gray-400 font-medium">Alımda ödenecek:</span>
+                    <span className="font-bold text-white tabular-nums">{tl(brut + komisyon)} TL</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 font-medium">Satışta gelecek:</span>
+                    <span className="font-bold text-white tabular-nums">{tl(brut - komisyon)} TL</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {tradeMessage && (
               <p className={`text-xs font-semibold text-center ${tradeMessage.isError ? "text-[#F43F5E]" : "text-[#10B981]"}`}>

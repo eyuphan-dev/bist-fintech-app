@@ -224,6 +224,10 @@ MIGRATIONS = {
         "katilim_checked_at": "TIMESTAMP",
         "katilim_detail": "TEXT",
     },
+    "transactions": {
+        # Islem komisyonu (2026-08-27). Eski satirlarda NULL kalir.
+        "commission": "NUMERIC(12, 2)",
+    },
     "index_history": {
         # Gun ici tazeleme: doviz/altin artik 15 dakikada bir guncelleniyor.
         "updated_at": "TIMESTAMP",

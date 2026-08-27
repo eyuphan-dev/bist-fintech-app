@@ -33,9 +33,13 @@ from sqlalchemy.orm import Session
 
 import models
 
-# BIST'te aracı kurum komisyonu tipik olarak binde 0.2 civarıdır (alımda ve
-# satımda ayrı ayrı). Sıfır varsaymak çok işlem yapan stratejileri kayırırdı.
-VARSAYILAN_KOMISYON_PCT = 0.02
+# Komisyon oranı constants.py'den gelir — simülatördeki gerçek AL/SAT ile
+# backtest'in AYNI oranı kullanması şart. Ayrı tanımlansalardı zamanla
+# birbirinden sapar ve backtest sonucu gerçek işlemle kıyaslanamaz hale gelirdi.
+# Sıfır varsaymak ise çok işlem yapan stratejileri haksız yere kayırırdı.
+from constants import KOMISYON_ORANI_PCT
+
+VARSAYILAN_KOMISYON_PCT = KOMISYON_ORANI_PCT
 
 STRATEJILER = {
     "RSI": {

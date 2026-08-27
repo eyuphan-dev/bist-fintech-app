@@ -286,8 +286,10 @@ class TransactionItem(BaseModel):
     action_type: str          # 'AL' / 'SAT'
     quantity: float
     price: float
-    total_amount: float
-    # Yalnızca SAT satırlarında dolu; AL'da None.
+    total_amount: float             # BRÜT (adet x fiyat), komisyon hariç
+    # 2026-08-27 öncesi işlemlerde None — o dönem komisyon kesilmiyordu.
+    commission: Optional[float] = None
+    # Yalnızca SAT satırlarında dolu; AL'da None. KOMİSYONDAN SONRADIR.
     realized_pnl: Optional[float] = None
     realized_pnl_pct: Optional[float] = None
     average_cost_at_trade: Optional[float] = None

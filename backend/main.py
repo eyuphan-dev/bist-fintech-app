@@ -53,7 +53,7 @@ from bot import (
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from market_hours import get_market_status_dict, is_market_open
-from transactions import record_transaction
+from transactions import record_transaction, alim_maliyeti, satim_geliri
 from analysis_engine import (
     calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError,
     calculate_pivot_levels, get_foreign_holding_trend,
@@ -1620,14 +1620,23 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
         if not current_price:
             raise HTTPException(status_code=400, detail="Hisse fiyatı bulunamadı.")
 
-        total_cost = trade.quantity * current_price
+        # Komisyon: alımda maliyeti artırır, satımda geliri azaltır. Oran ve
+        # hesap constants.py + transactions.py'de tek yerde tanımlı; backtest de
+        # aynısını kullanır (bkz. constants.KOMISYON_ORANI_PCT).
+        brut_tutar, komisyon, total_cost = alim_maliyeti(trade.quantity, current_price)
         portfolio_entry = db.query(models.Portfolio).filter_by(
             user_id=current_user.id, stock_id=stock.id, is_bot_portfolio=False
         ).first()
 
         if action == "AL":
+            # Bakiye kontrolü KOMİSYON DAHİL yapılır; aksi halde bakiyesi tam
+            # yetecek bir alım komisyon yüzünden bakiyeyi eksiye düşürürdü.
             if float(current_user.virtual_balance) < total_cost:
-                raise HTTPException(status_code=400, detail="Yetersiz sanal bakiye.")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Yetersiz sanal bakiye. Gerekli: {total_cost:.2f} TL "
+                           f"({brut_tutar:.2f} TL + {komisyon:.2f} TL komisyon).",
+                )
 
             current_user.virtual_balance = float(current_user.virtual_balance) - total_cost
 
@@ -1643,7 +1652,8 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
                     user_id=current_user.id,
                     stock_id=stock.id,
                     quantity=trade.quantity,
-                    average_cost=current_price,
+                    # Komisyon DAHİL birim maliyet — total_cost komisyonu içerir.
+                    average_cost=total_cost / trade.quantity,
                     is_bot_portfolio=False,
                 )
                 db.add(new_entry)
@@ -1651,15 +1661,21 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
             record_transaction(
                 db, user_id=current_user.id, stock_id=stock.id, action_type="AL",
                 quantity=trade.quantity, price=current_price, source="MANUAL",
+                commission=komisyon,
             )
             db.commit()
-            return {"message": f"{trade.quantity} adet {stock.symbol} başarıyla alındı.", "balance": current_user.virtual_balance}
+            return {
+                "message": f"{trade.quantity} adet {stock.symbol} başarıyla alındı. "
+                           f"Komisyon: {komisyon:.2f} TL.",
+                "balance": current_user.virtual_balance,
+                "commission": komisyon,
+            }
 
         else:  # SAT
             if not portfolio_entry or float(portfolio_entry.quantity) < trade.quantity:
                 raise HTTPException(status_code=400, detail="Yetersiz hisse miktarı.")
 
-            revenue = trade.quantity * current_price
+            _brut, komisyon, revenue = satim_geliri(trade.quantity, current_price)
             current_user.virtual_balance = float(current_user.virtual_balance) + revenue
 
             # Gerçekleşen K/Z için ortalama maliyet SATIŞTAN ÖNCE okunmalı: pozisyon
@@ -1680,9 +1696,15 @@ def execute_trade(request: Request, trade: TradeRequest, current_user: models.Us
                 db, user_id=current_user.id, stock_id=stock.id, action_type="SAT",
                 quantity=trade.quantity, price=current_price,
                 average_cost=avg_cost_before_sale, source="MANUAL",
+                commission=komisyon,
             )
             db.commit()
-            return {"message": f"{trade.quantity} adet {stock.symbol} başarıyla satıldı.", "balance": current_user.virtual_balance}
+            return {
+                "message": f"{trade.quantity} adet {stock.symbol} başarıyla satıldı. "
+                           f"Komisyon: {komisyon:.2f} TL.",
+                "balance": current_user.virtual_balance,
+                "commission": komisyon,
+            }
     except Exception:
         db.rollback()
         raise
@@ -2918,6 +2940,7 @@ def get_user_transactions(
             quantity=float(tx.quantity),
             price=float(tx.price),
             total_amount=float(tx.total_amount),
+            commission=float(tx.commission) if tx.commission is not None else None,
             realized_pnl=float(tx.realized_pnl) if tx.realized_pnl is not None else None,
             realized_pnl_pct=pnl_pct,
             average_cost_at_trade=float(tx.average_cost_at_trade) if tx.average_cost_at_trade is not None else None,

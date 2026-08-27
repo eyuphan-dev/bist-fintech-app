@@ -11,3 +11,19 @@ görünseler de her iki yerde ayrı tanımlanıp zamanla birbirinden sapmaların
 # normal devre kesici kuralları bunu asla üretmeyeceğinden, %50'yi aşan
 # gün-içi/günlük sıçramalar güvenilmez kabul edilip None (bilgi yok) döndürülür.
 EXTREME_CHANGE_GUARD_PCT = 50.0
+
+
+# ---------------------------------------------------------------------------
+# Islem komisyonu
+# ---------------------------------------------------------------------------
+# BIST'te araci kurum komisyonu tipik olarak binde 0.2 civarindadir ve ALIMDA
+# VE SATIMDA AYRI AYRI alinir.
+#
+# NEDEN BURADA: bu deger uzun sure YALNIZCA backtest.py'de tanimliydi. Sonuc
+# tersine donmustu -- backtest komisyon kesiyor, kullanicinin gercek AL/SAT
+# islemi kesmiyordu, yani kullanicinin kendi islemleri stratejilerden
+# sistematik olarak KARLI gorunuyordu. Uygulamanin ogretmeye calistigi seyin
+# tam tersi. Artik uc islem yolu da (main.py /api/trade, orders.py bekleyen
+# emir, bot.py) ayni sabiti ve ayni yardimci fonksiyonlari kullaniyor
+# (bkz. transactions.py: alim_maliyeti / satim_geliri).
+KOMISYON_ORANI_PCT = 0.02
