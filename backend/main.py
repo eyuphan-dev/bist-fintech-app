@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta, time as dt_time
 from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, Response
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
@@ -62,7 +62,8 @@ from analysis_engine import (
 )
 from insider_client import fetch_insider_trades, get_recent_insider_buys, refresh_all_insider_trades
 from dividend_stability import compute_dividend_stability
-from text_utils import tr_lower
+from text_utils import tr_lower, tr_fold
+from kap_topics import is_major_holder_news
 from sentiment import score_sentiment
 from yfinance_client import fetch_stock_news
 from cache import get_cached_news, set_cached_news
@@ -341,14 +342,47 @@ def _log_user_action_background(user_id: int, action: str, details: str = ""):
 # kapalıyken hiçbir arka plan görevi yeni fiyat yazmadığından DB'deki son fiyat -ve dolayısıyla
 # tüm değerlemeler- Cuma 18:15 kapanışında donmuş kalır. Bu, aynı anda birden fazla worker
 # çalışsa bile (RAM cache process-local olduğu için) tutarlı, tek doğruluk kaynağı sağlar.
+# Bir tikin "güncel fiyat" sayılabileceği azami yaş. _bulk_price_and_change ile
+# AYNI pencere kullanılır; ikisi ayrışırsa aynı hisse iki sayfada iki farklı
+# fiyattan görünür.
+TIK_TAZELIK_PENCERESI = timedelta(days=7)
+
+
 def _get_latest_db_price(db: Session, stock_id: int) -> float:
+    """
+    Hissenin güncel fiyatı: önce son tik, tik bayatsa son günlük kapanış.
+
+    BAYATLIK KONTROLÜ NEDEN VAR: eskiden bu fonksiyon son tiki YAŞINA BAKMADAN
+    döndürüyordu, `_bulk_price_and_change` ise 7 günden eski tiki yok sayıp
+    günlük kapanışa düşüyordu. Uygulamada 11 yer birincisini, 6 yer ikincisini
+    kullanıyordu — yani aynı hisse portföy sayfasında bir fiyattan, hisse
+    listesinde başka fiyattan görünebiliyordu.
+
+    Ölçüldü (yerel veritabanı, son tik 21 gün eski): BIMAS tikte 382,25 TL,
+    günlük kapanışta 413,75 TL. Aradaki %8'lik fark doğrudan portföy değerine
+    ve liderlik tablosuna yansıyordu. Üretimde seans içinde tikler taze olduğu
+    için fark çıkmaz; fark uzun tatil ve işlem görmeyen hisselerde ortaya çıkar.
+    """
+    esik = datetime.utcnow() - TIK_TAZELIK_PENCERESI
     latest_record = (
         db.query(models.StockPrice)
-        .filter_by(stock_id=stock_id)
+        .filter(models.StockPrice.stock_id == stock_id,
+                models.StockPrice.recorded_at >= esik)
         .order_by(models.StockPrice.recorded_at.desc())
         .first()
     )
-    return float(latest_record.price) if latest_record else 0.0
+    if latest_record:
+        return float(latest_record.price)
+
+    # Tik yok ya da bayat: son günlük kapanışa düş (_bulk_price_and_change ile
+    # aynı öncelik sırası).
+    son_kapanis = (
+        db.query(models.StockPriceDaily.close)
+        .filter(models.StockPriceDaily.stock_id == stock_id)
+        .order_by(models.StockPriceDaily.trade_date.desc())
+        .first()
+    )
+    return float(son_kapanis[0]) if son_kapanis else 0.0
 
 
 # --- STOCKS ---
@@ -545,21 +579,28 @@ def search_stocks(q: str = "", limit: int = 8, db: Session = Depends(get_db)):
         return []
 
     capped_limit = max(1, min(limit, 25))
-    pattern = f"%{term}%"
-    # Sıralama (sembolle başlayanlar önce) Python tarafında yapıldığı için, LIMIT'i
-    # doğrudan sorguya uygularsak isabetli bir eşleşme (THY → THYAO) veritabanının
-    # döndürdüğü ilk N kaydın dışında kalıp elenebilir. Bu yüzden önce daha geniş bir
-    # aday kümesi çekilir, sıralama sonrası istenen sayıya kırpılır.
-    stocks = (
+
+    # ARAMA NEDEN SQL'DE DEĞİL: ILIKE Türkçe harfleri katlayamaz. Ölçüldü —
+    # üretimde (PostgreSQL) "türk" 8 sonuç verirken "TURK" yalnızca 1 veriyordu;
+    # yerelde (SQLite) "ziraat" 0, "ZİRAAT" 24 sonuç veriyordu. Telefondan
+    # Türkçe karakter yazmayan kullanıcı hisseyi hiç bulamıyordu.
+    #
+    # Katalog 165 hisse; tamamını belleğe alıp tr_fold ile karşılaştırmak
+    # hem doğru hem de bu boyutta ölçülebilir bir maliyet getirmiyor.
+    aday_hisseler = (
         db.query(models.Stock)
         .filter(models.Stock.is_active == True)  # noqa: E712 (SQLAlchemy kolon karşılaştırması)
-        .filter(or_(models.Stock.symbol.ilike(pattern), models.Stock.company_name.ilike(pattern)))
-        .limit(capped_limit * 5)
         .all()
     )
+    katlanmis_terim = tr_fold(term)
+    stocks = [
+        s for s in aday_hisseler
+        if katlanmis_terim in tr_fold(s.symbol or "")
+        or katlanmis_terim in tr_fold(s.company_name or "")
+    ]
 
-    upper_term = term.upper()
-    stocks.sort(key=lambda s: (not s.symbol.upper().startswith(upper_term), s.symbol))
+    # Sembolü terimle BAŞLAYANLAR önce (THY -> THYAO en üstte çıksın).
+    stocks.sort(key=lambda s: (not tr_fold(s.symbol).startswith(katlanmis_terim), s.symbol))
     stocks = stocks[:capped_limit]
 
     return [
@@ -1041,6 +1082,14 @@ def get_stock_analysis(symbol: str, db: Session = Depends(get_db)):
             asset_ratio=float(stock.katilim_asset_ratio) if stock.katilim_asset_ratio is not None else None,
             detail=stock.katilim_detail,
             checked_at=stock.katilim_checked_at,
+            # KAP resmi beyanı (bkz. katilim_kap.py). Yoksa None kalır ve
+            # arayüz uydurma bir sayı göstermek yerine hiç göstermez.
+            kap_gelir_pct=float(stock.kap_katilim_gelir_pct) if stock.kap_katilim_gelir_pct is not None else None,
+            kap_varlik_pct=float(stock.kap_katilim_varlik_pct) if stock.kap_katilim_varlik_pct is not None else None,
+            kap_borc_pct=float(stock.kap_katilim_borc_pct) if stock.kap_katilim_borc_pct is not None else None,
+            kap_donem=stock.kap_katilim_donem,
+            kap_url=stock.kap_katilim_url,
+            kap_updated_at=stock.kap_katilim_updated_at,
         ),
         analysis=CompanyAnalysisResponse.model_validate(stock.analysis) if stock.analysis else None
     )
@@ -1390,9 +1439,7 @@ def get_kap_news(db: Session = Depends(get_db)):
 # içerdiğinden (bildirimin detay sayfasındaki yatırımcı adı/pay oranı tablosu ayrıca
 # çekilmiyor), bu basit anahtar kelime eşleşmesiyle "hangi hissede önemli bir pay
 # sahipliği değişikliği oldu" bilgisini yakalıyoruz — kullanıcı detay için KAP linkine yönlendirilir.
-_MAJOR_HOLDER_KEYWORDS = [
-    "pay sahip", "oy hak", "sermaye piyasası araçlarının sahip", "hakim ortak", "hakimiyet",
-]
+# Sınıflandırma mantığı kap_topics.py modülüne taşındı (ölçümle doğrulandı).
 
 
 @app.get("/api/kap/search", response_model=List[KapNotificationResponse])
@@ -1412,47 +1459,93 @@ def get_major_holder_news(db: Session = Depends(get_db)):
     Genel KAP akışından, başlığında pay sahipliği/oy hakları değişikliğine işaret eden
     anahtar kelimeler geçen bildirimleri (büyük yatırımcı hareketleri) filtreler.
     """
+    # Sabit .limit(300) yerine ZAMAN penceresi: eskiden en yeni 300 kayıt çekilip
+    # sonra filtreleniyordu, yani akış gürültüyle dolduğunda gerçek pay sahipliği
+    # bildirimleri pencerenin dışında kalıp sessizce kayboluyordu.
+    esik = datetime.utcnow() - timedelta(days=90)
     notifications = (
         db.query(models.KapNotification)
+        .filter(models.KapNotification.publish_date >= esik)
         .order_by(models.KapNotification.publish_date.desc())
-        .limit(300)
         .all()
     )
-    filtered = [
-        n for n in notifications
-        # tr_lower: KAP başlıkları büyük "İ" içerebilir, .lower() bunu bozar
-        # (bkz. text_utils.py, insider_client.py'de aynı hata ölçülerek bulundu).
-        if any(kw in tr_lower(n.title) for kw in _MAJOR_HOLDER_KEYWORDS)
-    ]
+    # Sınıflandırma kap_topics.py'de; orada dahil etme VE dışlama listesi birlikte
+    # çalışır ("Pay Bazında Devre Kesici" gibi 60+ gürültü kaydı elenir).
+    filtered = [n for n in notifications if is_major_holder_news(n.title)]
     return filtered[:30]
 
 
 # --- TEFAS FONLARI ---
 
 @app.get("/api/funds", response_model=List[FundResponse])
-def get_funds(katilim_only: bool = False, db: Session = Depends(get_db)):
+def get_funds(
+    katilim_only: bool = False,
+    q: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """
+    TEFAS katılım fonları. `q` fon kodunda veya adında arar.
+
+    ARAMA VE LİMİT NEDEN VAR: fon kataloğu elle yazılmış 3 fondan TEFAS
+    taramasıyla 390 fona çıktı (bkz. tefas_client.discover_katilim_funds).
+    Tamamını tek seferde döndürmek 120 KB'lık bir yanıt ve kullanıcı tarafında
+    390 satırlık, gezinilemez bir liste demekti.
+    """
     query = db.query(models.Fund)
     if katilim_only:
         query = query.filter_by(is_katilim_compliant=True)
-    funds = query.all()
+    # Fon aramasında da ILIKE KULLANILMAZ: TEFAS fon adları tamamı büyük harf
+    # Türkçedir ("ZİRAAT PORTFÖY ... KATILIM FONU") ve ILIKE "ziraat" için
+    # sıfır sonuç döndürür (ölçüldü). Eşleştirme tr_fold ile Python tarafında
+    # yapılır; katalog birkaç yüz satır olduğu için maliyeti önemsiz.
+    if q and q.strip():
+        katlanmis = tr_fold(q.strip())
+        tum_fonlar = query.order_by(models.Fund.code.asc()).all()
+        funds = [
+            f for f in tum_fonlar
+            if katlanmis in tr_fold(f.code or "") or katlanmis in tr_fold(f.name or "")
+        ][:limit]
+    else:
+        funds = query.order_by(models.Fund.code.asc()).limit(limit).all()
+    if not funds:
+        return []
 
-    response = []
-    for fund in funds:
-        latest = (
-            db.query(models.FundPrice)
-            .filter_by(fund_id=fund.id)
-            .order_by(models.FundPrice.recorded_date.desc())
-            .first()
+    # N+1 GİDERİLDİ: eskiden fon BAŞINA ayrı bir "son fiyat" sorgusu atılıyordu.
+    # 3 fonluk katalogda görünmezdi, 390 fonda 390 sorgu oldu. Artık tek sorguda
+    # tüm fonların son fiyatı çekilir.
+    fund_ids = [f.id for f in funds]
+    esik = date.today() - timedelta(days=30)
+    fiyat_satirlari = (
+        db.query(models.FundPrice)
+        .filter(
+            models.FundPrice.fund_id.in_(fund_ids),
+            # Zaman penceresi ZORUNLU: fund_prices her gün büyür ve penceresiz
+            # sorgu tüm geçmişi tarar (bkz. projem.md "bu koda dokunmadan önce").
+            models.FundPrice.recorded_date >= esik,
         )
-        response.append(FundResponse(
+        .order_by(models.FundPrice.fund_id, models.FundPrice.recorded_date.desc())
+        .all()
+    )
+    son_fiyat = {}
+    for satir in fiyat_satirlari:
+        # Sıralama sayesinde her fon için İLK görülen satır en yenisidir.
+        son_fiyat.setdefault(satir.fund_id, satir)
+
+    return [
+        FundResponse(
             code=fund.code,
             name=fund.name,
             fund_type=fund.fund_type,
             risk_level=fund.risk_level,
             is_katilim_compliant=bool(fund.is_katilim_compliant),
-            latest_price=FundPriceResponse.model_validate(latest) if latest else None
-        ))
-    return response
+            latest_price=(
+                FundPriceResponse.model_validate(son_fiyat[fund.id])
+                if fund.id in son_fiyat else None
+            ),
+        )
+        for fund in funds
+    ]
 
 
 # --- HALKA ARZLAR (IPO) ---
@@ -3760,12 +3853,54 @@ def get_leaderboard(db: Session = Depends(get_db)):
     """
     Liderlik tablosu: topluluk demo botu artık gösterilmez — yalnızca gerçek kullanıcılar
     ve her kullanıcının kendi kişisel AI botu (ayrı bir satır olarak) listelenir.
+
+    N+1 GİDERİLDİ: eskiden kullanıcı başına `_portfolio_value` çağrılıyor, o da
+    POZİSYON BAŞINA ayrı bir "son fiyat" sorgusu atıyordu. 6 kullanıcıda fark
+    edilmiyordu ama maliyet O(kullanıcı × pozisyon) büyüyor — 100 kullanıcı ×
+    10 pozisyon ≈ 2.200 sorgu. Uç herkese açık olduğu için bu, ölçeklendiğinde
+    veritabanını en çok yoran yer olurdu.
+
+    Artık TÜM pozisyonlar tek sorguda, tüm fiyatlar tek toplu çağrıda çekilir.
     """
     users = db.query(models.User).filter_by(is_bot=False).all()
+    if not users:
+        return []
+
+    user_ids = [u.id for u in users]
+
+    # Tüm kullanıcıların tüm pozisyonları — tek sorgu.
+    tum_pozisyonlar = (
+        db.query(models.Portfolio)
+        .filter(models.Portfolio.user_id.in_(user_ids))
+        .all()
+    )
+    # (user_id, is_bot_portfolio) -> [pozisyon, ...]
+    pozisyon_haritasi: Dict[tuple, List[models.Portfolio]] = {}
+    for poz in tum_pozisyonlar:
+        anahtar = (poz.user_id, bool(poz.is_bot_portfolio))
+        pozisyon_haritasi.setdefault(anahtar, []).append(poz)
+
+    # Geçen tüm hisselerin güncel fiyatı — tek toplu çağrı.
+    fiyat_haritasi = _bulk_price_and_change(db, list({p.stock_id for p in tum_pozisyonlar}))
+
+    # Tüm kişisel botlar — tek sorgu.
+    botlar = {
+        b.user_id: b
+        for b in db.query(models.UserBot).filter(models.UserBot.user_id.in_(user_ids)).all()
+    }
+
+    def deger(user_id: int, bot_mu: bool, nakit: float) -> float:
+        toplam = nakit
+        for poz in pozisyon_haritasi.get((user_id, bot_mu), []):
+            fiyat, _ = fiyat_haritasi.get(poz.stock_id, (0.0, None))
+            # Fiyat yoksa ortalama maliyet kullanılır — pozisyonu 0 TL saymak
+            # kullanıcıyı liderlik tablosunda haksız yere dibe atardı.
+            toplam += float(poz.quantity) * (fiyat or float(poz.average_cost))
+        return toplam
 
     leaderboard = []
     for user in users:
-        total_value = _portfolio_value(db, user.id, False, float(user.virtual_balance))
+        total_value = deger(user.id, False, float(user.virtual_balance))
         baseline = float(user.baseline_value or 100000.0)
         profit_loss_pct = ((total_value - baseline) / baseline) * 100 if baseline else 0.0
         leaderboard.append(LeaderboardItem(
@@ -3775,9 +3910,9 @@ def get_leaderboard(db: Session = Depends(get_db)):
             is_bot=False,
         ))
 
-        user_bot = db.query(models.UserBot).filter_by(user_id=user.id).first()
+        user_bot = botlar.get(user.id)
         if user_bot:
-            bot_total_value = _portfolio_value(db, user.id, True, float(user_bot.virtual_balance))
+            bot_total_value = deger(user.id, True, float(user_bot.virtual_balance))
             bot_baseline = float(user_bot.baseline_value or 100000.0)
             bot_profit_loss_pct = ((bot_total_value - bot_baseline) / bot_baseline) * 100 if bot_baseline else 0.0
             leaderboard.append(LeaderboardItem(
@@ -3787,6 +3922,5 @@ def get_leaderboard(db: Session = Depends(get_db)):
                 is_bot=True,
             ))
 
-    # Sort by total portfolio value descending
     leaderboard.sort(key=lambda x: x.total_portfolio_value, reverse=True)
     return leaderboard

@@ -21,6 +21,7 @@ import requests
 from sqlalchemy.orm import Session
 
 import models
+from text_utils import tr_fold
 
 TEFAS_INFO_URL = "https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir"
 
@@ -40,8 +41,29 @@ FUND_KINDS = ("YAT", "EMK", "BYF")
 # metinleri — bunlar gerçek bir hata değil, boş sonuç olarak yorumlanır.
 EMPTY_RESULT_MARKERS = ("out of bounds", "veri bulunamadı", "null\" because")
 
-# Katılım (Faizsiz) endeksine giren yaygın fon tipi anahtar kelimeleri
-KATILIM_KEYWORDS = ["katılım", "katilim", "kira sertifikası", "kira sertifikasi"]
+# Fon adından katılım (faizsiz) uygunluğunu yakalayan anahtar kelimeler.
+# Eşleştirme text_utils.tr_fold ile yapılır: TEFAS fon adlarını TAMAMI BÜYÜK
+# HARF döndürür ("... KISA VADELİ KATILIM SERBEST FONU") ve "KATILIM".lower()
+# ASCII "katilim" üretirken insanın yazdığı anahtar kelime "katılım"dır —
+# ikisi eşleşmez. Bu liste eskiden hiç kullanılmıyordu ve kullanılsaydı da
+# tr_fold olmadan sıfır eşleşme verirdi (ölçüldü).
+# "kira sertifika" KÖK olarak yazılır: TEFAS hem "KİRA SERTİFİKASI" hem
+# "KİRA SERTİFİKALARI" kullanıyor ve tam biçim yazılırsa çoğul olan eşleşmez.
+KATILIM_KEYWORDS = ("katilim", "kira sertifika", "faizsiz")
+
+# Fon adından TEFAS tür etiketini tahmin eder; TEFAS anlık görüntüsü tür
+# bilgisini ayrı bir alanda vermiyor.
+_TUR_ISARETLERI = (
+    ("kira sertifika", "Kira Sertifikası"),
+    ("hisse senedi", "Hisse Senedi"),
+    ("degisken", "Değişken"),
+    ("serbest", "Serbest"),
+    ("para piyasasi", "Para Piyasası"),
+    ("endeks", "Endeks"),
+    ("altin", "Altın"),
+    ("emeklilik", "Emeklilik"),
+    ("katilim", "Katılım"),
+)
 
 
 def _fetch_kind_snapshot(kind: str, from_date: datetime, to_date: datetime) -> List[Dict[str, Any]]:
@@ -79,7 +101,8 @@ def _fetch_kind_snapshot(kind: str, from_date: datetime, to_date: datetime) -> L
     return data.get("resultList") or []
 
 
-def update_tefas_funds(db: Session, fund_codes: Optional[List[str]] = None) -> int:
+def update_tefas_funds(db: Session, fund_codes: Optional[List[str]] = None,
+                       snapshot: Optional[List[Dict[str, Any]]] = None) -> int:
     """
     Takip edilen fonlar için TEFAS'tan son fiyatı çeker, fund_prices tablosunu
     günceller. fund_codes verilmezse veritabanındaki tüm fonlar kullanılır.
@@ -99,26 +122,23 @@ def update_tefas_funds(db: Session, fund_codes: Optional[List[str]] = None) -> i
     # daily_return hesaplamak için en az 2 fiyat noktası gerekiyor.
     from_date = today - timedelta(days=4)
 
+    if snapshot is None:
+        snapshot = _fetch_all_snapshots()
+
     # fund_code -> [{"price":..., "date": "YYYY-MM-DD"}, ...] (tarihe göre sıralı)
     history_by_code: Dict[str, List[Dict[str, Any]]] = {}
-    for kind in FUND_KINDS:
-        try:
-            rows = _fetch_kind_snapshot(kind, from_date, today)
-        except Exception as e:
-            print(f"[TefasClient] {kind} tipi fon verisi çekilemedi: {e}")
+    for row in snapshot:
+        code = (row.get("fonKodu") or "").upper()
+        if code not in tracked_codes:
             continue
-        for row in rows:
-            code = (row.get("fonKodu") or "").upper()
-            if code not in tracked_codes:
-                continue
-            price = row.get("fiyat")
-            date_str = row.get("tarih")
-            if price is None or not date_str:
-                continue
-            history_by_code.setdefault(code, []).append({
-                "price": float(price),
-                "date": date_str,
-            })
+        price = row.get("fiyat")
+        date_str = row.get("tarih")
+        if price is None or not date_str:
+            continue
+        history_by_code.setdefault(code, []).append({
+            "price": float(price),
+            "date": date_str,
+        })
 
     updated = 0
     for fund in funds:
@@ -187,3 +207,109 @@ def _parse_tefas_date(date_str: str):
         return datetime.strptime(date_str[:10], "%Y-%m-%d").date()
     except Exception:
         return None
+
+
+def _tur_tahmin(ad: str) -> Optional[str]:
+    """Fon adından TEFAS tür etiketini çıkarır; tanınmazsa None."""
+    katlanmis = tr_fold(ad)
+    for isaret, etiket in _TUR_ISARETLERI:
+        if isaret in katlanmis:
+            return etiket
+    return None
+
+
+def _katilim_mi(ad: str) -> bool:
+    """Fon adı katılım (faizsiz) fonuna işaret ediyor mu."""
+    katlanmis = tr_fold(ad)
+    return any(kw in katlanmis for kw in KATILIM_KEYWORDS)
+
+
+def discover_katilim_funds(db: Session, limit: int = 500,
+                           snapshot: Optional[List[Dict[str, Any]]] = None) -> int:
+    """
+    TEFAS anlık görüntüsündeki TÜM fonları tarar ve adı katılım (faizsiz)
+    fonuna işaret edenleri `funds` tablosuna ekler. Eklenen yeni fon sayısını
+    döner.
+
+    NEDEN: `update_tefas_funds` zaten her fon tipi için TÜM fonları (ölçüldü:
+    2.470 benzersiz fon) tek istekte indiriyordu, sonra elle yazılmış 3 fonluk
+    `seed_katilim_funds` listesinde olmayan her şeyi çöpe atıyordu. Yani veri
+    zaten elimizdeydi, sadece kullanılmıyordu. Keşif ek bir ağ isteği
+    getirmez — aynı yanıtı okur.
+
+    Fon adına bakmak mükemmel bir ölçüt değil (TEFAS bu uçta katılım bayrağı
+    vermiyor), ama "KATILIM" / "KİRA SERTİFİKASI" ibaresi fon unvanında SPK
+    tarafından zorunlu tutulur; bu yüzden ad temelli eşleşme uydurma bir skor
+    değil, resmi unvana dayanan doğrulanabilir bir ölçüttür.
+    """
+    if snapshot is None:
+        snapshot = _fetch_all_snapshots()
+
+    adaylar: Dict[str, str] = {}  # kod -> ad
+    for row in snapshot:
+        kod = (row.get("fonKodu") or "").strip().upper()
+        ad = (row.get("fonUnvan") or "").strip()
+        if not kod or not ad or kod in adaylar:
+            continue
+        if _katilim_mi(ad):
+            adaylar[kod] = ad
+
+    mevcut = {f.code.upper() for f in db.query(models.Fund).all()}
+    eklenen = 0
+    for kod, ad in sorted(adaylar.items()):
+        if kod in mevcut:
+            continue
+        if len(mevcut) + eklenen >= limit:
+            # Sınır ALFABETİK sırada keser; bu yüzden sınır aday sayısının
+            # (ölçüldü: 388) rahatça üstünde tutulmalı, yoksa sondaki harfle
+            # başlayan fonlar sessizce düşer.
+            print(f"[TefasClient] UYARI: {limit} fon sınırına ulaşıldı, kalan adaylar atlandı.")
+            break
+        db.add(models.Fund(
+            code=kod,
+            name=ad[:200],
+            fund_type=_tur_tahmin(ad),
+            risk_level=None,  # TEFAS bu uçta risk seviyesi vermiyor; uydurmuyoruz.
+            is_katilim_compliant=True,
+        ))
+        eklenen += 1
+
+    db.commit()
+    print(f"[TefasClient] Katılım fonu taraması: {len(adaylar)} aday, {eklenen} yeni fon eklendi.")
+    return eklenen
+
+
+def _fetch_all_snapshots() -> List[Dict[str, Any]]:
+    """
+    Üç fon tipinin anlık görüntüsünü TEK SEFER çekip birleştirir.
+
+    NEDEN PAYLAŞILIYOR: `discover_katilim_funds` ve `update_tefas_funds` aynı
+    veriyi istiyor. Her biri kendi isteğini atarsa 3 + 3 = 6 istek olur ve bu
+    TEFAS'ın ~6 istek/dakika sınırının tam sınırındadır — ölçüldü: ikisi arka
+    arkaya çağrıldığında ikincisi 429 Too Many Requests aldı ve fon fiyatları
+    hiç güncellenmedi. Tek çekim bunu 3 isteğe indirir.
+    """
+    today = datetime.now()
+    from_date = today - timedelta(days=6)
+    birlesik: List[Dict[str, Any]] = []
+    for kind in FUND_KINDS:
+        try:
+            birlesik.extend(_fetch_kind_snapshot(kind, from_date, today))
+        except Exception as e:
+            print(f"[TefasClient] {kind} tipi çekilemedi: {e}")
+    return birlesik
+
+
+def sync_tefas(db: Session) -> Dict[str, int]:
+    """
+    TEFAS senkronizasyonunun tek giriş noktası: anlık görüntüyü BİR KEZ çeker,
+    önce yeni katılım fonlarını keşfeder, sonra tüm takip edilen fonların
+    fiyatını günceller. Scheduler bunu çağırmalıdır.
+    """
+    snapshot = _fetch_all_snapshots()
+    if not snapshot:
+        print("[TefasClient] TEFAS anlık görüntüsü boş, senkronizasyon atlandı.")
+        return {"kesfedilen": 0, "guncellenen": 0}
+    kesfedilen = discover_katilim_funds(db, snapshot=snapshot)
+    guncellenen = update_tefas_funds(db, snapshot=snapshot)
+    return {"kesfedilen": kesfedilen, "guncellenen": guncellenen}

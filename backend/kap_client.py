@@ -60,15 +60,30 @@ def _symbol_matches(item: Dict[str, Any], symbol: str) -> bool:
     return bool(_matching_symbols(item, {symbol.upper()}))
 
 
+def _bosluk_temizle(metin: Any) -> str:
+    """Baştaki/sondaki boşlukları atar, iç boşluk dizilerini tek boşluğa indirir.
+
+    NEDEN: KAP başlıklarının bir kısmı satır sonu ve çift boşlukla geliyor
+    (ölçüldü: 230 kaydın 30'u). İki sonucu vardı — (1) başlık arayüzde kaçak
+    satır sonuyla basılıyordu, (2) `refresh_kap_notifications` mükerrer kaydı
+    TAM BAŞLIK EŞLEŞMESİYLE eliyor, yani aynı bildirim bir kez "...Bildirim" bir
+    kez "...Bildirim
+" olarak gelirse iki ayrı kayıt olarak yazılırdı.
+    """
+    if not metin:
+        return ""
+    return " ".join(str(metin).split())
+
+
 def _to_disclosure_dict(item: Dict[str, Any]) -> Dict[str, Any]:
     date_str = item.get("publishDate") or ""
     index = item.get("disclosureIndex")
     return {
-        "title": item.get("summary") or item.get("subject") or "Kamuoyu Bildirimi",
+        "title": _bosluk_temizle(item.get("summary") or item.get("subject")) or "Kamuoyu Bildirimi",
         "date": _format_date(date_str),
         "date_raw": date_str,
-        "type": item.get("subject") or item.get("disclosureCategory") or "",
-        "company": item.get("kapTitle") or "",
+        "type": _bosluk_temizle(item.get("subject") or item.get("disclosureCategory")),
+        "company": _bosluk_temizle(item.get("kapTitle")),
         "url": f"https://www.kap.org.tr/tr/Bildirim/{index}" if index else "",
     }
 

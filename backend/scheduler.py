@@ -20,7 +20,8 @@ from datetime import datetime, timedelta, date
 from market_hours import is_market_open, TR_TZ
 from kap_client import fetch_kap_news
 from insider_client import refresh_all_insider_trades
-from tefas_client import update_tefas_funds
+from katilim_kap import kap_katilim_formlarini_senkronize_et
+from tefas_client import sync_tefas
 from analysis_engine import refresh_earnings_calendar
 from daily_history import refresh_daily_history, refresh_index_history
 from tr_market import store_tr_quotes, store_index_intraday
@@ -229,9 +230,24 @@ def refresh_market_data_job():
             print(f"[Scheduler] İçeriden öğrenenler tazeleme hatası: {e}")
             db.rollback()
 
-        print("[Scheduler] TEFAS fon fiyatları tazeleniyor...")
+        print("[Scheduler] KAP Katılım Finansı formları tazeleniyor...")
         try:
-            update_tefas_funds(db)
+            # KAP bildirimleri BU İŞTE yukarıda tazelendiği için formlar da
+            # hemen ardından işlenir; sıralama önemli, önce bildirim listesi
+            # gelmeli ki yeni yayımlanan formlar aynı turda yakalansın.
+            kap_katilim_formlarini_senkronize_et(db)
+        except Exception as e:
+            print(f"[Scheduler] Katılım formu tazeleme hatası: {e}")
+            db.rollback()
+
+        print("[Scheduler] TEFAS fonları tazeleniyor (keşif + fiyat)...")
+        try:
+            # sync_tefas anlık görüntüyü TEK kez çeker; keşif ve fiyat
+            # güncellemesini ayrı ayrı çağırmak TEFAS'ın dakikalık istek
+            # sınırını aşıp 429 aldırıyordu (bkz. tefas_client._fetch_all_snapshots).
+            sonuc = sync_tefas(db)
+            print(f"[Scheduler] TEFAS: {sonuc['kesfedilen']} yeni fon, "
+                  f"{sonuc['guncellenen']} fiyat güncellendi.")
         except Exception as e:
             print(f"[Scheduler] TEFAS tazeleme hatası: {e}")
             db.rollback()

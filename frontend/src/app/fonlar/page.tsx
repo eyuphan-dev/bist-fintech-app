@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { RefreshCw, PiggyBank, Rocket } from "lucide-react";
+import { RefreshCw, PiggyBank, Rocket, Search } from "lucide-react";
 import { API_BASE } from "../context/AuthContext";
 import { marketTextClass } from "../../lib/marketColor";
 
@@ -36,29 +36,40 @@ export default function FonlarPage() {
   const [funds, setFunds] = useState<Fund[]>([]);
   const [ipos, setIpos] = useState<Ipo[]>([]);
   const [katilimOnly, setKatilimOnly] = useState(false);
+  const [arama, setArama] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // TEFAS taraması fon sayısını 3'ten 390'a çıkardı; arama olmadan liste
+  // gezinilemez hale geliyordu. Filtreleme sunucuda yapılır (yanıt 120 KB'a
+  // kadar çıkabiliyor), bu yüzden her tuşa basışta istek atmamak için
+  // 300 ms geciktirilir.
   useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [fundsRes, iposRes] = await Promise.all([
-          fetch(`${API_BASE}/funds${katilimOnly ? "?katilim_only=true" : ""}`),
-          fetch(`${API_BASE}/ipos`),
-        ]);
-        if (fundsRes.ok) setFunds(await fundsRes.json());
-        if (iposRes.ok) setIpos(await iposRes.json());
-      } catch (err) {
-        console.error("Fon/Halka arz verisi alınamadı:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAll();
-  }, [katilimOnly]);
+    const zamanlayici = setTimeout(() => {
+      const fetchAll = async () => {
+        try {
+          const params = new URLSearchParams();
+          if (katilimOnly) params.set("katilim_only", "true");
+          if (arama.trim()) params.set("q", arama.trim());
+          const [fundsRes, iposRes] = await Promise.all([
+            fetch(`${API_BASE}/funds?${params.toString()}`),
+            fetch(`${API_BASE}/ipos`),
+          ]);
+          if (fundsRes.ok) setFunds(await fundsRes.json());
+          if (iposRes.ok) setIpos(await iposRes.json());
+        } catch (err) {
+          console.error("Fon/Halka arz verisi alınamadı:", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchAll();
+    }, 300);
+    return () => clearTimeout(zamanlayici);
+  }, [katilimOnly, arama]);
 
   const riskColor = (level: number | null) => {
     if (level === null) return "text-gray-400";
-    if (level <= 2) return "text-[#4A87C7]";
+    if (level <= 2) return "text-[#10B981]";
     if (level <= 4) return "text-[#F59E0B]";
     return "text-[#F43F5E]";
   };
@@ -80,7 +91,7 @@ export default function FonlarPage() {
             onClick={() => setKatilimOnly((v) => !v)}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition ${
               katilimOnly
-                ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 text-[#4A87C7]"
+                ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
                 : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
             }`}
           >
@@ -88,13 +99,27 @@ export default function FonlarPage() {
           </button>
         </div>
 
+        <div className="relative">
+          <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={arama}
+            onChange={(e) => setArama(e.target.value)}
+            placeholder="Fon kodu veya adıyla ara (ör. AFT, Ziraat, kira sertifikası)"
+            aria-label="Fon ara"
+            className="w-full min-h-[44px] pl-9 pr-3 rounded-lg bg-[#151921] border border-[#242B35] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#10B981]/50"
+          />
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-10 text-gray-500 text-xs">
-            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
+            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
             Fonlar yükleniyor...
           </div>
         ) : funds.length === 0 ? (
-          <p className="text-xs text-gray-500 text-center py-6">Takip edilen fon bulunamadı.</p>
+          <p className="text-xs text-gray-500 text-center py-6">
+            {arama.trim() ? `"${arama.trim()}" için fon bulunamadı.` : "Takip edilen fon bulunamadı."}
+          </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {funds.map((fund) => (
@@ -105,7 +130,7 @@ export default function FonlarPage() {
                     <p className="text-[11px] text-gray-500 mt-0.5 truncate max-w-[180px]">{fund.name}</p>
                   </div>
                   {fund.is_katilim_compliant && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#4A87C7]/10 text-[#4A87C7] whitespace-nowrap">
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#10B981]/10 text-[#10B981] whitespace-nowrap">
                       KATILIM
                     </span>
                   )}
@@ -113,9 +138,14 @@ export default function FonlarPage() {
 
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-500">{fund.fund_type || "Fon"}</span>
-                  <span className={`font-bold ${riskColor(fund.risk_level)}`}>
-                    Risk: {fund.risk_level ?? "N/A"}/7
-                  </span>
+                  {/* TEFAS bu uçta risk seviyesi vermiyor; uydurmak yerine
+                      seviye yoksa alan hiç gösterilmez ("Risk: N/A/7" hem
+                      çirkin hem de veri varmış izlenimi veriyordu). */}
+                  {fund.risk_level !== null && (
+                    <span className={`font-bold ${riskColor(fund.risk_level)}`}>
+                      Risk: {fund.risk_level}/7
+                    </span>
+                  )}
                 </div>
 
                 {fund.latest_price ? (
@@ -171,7 +201,7 @@ export default function FonlarPage() {
                     <span className="font-bold text-white">{ipo.company_name}</span>
                     {ipo.symbol && <span className="text-[10px] text-gray-500">({ipo.symbol})</span>}
                     {ipo.is_katilim_compliant && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#4A87C7]/10 text-[#4A87C7]">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#10B981]/10 text-[#10B981]">
                         KATILIM
                       </span>
                     )}
