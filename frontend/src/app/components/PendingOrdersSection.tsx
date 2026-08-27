@@ -145,9 +145,9 @@ export default function PendingOrdersSection() {
   if (!token) return null;
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
       {toast && (
-        <div className="flex items-center gap-2 bg-[#10B981]/10 border border-[#10B981]/25 text-[#10B981] rounded-lg px-3 py-2 text-[11px] font-medium mb-4">
+        <div className="flex items-center gap-2 bg-[#4A87C7]/10 border border-[#4A87C7]/25 text-[#4A87C7] rounded-lg px-3 py-2 text-[11px] font-medium mb-4">
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
           {toast}
         </div>
@@ -184,7 +184,7 @@ export default function PendingOrdersSection() {
               {orders.map((o) => (
                 <tr key={o.id} className="hover:bg-[#0B0E14]/60 transition">
                   <td className="py-3 font-bold text-white">
-                    <Link href={`/hisse/${o.symbol}`} className="hover:text-[#10B981] transition">
+                    <Link href={`/hisse/${o.symbol}`} className="hover:text-[#4A87C7] transition">
                       {o.symbol}
                     </Link>
                   </td>
@@ -206,7 +206,7 @@ export default function PendingOrdersSection() {
                       <button
                         onClick={() => openEditModal(o)}
                         title="Düzenle"
-                        className="text-gray-400 hover:text-[#10B981] transition rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
+                        className="text-gray-400 hover:text-[#4A87C7] transition rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -233,7 +233,7 @@ export default function PendingOrdersSection() {
           onClick={() => setEditingOrder(null)}
         >
           <div
-            className="relative w-full max-w-sm bg-[#151921] border border-[#242B35] rounded-2xl shadow-2xl p-5 space-y-3"
+            className="relative w-full max-w-sm bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -251,7 +251,7 @@ export default function PendingOrdersSection() {
                 type="number"
                 min="1"
                 step="1"
-                className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-24 text-center outline-none focus:border-[#10B981] font-semibold tabular-nums"
+                className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-24 text-center outline-none focus:border-[#4A87C7] font-semibold tabular-nums"
                 value={editQuantity}
                 onChange={(e) => setEditQuantity(Math.max(1, parseFloat(e.target.value) || 1))}
               />
@@ -262,7 +262,7 @@ export default function PendingOrdersSection() {
                 <span className="text-gray-400 font-medium shrink-0">Tarih/Saat:</span>
                 <input
                   type="datetime-local"
-                  className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1.5 text-white outline-none focus:border-[#10B981] text-xs flex-1"
+                  className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1.5 text-white outline-none focus:border-[#4A87C7] text-xs flex-1"
                   value={editExecutionTime}
                   onChange={(e) => setEditExecutionTime(e.target.value)}
                 />
@@ -274,7 +274,7 @@ export default function PendingOrdersSection() {
                   type="number"
                   min="0.01"
                   step="0.01"
-                  className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-28 text-center outline-none focus:border-[#10B981] font-semibold tabular-nums"
+                  className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-28 text-center outline-none focus:border-[#4A87C7] font-semibold tabular-nums"
                   value={editTargetPrice}
                   onChange={(e) => setEditTargetPrice(parseFloat(e.target.value) || 0)}
                 />
@@ -286,7 +286,7 @@ export default function PendingOrdersSection() {
             <button
               onClick={handleSaveEdit}
               disabled={savingEdit}
-              className="w-full bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold py-2.5 rounded-lg text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 min-h-[44px]"
+              className="w-full bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] font-bold py-2.5 rounded-lg text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 min-h-[44px]"
             >
               {savingEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Kaydet

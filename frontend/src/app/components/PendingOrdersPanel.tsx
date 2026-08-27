@@ -116,14 +116,14 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
   if (!token) return null;
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-3">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
           <Clock className="w-4 h-4 text-[#F59E0B]" /> Limit / Zamanlı Emirler
         </h3>
         <button
           onClick={() => setShowForm((s) => !s)}
-          className="text-[#10B981] hover:text-[#34d399] transition rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
+          className="text-[#4A87C7] hover:text-[#34d399] transition rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="Yeni emir ekle"
         >
           <Plus className="w-4 h-4" />
@@ -138,7 +138,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
                 key={t}
                 onClick={() => setOrderType(t)}
                 className={`py-2.5 rounded-lg text-[10px] font-bold transition min-h-[44px] ${
-                  orderType === t ? "bg-[#10B981] text-[#0B0E14]" : "bg-[#151921] text-gray-400 border border-[#242B35]"
+                  orderType === t ? "bg-[#4A87C7] text-[#0B0E14]" : "bg-[#151921] text-gray-400 border border-[#242B35]"
                 }`}
               >
                 {ORDER_TYPE_LABELS[t]}
@@ -152,7 +152,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
               type="number"
               min="1"
               step="1"
-              className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-20 text-center outline-none focus:border-[#10B981] font-semibold tabular-nums"
+              className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-20 text-center outline-none focus:border-[#4A87C7] font-semibold tabular-nums"
               value={quantity}
               onChange={(e) => setQuantity(Math.max(1, parseFloat(e.target.value) || 1))}
             />
@@ -163,7 +163,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
               <span className="text-gray-400 font-medium shrink-0">Tarih/Saat:</span>
               <input
                 type="datetime-local"
-                className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white outline-none focus:border-[#10B981] text-xs flex-1"
+                className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white outline-none focus:border-[#4A87C7] text-xs flex-1"
                 value={executionTime}
                 onChange={(e) => setExecutionTime(e.target.value)}
               />
@@ -177,7 +177,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
                 type="number"
                 min="0.01"
                 step="0.01"
-                className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-24 text-center outline-none focus:border-[#10B981] font-semibold tabular-nums"
+                className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-24 text-center outline-none focus:border-[#4A87C7] font-semibold tabular-nums"
                 value={targetPrice}
                 onChange={(e) => setTargetPrice(parseFloat(e.target.value) || 0)}
               />
@@ -202,7 +202,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
           <button
             onClick={handleCreate}
             disabled={loading}
-            className="w-full bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold py-2.5 rounded-lg text-xs transition disabled:opacity-50 min-h-[44px]"
+            className="w-full bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] font-bold py-2.5 rounded-lg text-xs transition disabled:opacity-50 min-h-[44px]"
           >
             Emri Oluştur
           </button>

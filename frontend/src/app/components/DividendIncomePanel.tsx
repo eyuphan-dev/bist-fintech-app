@@ -63,7 +63,7 @@ export default function DividendIncomePanel({ refreshKey }: { refreshKey?: numbe
   const withIncome = data.items.filter((i) => (i.annual_income ?? 0) > 0);
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-4">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-4">
       <div className="flex items-center gap-2">
         <Coins className="w-4 h-4 text-[#F59E0B]" />
         <h3 className="text-xs font-bold text-white uppercase tracking-wide">
@@ -116,7 +116,7 @@ export default function DividendIncomePanel({ refreshKey }: { refreshKey?: numbe
                     <td className="py-2 px-3 text-right tabular-nums text-gray-400">
                       %{i.dividend_yield?.toFixed(2)}
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums font-semibold text-[#10B981]">
+                    <td className="py-2 px-3 text-right tabular-nums font-semibold text-[#4A87C7]">
                       {i.yield_on_cost === null ? "—" : `%${i.yield_on_cost.toFixed(2)}`}
                     </td>
                     <td className="py-2 pl-3 text-right tabular-nums font-semibold text-white">

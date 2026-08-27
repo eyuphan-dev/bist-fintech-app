@@ -5,6 +5,7 @@ import Link from "next/link";
 import { RefreshCw, Star, StarOff } from "lucide-react";
 import KatilimBadge from "../components/KatilimBadge";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import { marketBadgeClass } from "../../lib/marketColor";
 
 interface WatchlistItem {
   symbol: string;
@@ -130,13 +131,13 @@ export default function FavorilerPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
           Favoriler yükleniyor...
         </div>
       ) : items.length === 0 ? (
         <div className="text-center text-gray-500 text-xs py-16 space-y-2">
           <p>Henüz favori hisseniz yok.</p>
-          <Link href="/piyasalar" className="text-[#10B981] font-semibold hover:text-[#34d399]">
+          <Link href="/piyasalar" className="text-[#4A87C7] font-semibold hover:text-[#34d399]">
             Piyasalara göz atın →
           </Link>
         </div>
@@ -145,7 +146,7 @@ export default function FavorilerPage() {
           {items.map((item) => (
             <div
               key={item.symbol}
-              className="bg-[#151921] p-4 rounded-2xl border border-[#242B35] hover:border-[#10B981]/40 transition flex flex-col gap-3 relative"
+              className="bg-[#151921] p-4 rounded-2xl border border-[#242B35] hover:border-[#4A87C7]/40 transition flex flex-col gap-3 relative"
             >
               <button
                 onClick={() => handleRemove(item.symbol)}
@@ -167,9 +168,9 @@ export default function FavorilerPage() {
                       <span className="font-bold text-white tracking-wide">{item.symbol}</span>
                       {item.price_change_pct !== null ? (
                         <span className={`text-[10px] font-semibold px-1 rounded tabular-nums ${
-                          item.price_change_pct >= 0 ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
+                          marketBadgeClass(item.price_change_pct)
                         }`}>
-                          %{item.price_change_pct >= 0 ? "+" : ""}{item.price_change_pct}
+                          %{item.price_change_pct > 0 ? "+" : ""}{item.price_change_pct}
                         </span>
                       ) : (
                         <span className="text-[10px] font-semibold px-1 rounded tabular-nums bg-gray-500/10 text-gray-500">—</span>
@@ -193,7 +194,7 @@ export default function FavorilerPage() {
                     value={draftTarget}
                     onChange={(e) => setDraftTarget(e.target.value)}
                     placeholder="Hedef fiyat (TL)"
-                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
+                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
                   />
                   <input
                     type="text"
@@ -201,14 +202,14 @@ export default function FavorilerPage() {
                     value={draftNote}
                     onChange={(e) => setDraftNote(e.target.value)}
                     placeholder="Not (örn. bilanço sonrası tekrar bak)"
-                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
+                    className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-2.5 text-xs text-white outline-none"
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={() => saveEditor(item.symbol)}
                       disabled={saving}
                       type="button"
-                      className="flex-1 bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-[11px] py-2.5 rounded-lg transition disabled:opacity-50"
+                      className="flex-1 bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] font-bold text-[11px] py-2.5 rounded-lg transition disabled:opacity-50"
                     >
                       {saving ? "Kaydediliyor..." : "Kaydet"}
                     </button>

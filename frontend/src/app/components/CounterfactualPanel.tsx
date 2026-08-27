@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { GitCompareArrows, Info } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import { marketColor } from "../../lib/marketColor";
 
 interface Scenario {
   key: string;
@@ -65,7 +66,7 @@ export default function CounterfactualPanel({ refreshKey }: { refreshKey?: numbe
   const gercekEnIyisindenKotu = enIyiSenaryo && gercekGetiri < enIyiSenaryo.return_pct;
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-4">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-4">
       <div className="flex items-center gap-2">
         <GitCompareArrows className="w-4 h-4 text-[#F59E0B]" />
         <h3 className="text-sm font-bold text-white tracking-wide uppercase">
@@ -80,9 +81,9 @@ export default function CounterfactualPanel({ refreshKey }: { refreshKey?: numbe
           <p className="text-sm font-bold text-white tabular-nums mt-1">{fmtTL(data.actual_value)} TL</p>
           <p
             className="text-[10px] font-semibold tabular-nums mt-0.5"
-            style={{ color: gercekGetiri >= 0 ? "#10B981" : "#F43F5E" }}
+            style={{ color: marketColor(gercekGetiri) }}
           >
-            {gercekGetiri >= 0 ? "+" : ""}{gercekGetiri.toFixed(2)}%
+            {gercekGetiri > 0 ? "+" : ""}{gercekGetiri.toFixed(2)}%
           </p>
         </div>
 
@@ -92,9 +93,9 @@ export default function CounterfactualPanel({ refreshKey }: { refreshKey?: numbe
             <p className="text-sm font-bold text-white tabular-nums mt-1">{fmtTL(s.final_value)} TL</p>
             <p
               className="text-[10px] font-semibold tabular-nums mt-0.5"
-              style={{ color: s.return_pct >= 0 ? "#10B981" : "#F43F5E" }}
+              style={{ color: marketColor(s.return_pct) }}
             >
-              {s.return_pct >= 0 ? "+" : ""}{s.return_pct.toFixed(2)}%
+              {s.return_pct > 0 ? "+" : ""}{s.return_pct.toFixed(2)}%
             </p>
           </div>
         ))}

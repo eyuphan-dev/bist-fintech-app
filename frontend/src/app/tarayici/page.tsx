@@ -5,6 +5,7 @@ import Link from "next/link";
 import { RefreshCw, SlidersHorizontal, ArrowUp, ArrowDown, X } from "lucide-react";
 import KatilimBadge from "../components/KatilimBadge";
 import { API_BASE } from "../context/AuthContext";
+import { marketTextClass } from "../../lib/marketColor";
 
 interface ScreenerItem {
   symbol: string;
@@ -114,21 +115,21 @@ export default function TarayiciPage() {
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-white flex items-center gap-2">
-          <SlidersHorizontal className="w-5 h-5 text-[#10B981]" /> Hisse Tarayıcı
+          <SlidersHorizontal className="w-5 h-5 text-[#4A87C7]" /> Hisse Tarayıcı
         </h1>
         <p className="text-xs text-gray-500 mt-1">
           F/K, PD/DD, ROE, Piotroski skoru, temettü verimi ve sektöre göre filtreleyip sıralayın.
         </p>
       </div>
 
-      <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4 space-y-4">
+      <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4 space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Sektör</label>
             <select
               value={filters.sector}
               onChange={(e) => setFilters((f) => ({ ...f, sector: e.target.value }))}
-              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none"
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none"
             >
               <option value="">Tümü</option>
               {sectors.map((s) => (
@@ -141,9 +142,9 @@ export default function TarayiciPage() {
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">F/K (min-max)</label>
             <div className="flex gap-1 mt-1">
               <input type="number" placeholder="Min" value={filters.minPe} onChange={(e) => setFilters((f) => ({ ...f, minPe: e.target.value }))}
-                className="w-1/2 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2 py-2 text-white text-xs outline-none" />
+                className="w-1/2 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2 py-2 text-white text-xs outline-none" />
               <input type="number" placeholder="Max" value={filters.maxPe} onChange={(e) => setFilters((f) => ({ ...f, maxPe: e.target.value }))}
-                className="w-1/2 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2 py-2 text-white text-xs outline-none" />
+                className="w-1/2 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2 py-2 text-white text-xs outline-none" />
             </div>
           </div>
 
@@ -151,28 +152,28 @@ export default function TarayiciPage() {
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">PD/DD (min-max)</label>
             <div className="flex gap-1 mt-1">
               <input type="number" placeholder="Min" value={filters.minPb} onChange={(e) => setFilters((f) => ({ ...f, minPb: e.target.value }))}
-                className="w-1/2 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2 py-2 text-white text-xs outline-none" />
+                className="w-1/2 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2 py-2 text-white text-xs outline-none" />
               <input type="number" placeholder="Max" value={filters.maxPb} onChange={(e) => setFilters((f) => ({ ...f, maxPb: e.target.value }))}
-                className="w-1/2 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2 py-2 text-white text-xs outline-none" />
+                className="w-1/2 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2 py-2 text-white text-xs outline-none" />
             </div>
           </div>
 
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Min. ROE (%)</label>
             <input type="number" placeholder="örn. 15" value={filters.minRoe} onChange={(e) => setFilters((f) => ({ ...f, minRoe: e.target.value }))}
-              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
           </div>
 
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Min. Piotroski (0-9)</label>
             <input type="number" min={0} max={9} placeholder="örn. 6" value={filters.minPiotroski} onChange={(e) => setFilters((f) => ({ ...f, minPiotroski: e.target.value }))}
-              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
           </div>
 
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Min. Temettü Verimi (%)</label>
             <input type="number" min={0} step="0.5" placeholder="örn. 3" value={filters.minDividendYield} onChange={(e) => setFilters((f) => ({ ...f, minDividendYield: e.target.value }))}
-              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
+              className="w-full mt-1 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-3 md:py-2 text-white text-xs outline-none" />
           </div>
 
           <div className="flex items-end">
@@ -180,7 +181,7 @@ export default function TarayiciPage() {
               onClick={() => setFilters((f) => ({ ...f, katilimOnly: !f.katilimOnly }))}
               className={`w-full px-3 py-2 rounded-lg text-xs font-bold border transition ${
                 filters.katilimOnly
-                  ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
+                  ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 text-[#4A87C7]"
                   : "bg-[#0B0E14] border-[#242B35] text-gray-400 hover:text-white"
               }`}
             >
@@ -195,7 +196,7 @@ export default function TarayiciPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortField)}
-              className="bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-3 md:py-1.5 text-white text-xs outline-none"
+              className="bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-3 md:py-1.5 text-white text-xs outline-none"
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -203,7 +204,7 @@ export default function TarayiciPage() {
             </select>
             <button
               onClick={() => setOrder((o) => (o === "asc" ? "desc" : "asc"))}
-              className="flex items-center gap-1 bg-[#0B0E14] border border-[#242B35] hover:border-[#10B981]/40 rounded-lg px-2.5 py-1.5 text-xs text-gray-400 hover:text-white transition"
+              className="flex items-center gap-1 bg-[#0B0E14] border border-[#242B35] hover:border-[#4A87C7]/40 rounded-lg px-2.5 py-1.5 text-xs text-gray-400 hover:text-white transition"
             >
               {order === "asc" ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
               {order === "asc" ? "Artan" : "Azalan"}
@@ -221,7 +222,7 @@ export default function TarayiciPage() {
             )}
             <button
               onClick={fetchScreener}
-              className="bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-3 md:py-2 rounded-lg transition"
+              className="bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-3 md:py-2 rounded-lg transition"
             >
               Uygula
             </button>
@@ -231,7 +232,7 @@ export default function TarayiciPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
           Taranıyor...
         </div>
       ) : items.length === 0 ? (
@@ -257,7 +258,7 @@ export default function TarayiciPage() {
               {items.map((item) => (
                 <tr key={item.symbol} className="border-t border-[#242B35] hover:bg-[#151921]/60">
                   <td className="px-3 py-2">
-                    <Link href={`/hisse/${item.symbol}`} className="font-bold text-white hover:text-[#10B981]">
+                    <Link href={`/hisse/${item.symbol}`} className="font-bold text-white hover:text-[#4A87C7]">
                       {item.symbol}
                     </Link>
                     <p className="text-[10px] text-gray-500 truncate max-w-[140px]">{item.company_name}</p>
@@ -265,9 +266,9 @@ export default function TarayiciPage() {
                   <td className="px-3 py-2 text-gray-400 hidden sm:table-cell">{item.sector || "—"}</td>
                   <td className="px-3 py-2 text-right text-white tabular-nums">{item.current_price} TL</td>
                   <td className={`px-3 py-2 text-right font-semibold tabular-nums ${
-                    item.price_change_pct === null ? "text-gray-500" : item.price_change_pct >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"
+                    marketTextClass(item.price_change_pct)
                   }`}>
-                    {item.price_change_pct === null ? "—" : `${item.price_change_pct >= 0 ? "+" : ""}${item.price_change_pct}%`}
+                    {item.price_change_pct === null ? "—" : `${item.price_change_pct > 0 ? "+" : ""}${item.price_change_pct}%`}
                   </td>
                   <td className="px-3 py-2 text-right text-gray-300 tabular-nums">{fmt(item.pe_ratio)}</td>
                   <td className="px-3 py-2 text-right text-gray-300 tabular-nums">{fmt(item.pb_ratio)}</td>

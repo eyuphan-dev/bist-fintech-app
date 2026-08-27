@@ -23,7 +23,7 @@ export default function CalculatorHelpModal({ title, purpose, howTo, example, on
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-md bg-[#151921] border border-[#242B35] rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+        className="relative w-full max-w-md bg-[#151921] border border-[#242B35] rounded-2xl overflow-hidden max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-[#F59E0B]/10 border-b border-[#F59E0B]/20 px-5 py-4 flex items-center justify-between shrink-0">

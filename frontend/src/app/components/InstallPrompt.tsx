@@ -96,10 +96,10 @@ export default function InstallPrompt() {
       role="dialog"
       aria-label="Uygulamayı ana ekrana ekle"
     >
-      <div className="bg-[#151921] border border-[#242B35] rounded-xl shadow-lg p-3.5">
+      <div className="bg-[#151921] border border-[#242B35] rounded-xl p-3.5">
         <div className="flex items-start gap-3">
-          <span className="w-9 h-9 rounded-lg bg-[#10B981]/10 flex items-center justify-center shrink-0">
-            <Download className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
+          <span className="w-9 h-9 rounded-lg bg-[#4A87C7]/10 flex items-center justify-center shrink-0">
+            <Download className="w-4 h-4 text-[#4A87C7]" strokeWidth={1.5} />
           </span>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-white">Ana ekrana ekle</p>
@@ -118,7 +118,7 @@ export default function InstallPrompt() {
               <button
                 onClick={install}
                 type="button"
-                className="mt-2.5 w-full min-h-[40px] rounded-lg bg-[#10B981] text-[#0B0E14] text-xs font-bold active:bg-[#059669] transition"
+                className="mt-2.5 w-full min-h-[40px] rounded-lg bg-[#4A87C7] text-[#0B0E14] text-xs font-bold active:bg-[#059669] transition"
               >
                 Yükle
               </button>

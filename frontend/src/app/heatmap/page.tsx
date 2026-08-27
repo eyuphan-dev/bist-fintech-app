@@ -130,7 +130,7 @@ export default function HeatmapPage() {
         formatter: (text: string) => {
           const pct = pctBySymbol.get(text);
           if (pct === null || pct === undefined) return [text, "—"];
-          return [text, `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`];
+          return [text, `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`];
         },
       },
       plotOptions: {
@@ -167,7 +167,7 @@ export default function HeatmapPage() {
           const color = isUnavailable ? NEUTRAL_HEX : getHeatColor(pct, heatClampPct);
           const label = isUnavailable
             ? "Kurumsal işlem nedeniyle karşılaştırılamıyor"
-            : `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+            : `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%`;
           return `<div style="background:#151921;border:1px solid #242B35;border-radius:8px;padding:8px 10px;font-size:12px;color:#fff">
             <div style="font-weight:700">${point.x}</div>
             <div style="color:${color};font-weight:700">${label}</div>
@@ -198,7 +198,7 @@ export default function HeatmapPage() {
             onClick={() => setView("heatmap")}
             className={`flex items-center gap-1.5 px-3.5 py-3 md:py-2 rounded-lg text-xs font-semibold border transition ${
               view === "heatmap"
-                ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
+                ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 text-[#4A87C7]"
                 : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
             }`}
           >
@@ -208,7 +208,7 @@ export default function HeatmapPage() {
             onClick={() => setView("table")}
             className={`flex items-center gap-1.5 px-3.5 py-3 md:py-2 rounded-lg text-xs font-semibold border transition ${
               view === "table"
-                ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
+                ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 text-[#4A87C7]"
                 : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
             }`}
           >
@@ -219,14 +219,14 @@ export default function HeatmapPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
           Hisseler yükleniyor...
         </div>
       ) : stocks.length === 0 ? (
         <p className="text-center text-gray-500 text-xs py-10">Gösterilecek hisse bulunamadı.</p>
       ) : view === "heatmap" ? (
         <div className="space-y-3">
-          <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-3">
+          <div className="bg-[#151921] border border-[#242B35] rounded-xl p-3">
             <Chart options={chartOptions} series={series} type="treemap" height={520} />
           </div>
 
@@ -260,7 +260,7 @@ export default function HeatmapPage() {
                 <tr key={s.symbol} className="border-t border-[#242B35] hover:bg-[#151921]/60">
                   <td className="px-3 py-2 text-gray-400">{s.sector || UNCATEGORIZED}</td>
                   <td className="px-3 py-2">
-                    <Link href={`/hisse/${s.symbol}`} className="font-bold text-white hover:text-[#10B981]">
+                    <Link href={`/hisse/${s.symbol}`} className="font-bold text-white hover:text-[#4A87C7]">
                       {s.symbol}
                     </Link>
                   </td>
@@ -272,7 +272,7 @@ export default function HeatmapPage() {
                         s.price_change_pct >= 0 ? "text-[#0D9488]" : "text-[#F43F5E]"
                       }`}
                     >
-                      {s.price_change_pct >= 0 ? "+" : ""}
+                      {s.price_change_pct > 0 ? "+" : ""}
                       {s.price_change_pct}%
                     </td>
                   ) : (

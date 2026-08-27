@@ -123,7 +123,7 @@ export default function OnboardingHelpModal() {
         // çubuğun sağ slotundaki "Menü" düğmesinin üzerine denk gelip tıklanmasını
         // engelliyordu. env(safe-area-inset-bottom) iOS home-indicator'ı da hesaba katar.
         // md ve üzerinde alt çubuk gizli olduğu için buton eski yerinde kalır.
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-5 right-5 z-40 w-11 h-11 rounded-full bg-[#F59E0B] hover:bg-[#d98a08] text-[#0B0E14] shadow-lg shadow-black/40 flex items-center justify-center transition active:scale-95"
+        className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] md:bottom-5 right-4 z-30 w-11 h-11 rounded-full bg-[var(--surface)] border border-[var(--line-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--brand)] flex items-center justify-center transition-colors active:scale-[0.97]"
         title="Yardım"
       >
         <HelpCircle className="w-5 h-5" />
@@ -131,7 +131,7 @@ export default function OnboardingHelpModal() {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-md bg-[#151921] border border-[#242B35] rounded-2xl shadow-2xl overflow-hidden">
+          <div className="relative w-full max-w-md bg-[#151921] border border-[#242B35] rounded-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#242B35]">
               <h3 className="text-sm font-bold text-white">{content.title}</h3>
               <button onClick={() => setIsOpen(false)} className="text-gray-500 hover:text-white transition">

@@ -1,33 +1,70 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   RENK ROLLERI — her rengin TEK bir anlami vardir
+   --------------------------------------------------------------------------
+   Onceki durumda yesil ayni anda uc isi birden yapiyordu: marka rengi, aktif
+   sekme ve finansal yukselis. Sonucta ekranda gozun tutunacagi yer kalmiyor,
+   yesil "kazanc" anlamini yitirip dekorasyona donusuyordu (liderlik
+   tablosunda 10 satirin 9'u yesil +0.00% goruntusu bundandi).
+
+   Kural: yesil ve kirmizi YALNIZCA piyasa yonu icindir. Marka, gezinme ve
+   tiklanabilir her sey MAVI kullanir. Mavi bilerek secildi: yesile de
+   kirmiziya da renk cemberinde maksimum uzaklikta, bu yuzden mobilde 10-11px
+   yazilarda bile anlam karismaz. Kehribar ise yalnizca UYARI rengidir --
+   kirmiziya komsu bir ton oldugu icin marka rengi olarak kullanildiginda
+   dususle karisma riski tasiyordu.
+   ========================================================================== */
 :root {
-  --background: #030712;
-  --foreground: #f3f4f6;
-  --primary: #10b981; /* Neon green */
-  --primary-hover: #059669;
-  --secondary: #1f2937;
-  --accent: #ef4444; /* Neon red */
-  --muted: #9ca3af;
-  --border: #374151;
-  --card-bg: rgba(17, 24, 39, 0.7);
+  --background: #0B0E14;
+  --foreground: #F8FAFC;
+
+  /* Yuzeyler */
+  --surface: #151921;
+  --surface-raised: #1B2029;   /* hover/secili durum — GOLGE YERINE kullanilir */
+  --line: #242B35;
+  --line-strong: #313A47;      /* hover kenarligi */
+
+  /* Metin */
+  --text-primary: #F8FAFC;
+  --text-secondary: #8A99AD;
+  --text-muted: #64748B;
+
+  /* Marka / etkilesim — MAVI */
+  --brand: #4A87C7;
+  --brand-hover: #5C99D6;
+  --brand-active: #3D74AD;
+  --brand-soft: rgba(74, 135, 199, 0.12);
+  --brand-line: rgba(74, 135, 199, 0.35);
+
+  /* Piyasa yonu — SADECE burada */
+  --up: #10B981;
+  --down: #F43F5E;
+  --flat: #8A99AD;             /* degisim yok: 0.00% ARTIK yesil degil */
+
+  /* Uyari */
+  --warn: #F59E0B;
+  --warn-soft: rgba(245, 158, 11, 0.10);
+
+  /* Kose yuvarlakligi — tek kural, 107 yerdeki lg/xl/2xl karmasasi yerine */
+  --radius-card: 0.75rem;      /* kartlar */
+  --radius-control: 0.5rem;    /* buton, input, rozet */
+  --radius-modal: 1rem;        /* modal */
 }
 
 @theme {
-  --color-primary: var(--primary);
-  --color-primary-hover: var(--primary-hover);
-  --color-secondary: var(--secondary);
-  --color-accent: var(--accent);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-card-bg: var(--card-bg);
+  --color-primary: var(--brand);
+  --color-primary-hover: var(--brand-hover);
+  --color-border: var(--line);
 
-  /* Obsidian Dark — Midas Pro / Helal Finans modülü UI sistemi */
+  /* Obsidian Dark — uygulama genelinde kullanilan isimlendirilmis renkler */
   --color-obsidian: #0B0E14;
   --color-obs-surface: #151921;
   --color-obs-border: #242B35;
   --color-obs-positive: #10B981;
   --color-obs-negative: #F43F5E;
   --color-obs-gold: #F59E0B;
+  --color-brand: #4A87C7;
 }
 
 /* Fiyat/rakam alanları için hizalı, kaymayan basamaklar */
@@ -87,29 +124,13 @@ label {
   touch-action: manipulation;
 }
 
-/* Custom glowing effects */
-.glow-green {
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
-}
+/* NOT: Buradaki .glow-* (box-shadow) ve .glass-card (glassmorphism) siniflari
+   2026-08-27'de SILINDI. Ikisi de tasarim sisteminde acikca yasakli
+   (bkz. projem.md tasarim bolumu) ve kodda hic kullanilmiyorlardi -- olculdu,
+   0 kullanim. Golge bu projede kasitli olarak KULLANILMAZ: derinlik hissi
+   yuzey renginin acilmasiyla verilir (--surface-raised), golgeyle degil.
 
-.glow-red {
-  box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
-}
-
-.glow-text-green {
-  text-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
-}
-
-.glow-text-red {
-  text-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
-}
-
-/* Glassmorphism card */
-.glass-card {
-  background: rgba(17, 24, 39, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
+*/
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
@@ -118,16 +139,16 @@ label {
 }
 
 ::-webkit-scrollbar-track {
-  background: #030712;
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2937;
+  background: var(--line);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+  background: var(--line-strong);
 }
 
 /* Scroll gerektiren yatay şeritlerde (ör. NavBar) çubuğu tamamen gizler */
@@ -140,16 +161,15 @@ label {
   display: none;
 }
 
-/* Simple animations */
-@keyframes pulse-slow {
-  0%, 100% {
-    opacity: 0.8;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
 
-.pulse-slow {
-  animation: pulse-slow 3s infinite;
+
+/* ApexCharts kendi tooltip'lerine box-shadow bindiriyor (kutuphane varsayilani).
+   Bu projede golge KULLANILMAZ; derinlik yuzey rengi ve ince cizgiyle verilir.
+   Kutuphane siniflarina disaridan mudahale edildigi icin !important gerekli. */
+.apexcharts-tooltip,
+.apexcharts-xaxistooltip,
+.apexcharts-yaxistooltip {
+  box-shadow: none !important;
+  border: 1px solid var(--line-strong) !important;
+  background: var(--surface) !important;
 }

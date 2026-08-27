@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Layers, RefreshCw, Info } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import { marketColor } from "../../lib/marketColor";
 
 interface Sector {
   sector: string;
@@ -52,7 +53,7 @@ export default function SectorsPage() {
   if (authLoading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <RefreshCw className="w-10 h-10 text-[#10B981] animate-spin mb-4" />
+        <RefreshCw className="w-10 h-10 text-[#4A87C7] animate-spin mb-4" />
         <p className="text-gray-400 font-medium">Yükleniyor...</p>
       </div>
     );
@@ -61,7 +62,7 @@ export default function SectorsPage() {
   if (!token) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 text-center">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 text-center">
           <p className="text-xs text-gray-400">Sektör analizini görmek için giriş yapmalısınız.</p>
         </div>
       </div>
@@ -100,11 +101,11 @@ export default function SectorsPage() {
       </div>
 
       {loading ? (
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-8 text-center">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-8 text-center">
           <p className="text-xs text-gray-500">Yükleniyor...</p>
         </div>
       ) : (
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs min-w-[600px]">
               <thead>
@@ -116,7 +117,7 @@ export default function SectorsPage() {
                         onClick={() => setSortBy(c.key)}
                         title={c.hint}
                         type="button"
-                        className={`transition ${sortBy === c.key ? "text-[#10B981]" : "hover:text-white"}`}
+                        className={`transition ${sortBy === c.key ? "text-[#4A87C7]" : "hover:text-white"}`}
                       >
                         {c.label}
                       </button>
@@ -131,7 +132,7 @@ export default function SectorsPage() {
                     <td className="py-2.5 pr-3">
                       <span className="font-bold text-white">{s.sector}</span>
                       {s.katilim_compliant_count > 0 && (
-                        <span className="block text-[10px] text-[#10B981]">
+                        <span className="block text-[10px] text-[#4A87C7]">
                           {s.katilim_compliant_count}/{s.stock_count} katılım uygun
                         </span>
                       )}
@@ -140,7 +141,7 @@ export default function SectorsPage() {
                       const isChange = c.key === "avg_change_pct";
                       const v = s[c.key];
                       const color = isChange && v !== null
-                        ? (v as number) >= 0 ? "#10B981" : "#F43F5E"
+                        ? marketColor(v as number)
                         : undefined;
                       return (
                         <td
@@ -148,7 +149,7 @@ export default function SectorsPage() {
                           className="py-2.5 px-3 text-right tabular-nums font-semibold text-gray-300"
                           style={color ? { color } : undefined}
                         >
-                          {isChange && v !== null && (v as number) >= 0 ? "+" : ""}
+                          {isChange && v !== null && (v as number) > 0 ? "+" : ""}
                           {c.render(s)}
                         </td>
                       );

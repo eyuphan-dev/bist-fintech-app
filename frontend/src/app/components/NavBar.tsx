@@ -89,12 +89,12 @@ export default function NavBar() {
 
   const linkClass = (active: boolean) =>
     `flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition whitespace-nowrap shrink-0 ${
-      active ? "bg-[#10B981] text-[#0B0E14]" : "text-gray-400 hover:text-white hover:bg-[#151921]"
+      active ? "bg-[#4A87C7] text-[#0B0E14]" : "text-gray-400 hover:text-white hover:bg-[#151921]"
     }`;
 
   const dropdownItemClass = (active: boolean) =>
     `flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold transition ${
-      active ? "text-[#10B981]" : "text-gray-300 hover:text-white hover:bg-[#0B0E14]"
+      active ? "text-[#4A87C7]" : "text-gray-300 hover:text-white hover:bg-[#0B0E14]"
     }`;
 
   // Safe-area dolgusu header'IN İÇİNDE uygulanır: böylece çubuğun arka planı
@@ -106,7 +106,7 @@ export default function NavBar() {
     >
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2 shrink-0 min-h-[44px] md:min-h-0 -ml-1 pl-1 pr-1 md:ml-0 md:px-0">
-          <LineChart className="w-6 h-6 text-[#10B981]" />
+          <LineChart className="w-6 h-6 text-[#4A87C7]" />
           <span className="font-bold text-lg tracking-tight text-white hidden sm:inline">BIST Simülasyonu</span>
         </Link>
 
@@ -132,7 +132,7 @@ export default function NavBar() {
               <span className="hidden lg:inline">Daha Fazla</span>
             </button>
             {moreOpen && (
-              <div className="absolute top-full right-0 mt-1 w-56 bg-[#151921] border border-[#242B35] rounded-xl shadow-xl py-1.5 z-40">
+              <div className="absolute top-full right-0 mt-1 w-56 bg-[#151921] border border-[#242B35] rounded-xl py-1.5 z-40">
                 {MORE_NAV_LINKS.map((link) => {
                   const Icon = link.icon;
                   return (
@@ -166,7 +166,7 @@ export default function NavBar() {
               aria-expanded={userOpen}
               title="Hesabım"
             >
-              <span className="w-8 h-8 rounded-full bg-[#10B981] text-[#0B0E14] font-bold text-sm flex items-center justify-center shrink-0">
+              <span className="w-8 h-8 rounded-full bg-[#4A87C7] text-[#0B0E14] font-bold text-sm flex items-center justify-center shrink-0">
                 {(user?.username?.[0] ?? "?").toUpperCase()}
               </span>
               <ChevronDown
@@ -175,7 +175,7 @@ export default function NavBar() {
             </button>
 
             {userOpen && (
-              <div className="absolute top-full right-0 mt-1 w-60 bg-[#151921] border border-[#242B35] rounded-xl shadow-xl py-1.5 z-40">
+              <div className="absolute top-full right-0 mt-1 w-60 bg-[#151921] border border-[#242B35] rounded-xl py-1.5 z-40">
                 <div className="px-3.5 pt-1 pb-2.5 border-b border-[#242B35] mb-1.5">
                   <p className="text-[10px] text-gray-500">Giriş yapıldı</p>
                   <p className="text-xs font-bold text-white truncate">@{user?.username}</p>

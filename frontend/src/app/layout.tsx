@@ -75,7 +75,11 @@ export default function RootLayout({
           <CacheGuard />
           <div className="min-h-screen flex flex-col">
             <NavBar />
-            <div className="flex-1 pb-16 md:pb-0">{children}</div>
+            {/* Sabit alt gezinme barinin yuksekligi + centikli cihazlarda alt guvenli
+                alan. Onceki `pb-16` sabit 64px idi ve safe-area-inset-bottom'u
+                hesaba katmiyordu; iPhone gibi cihazlarda sayfanin son satiri
+                barin altinda kaliyordu. */}
+            <div className="flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</div>
             <Footer />
           </div>
           <MobileBottomNav />

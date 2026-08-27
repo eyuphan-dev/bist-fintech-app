@@ -72,7 +72,7 @@ export default function SettingsPage() {
   if (authLoading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <RefreshCw className="w-10 h-10 text-[#10B981] animate-spin mb-4" />
+        <RefreshCw className="w-10 h-10 text-[#4A87C7] animate-spin mb-4" />
         <p className="text-gray-400 font-medium">Yükleniyor...</p>
       </div>
     );
@@ -81,7 +81,7 @@ export default function SettingsPage() {
   if (!token) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 text-center">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 text-center">
           <p className="text-xs text-gray-400">Ayarlara erişmek için giriş yapmalısınız.</p>
         </div>
       </div>
@@ -89,7 +89,7 @@ export default function SettingsPage() {
   }
 
   const inputClass =
-    "w-full bg-[#0B0E14] border border-[#242B35] rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-[#10B981]/50 transition";
+    "w-full bg-[#0B0E14] border border-[#242B35] rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-[#4A87C7]/50 transition";
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
@@ -100,7 +100,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Hesap bilgisi */}
-      <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+      <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <UserIcon className="w-4 h-4 text-gray-500" />
           <h2 className="text-xs font-bold text-white uppercase tracking-wide">Hesap Bilgileri</h2>
@@ -121,7 +121,7 @@ export default function SettingsPage() {
       <PushNotificationSettings />
 
       {/* Şifre değiştirme */}
-      <form onSubmit={submit} className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-4">
+      <form onSubmit={submit} className="bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-4">
         <div className="flex items-center gap-2">
           <KeyRound className="w-4 h-4 text-[#F59E0B]" />
           <h2 className="text-xs font-bold text-white uppercase tracking-wide">Şifre Değiştir</h2>
@@ -189,7 +189,7 @@ export default function SettingsPage() {
         <button
           type="submit"
           disabled={busy}
-          className="w-full bg-[#10B981] hover:bg-[#0EA271] text-[#0B0E14] font-bold text-sm py-2.5 rounded-lg transition disabled:opacity-50"
+          className="w-full bg-[#4A87C7] hover:bg-[#0EA271] text-[#0B0E14] font-bold text-sm py-2.5 rounded-lg transition disabled:opacity-50"
         >
           {busy ? "Güncelleniyor..." : "Şifreyi Güncelle"}
         </button>

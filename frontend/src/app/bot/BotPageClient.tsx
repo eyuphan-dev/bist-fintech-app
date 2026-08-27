@@ -26,7 +26,7 @@ export default function BotPageClient() {
           <PersonalBotPanel />
         </section>
       ) : (
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 text-center">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 text-center">
           <p className="text-xs text-gray-400">
             Kişisel AI Bot durumunuzu, bakiyenizi ve işlem günlüğünüzü görmek için giriş yapmalısınız.
           </p>

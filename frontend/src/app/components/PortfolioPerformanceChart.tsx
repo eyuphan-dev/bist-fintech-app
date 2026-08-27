@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { TrendingUp, Trophy } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import { marketColor } from "../../lib/marketColor";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -84,7 +85,7 @@ export default function PortfolioPerformanceChart({ refreshKey }: { refreshKey?:
   }
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
       <div className="flex items-center justify-between mb-3 gap-2">
         <h3 className="text-sm font-bold text-white tracking-wide uppercase flex items-center gap-1.5">
           <TrendingUp className="w-4 h-4 text-[#10B981]" /> Portföy Performansı
@@ -101,7 +102,7 @@ export default function PortfolioPerformanceChart({ refreshKey }: { refreshKey?:
           className="flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-[11px] font-semibold"
           style={{
             backgroundColor: excess >= 0 ? "rgba(16,185,129,0.1)" : "rgba(244,63,94,0.1)",
-            color: excess >= 0 ? "#10B981" : "#F43F5E",
+            color: marketColor(excess),
           }}
         >
           <Trophy className="w-3.5 h-3.5 shrink-0" />

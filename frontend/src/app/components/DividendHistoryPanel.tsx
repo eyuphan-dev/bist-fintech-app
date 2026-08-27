@@ -26,7 +26,7 @@ interface Data {
 
 /** dividend_stability.py'deki sabit kurallarla BİREBİR eşleşir — bkz. backend. */
 const STABILITY_STYLE: Record<string, { color: string; bg: string; label: string }> = {
-  A: { color: "#10B981", bg: "rgba(16,185,129,0.12)", label: "A · Çok İstikrarlı" },
+  A: { color: "#4A87C7", bg: "rgba(16,185,129,0.12)", label: "A · Çok İstikrarlı" },
   B: { color: "#34D399", bg: "rgba(52,211,153,0.10)", label: "B · İstikrarlı" },
   C: { color: "#F59E0B", bg: "rgba(245,158,11,0.10)", label: "C · Düzensiz" },
   D: { color: "#F43F5E", bg: "rgba(244,63,94,0.10)", label: "D · Kesintili" },
@@ -69,7 +69,7 @@ export default function DividendHistoryPanel({ symbol }: { symbol: string }) {
   const stabilityStyle = data.stability_class ? STABILITY_STYLE[data.stability_class] : null;
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-lg p-3 space-y-3">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Coins className="w-3.5 h-3.5 text-[#F59E0B]" />

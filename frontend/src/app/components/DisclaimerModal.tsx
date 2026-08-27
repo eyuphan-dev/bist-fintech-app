@@ -25,7 +25,7 @@ export default function DisclaimerModal({ onAccept, onClose }: DisclaimerModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-2xl bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-2xl bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden">
 
         {/* ── Başlık ────────────────────────────────────────────────────── */}
         <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-b border-amber-500/20 px-6 py-4 flex items-center justify-between">
@@ -168,7 +168,7 @@ export default function DisclaimerModal({ onAccept, onClose }: DisclaimerModalPr
             disabled={!accepted}
             className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-200
               ${accepted
-                ? "bg-emerald-500 hover:bg-emerald-400 text-gray-950 shadow-lg shadow-emerald-500/25 active:scale-[0.98]"
+                ? "bg-emerald-500 hover:bg-emerald-400 text-gray-950 active:scale-[0.98]"
                 : "bg-gray-800 text-gray-600 cursor-not-allowed"
               }`}
           >

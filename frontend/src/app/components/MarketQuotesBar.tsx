@@ -93,7 +93,7 @@ export default function MarketQuotesBar({ refreshKey }: { refreshKey?: number })
   ).join(", ");
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {quotes.map((q) => {
           const ch = q.change_1d_pct;
@@ -111,7 +111,7 @@ export default function MarketQuotesBar({ refreshKey }: { refreshKey?: number })
                 </span>
                 {q.change_30d_pct !== null && (
                   <span className="text-gray-600">
-                    30g {q.change_30d_pct >= 0 ? "+" : ""}
+                    30g {q.change_30d_pct > 0 ? "+" : ""}
                     {q.change_30d_pct.toFixed(1)}%
                   </span>
                 )}

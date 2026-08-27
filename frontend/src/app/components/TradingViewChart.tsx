@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { createChart, ColorType, ISeriesApi, AreaSeries, LineStyle } from "lightweight-charts";
+import { marketColor } from "../../lib/marketColor";
 
 interface ChartDataPoint {
   price: number;
@@ -173,7 +174,7 @@ export default function TradingViewChart({
 
   const gosterilen = okuma ?? sonOkuma;
   const pct = gosterilen?.pct ?? null;
-  const pctRenk = pct === null ? "#8A99AD" : pct >= 0 ? "#10B981" : "#F43F5E";
+  const pctRenk = marketColor(pct);
 
   const zamanMetni = (() => {
     if (!gosterilen) return "";

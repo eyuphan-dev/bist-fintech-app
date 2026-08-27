@@ -47,7 +47,7 @@ export default function SeasonalityPanel({ symbol }: { symbol: string }) {
   const maxAbs = Math.max(...data.months.map((m) => Math.abs(m.avg_return_pct)), 0.0001);
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-lg p-3 space-y-3">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-3 space-y-3">
       <div className="flex items-center gap-2">
         <CalendarClock className="w-3.5 h-3.5 text-[#F59E0B]" />
         <p className="text-[9px] text-gray-500 uppercase font-bold">Aylık Mevsimsellik</p>

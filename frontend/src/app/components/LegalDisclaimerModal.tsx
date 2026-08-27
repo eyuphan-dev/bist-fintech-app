@@ -20,7 +20,7 @@ export default function LegalDisclaimerModal({ onAccept, onClose }: LegalDisclai
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-2xl bg-[#151921] border border-[#242B35] rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-2xl bg-[#151921] border border-[#242B35] rounded-2xl overflow-hidden">
         <div className="bg-[#F59E0B]/10 border-b border-[#F59E0B]/20 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <ShieldAlert className="w-6 h-6 text-[#F59E0B] shrink-0" />
@@ -84,7 +84,7 @@ export default function LegalDisclaimerModal({ onAccept, onClose }: LegalDisclai
             <div
               onClick={() => setAccepted((v) => !v)}
               className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                accepted ? "bg-[#10B981] border-[#10B981]" : "bg-transparent border-[#242B35] group-hover:border-[#10B981]"
+                accepted ? "bg-[#4A87C7] border-[#4A87C7]" : "bg-transparent border-[#242B35] group-hover:border-[#4A87C7]"
               }`}
             >
               {accepted && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
@@ -102,7 +102,7 @@ export default function LegalDisclaimerModal({ onAccept, onClose }: LegalDisclai
             disabled={!accepted}
             className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
               accepted
-                ? "bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] shadow-lg shadow-[#10B981]/20 active:scale-[0.98]"
+                ? "bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] active:scale-[0.98]"
                 : "bg-[#242B35] text-gray-600 cursor-not-allowed"
             }`}
           >

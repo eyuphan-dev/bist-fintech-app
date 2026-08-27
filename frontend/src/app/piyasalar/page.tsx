@@ -6,6 +6,7 @@ import { Search, RefreshCw, Star } from "lucide-react";
 import KatilimBadge from "../components/KatilimBadge";
 import MarketQuotesBar from "../components/MarketQuotesBar";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import { marketBadgeClass } from "../../lib/marketColor";
 
 interface Stock {
   id: number;
@@ -106,7 +107,7 @@ export default function PiyasalarPage() {
           <input
             type="text"
             placeholder="Hisse sembolü veya şirket adı ara..."
-            className="w-full bg-[#151921] border border-[#242B35] focus:border-[#10B981] rounded-xl pl-10 pr-4 py-2.5 text-white outline-none transition text-sm"
+            className="w-full bg-[#151921] border border-[#242B35] focus:border-[#4A87C7] rounded-xl pl-10 pr-4 py-2.5 text-white outline-none transition text-sm"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -115,7 +116,7 @@ export default function PiyasalarPage() {
           onClick={() => setKatilimOnly((v) => !v)}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold border transition whitespace-nowrap ${
             katilimOnly
-              ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
+              ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 text-[#4A87C7]"
               : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
           }`}
         >
@@ -125,7 +126,7 @@ export default function PiyasalarPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
           Hisseler yükleniyor...
         </div>
       ) : (
@@ -134,7 +135,7 @@ export default function PiyasalarPage() {
             <Link
               key={stock.symbol}
               href={`/hisse/${stock.symbol}`}
-              className="bg-[#151921] p-4 rounded-2xl border border-[#242B35] hover:border-[#10B981]/40 transition flex flex-col gap-3 relative"
+              className="bg-[#151921] p-4 rounded-2xl border border-[#242B35] hover:border-[#4A87C7]/40 transition flex flex-col gap-3 relative"
             >
               {token && (
                 <button
@@ -156,9 +157,9 @@ export default function PiyasalarPage() {
                     <span className="font-bold text-white tracking-wide">{stock.symbol}</span>
                     {stock.price_change_pct !== null ? (
                       <span className={`text-[10px] font-semibold px-1 rounded tabular-nums ${
-                        stock.price_change_pct >= 0 ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
+                        marketBadgeClass(stock.price_change_pct)
                       }`}>
-                        %{stock.price_change_pct >= 0 ? "+" : ""}{stock.price_change_pct}
+                        %{stock.price_change_pct > 0 ? "+" : ""}{stock.price_change_pct}
                       </span>
                     ) : (
                       <span

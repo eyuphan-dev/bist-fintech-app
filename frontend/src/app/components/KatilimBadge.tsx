@@ -46,7 +46,7 @@ export default function KatilimBadge({
 
         {showPopover && (
           <div
-            className="absolute z-40 top-full mt-2 left-0 w-64 bg-[#151921] border border-[#242B35] rounded-lg shadow-xl p-3"
+            className="absolute z-40 top-full mt-2 left-0 w-64 bg-[#151921] border border-[#242B35] rounded-xl p-3"
             onMouseLeave={() => setShowPopover(false)}
           >
             <p className="text-[11px] text-gray-300 leading-relaxed">
@@ -73,7 +73,7 @@ export default function KatilimBadge({
 
         {showPopover && (
           <div
-            className="absolute z-40 top-full mt-2 left-0 w-64 bg-[#151921] border border-[#242B35] rounded-lg shadow-xl p-3"
+            className="absolute z-40 top-full mt-2 left-0 w-64 bg-[#151921] border border-[#242B35] rounded-xl p-3"
             onMouseLeave={() => setShowPopover(false)}
           >
             <p className="text-[11px] text-gray-300 leading-relaxed">
@@ -89,7 +89,7 @@ export default function KatilimBadge({
     <div className="relative inline-block">
       <button
         onClick={() => setShowPopover((v) => !v)}
-        className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/25 ${sizeClasses}`}
+        className={`inline-flex items-center gap-1 rounded-md font-bold uppercase tracking-wide bg-[#4A87C7]/10 text-[#4A87C7] border border-[#4A87C7]/25 ${sizeClasses}`}
       >
         <CheckCircle2 className="w-3 h-3" />
         ✓ KATILIM ENDEKSİNE UYGUN
@@ -97,7 +97,7 @@ export default function KatilimBadge({
 
       {showPopover && (
         <div
-          className="absolute z-40 top-full mt-2 left-0 w-64 bg-[#151921] border border-[#242B35] rounded-lg shadow-xl p-3"
+          className="absolute z-40 top-full mt-2 left-0 w-64 bg-[#151921] border border-[#242B35] rounded-xl p-3"
           onMouseLeave={() => setShowPopover(false)}
         >
           <div className="flex items-start gap-2">

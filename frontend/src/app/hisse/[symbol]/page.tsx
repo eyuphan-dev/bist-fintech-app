@@ -23,6 +23,7 @@ import CommunityVoteWidget from "../../components/CommunityVoteWidget";
 import PendingOrdersPanel from "../../components/PendingOrdersPanel";
 import NotificationPreferenceModal from "../../components/NotificationPreferenceModal";
 import { useAuth, API_BASE } from "../../context/AuthContext";
+import { marketBadgeClass, marketTextClass } from "../../../lib/marketColor";
 
 const TradingViewChart = dynamic(() => import("../../components/TradingViewChart"), { ssr: false });
 
@@ -74,7 +75,12 @@ export default function StockDetailPage() {
   const [isWatched, setIsWatched] = useState(false);
   const [watchLoading, setWatchLoading] = useState(false);
 
-  const [tradeQty, setTradeQty] = useState<number>(1);
+  // METIN olarak tutulur, sayi olarak DEGIL. Onceki halde deger number'di ve
+  // onChange icinde `parseInt(e.target.value) || 1` vardi; alan silinince
+  // parseInt("") -> NaN -> `|| 1` aninda 1'e donduruyordu. Kullanici 20 yazmak
+  // icin once o 1'i silmek zorunda kaliyor, silemeyince "120" gibi yanlis bir
+  // deger olusuyordu. Bos string'e izin vermek icin tip string.
+  const [tradeQty, setTradeQty] = useState<string>("");
   const [tradeLoading, setTradeLoading] = useState(false);
   const [tradeMessage, setTradeMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -276,9 +282,20 @@ export default function StockDetailPage() {
     return () => { cancelled = true; };
   }, [token, refreshTrigger]);
 
+  // Girilen metinden turetilen sayisal deger. Bos ya da 0/negatifse islem
+  // yapilamaz -- hem butonlar kilitlenir hem de sunucuya istek gitmez.
+  const tradeQtyNum = Number.parseInt(tradeQty, 10);
+  const tradeQtyValid = Number.isFinite(tradeQtyNum) && tradeQtyNum > 0;
+
   const handleTrade = async (action: "AL" | "SAT") => {
     if (!token) {
       setTradeMessage({ text: "İşlem yapmak için giriş yapmalısınız.", isError: true });
+      return;
+    }
+    // Butonlar zaten kilitli ama klavye/otomasyon yoluyla da tetiklenebilir;
+    // sunucuya gecersiz miktar gondermemek icin burada da kontrol edilir.
+    if (!tradeQtyValid) {
+      setTradeMessage({ text: "Lütfen 0'dan büyük bir lot adedi girin.", isError: true });
       return;
     }
     setTradeLoading(true);
@@ -287,7 +304,7 @@ export default function StockDetailPage() {
       const res = await fetch(`${API_BASE}/trade`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ symbol, action_type: action, quantity: tradeQty }),
+        body: JSON.stringify({ symbol, action_type: action, quantity: tradeQtyNum }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -331,7 +348,7 @@ export default function StockDetailPage() {
           <ArrowLeft className="w-3.5 h-3.5" /> Piyasalara Dön
         </button>
         <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+          <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
           {symbol} yükleniyor...
         </div>
       </div>
@@ -350,9 +367,9 @@ export default function StockDetailPage() {
             <h1 className="text-2xl font-bold text-white">{stockDetail.symbol}</h1>
             {stockDetail.change_pct !== null && stockDetail.change_pct !== undefined ? (
               <span className={`text-xs px-1.5 py-0.5 rounded tabular-nums font-semibold ${
-                stockDetail.change_pct >= 0 ? "bg-[#10B981]/10 text-[#10B981]" : "bg-[#F43F5E]/10 text-[#F43F5E]"
+                marketBadgeClass(stockDetail.change_pct)
               }`}>
-                %{stockDetail.change_pct >= 0 ? "+" : ""}{stockDetail.change_pct}
+                %{stockDetail.change_pct > 0 ? "+" : ""}{stockDetail.change_pct}
               </span>
             ) : (
               <span
@@ -416,7 +433,7 @@ export default function StockDetailPage() {
           </div>
           <div>
             <p className="text-gray-500">Gün İçi Yüksek</p>
-            <p className="font-semibold text-[#10B981] tabular-nums">
+            <p className="font-semibold text-[#4A87C7] tabular-nums">
               {stockDetail.day_high !== null && stockDetail.day_high !== undefined ? `${stockDetail.day_high} TL` : "—"}
             </p>
           </div>
@@ -448,7 +465,7 @@ export default function StockDetailPage() {
               key={s.key}
               onClick={() => setSection(s.key)}
               className={`flex-1 min-w-[110px] flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold tracking-wide transition ${
-                section === s.key ? "bg-[#10B981] text-[#0B0E14]" : "text-gray-400 hover:text-white"
+                section === s.key ? "bg-[#4A87C7] text-[#0B0E14]" : "text-gray-400 hover:text-white"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -462,13 +479,13 @@ export default function StockDetailPage() {
         <div className="md:col-span-2 space-y-6">
           {section === "genel" && (
             <>
-              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+              <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="text-xs">
                     <span className="text-gray-500">{RANGES.find((r) => r.key === chartRange)?.periodLabel}: </span>
                     {rangeChangePct !== null ? (
-                      <span className={`font-bold tabular-nums ${rangeChangePct >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"}`}>
-                        {rangeChangePct >= 0 ? "+" : ""}{rangeChangePct.toFixed(2)}%
+                      <span className={`font-bold tabular-nums ${marketTextClass(rangeChangePct)}`}>
+                        {rangeChangePct > 0 ? "+" : ""}{rangeChangePct.toFixed(2)}%
                       </span>
                     ) : (
                       <span className="text-gray-600">—</span>
@@ -481,7 +498,7 @@ export default function StockDetailPage() {
                       onClick={() => setChartRange(r.key)}
                       className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tabular-nums transition ${
                         chartRange === r.key
-                          ? "bg-[#10B981] text-[#0B0E14]"
+                          ? "bg-[#4A87C7] text-[#0B0E14]"
                           : "text-gray-400 hover:text-white hover:bg-[#0B0E14]"
                       }`}
                     >
@@ -492,7 +509,7 @@ export default function StockDetailPage() {
                 </div>
                 {chartLoading && chartData.length === 0 ? (
                   <div className="flex items-center justify-center h-[320px] text-xs text-gray-500">
-                    <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+                    <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
                     Grafik yükleniyor...
                   </div>
                 ) : chartData.length === 0 ? (
@@ -543,13 +560,13 @@ export default function StockDetailPage() {
                 </div>
               </div>
 
-              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+              <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest flex items-center gap-1.5">
                     <Newspaper className="w-3.5 h-3.5" /> KAP Bildirimleri
                   </span>
                   {kapDisclosures?.kap_url && (
-                    <a href={kapDisclosures.kap_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#10B981] hover:text-[#34d399] transition font-medium">
+                    <a href={kapDisclosures.kap_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#4A87C7] hover:text-[#34d399] transition font-medium">
                       Tümünü Gör →
                     </a>
                   )}
@@ -557,7 +574,7 @@ export default function StockDetailPage() {
 
                 {kapLoading ? (
                   <div className="flex items-center gap-2 text-[11px] text-gray-500 py-3">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#10B981]" />
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#4A87C7]" />
                     KAP bildirimleri yükleniyor...
                   </div>
                 ) : kapDisclosures?.disclosures?.length > 0 ? (
@@ -583,7 +600,7 @@ export default function StockDetailPage() {
                 )}
               </div>
 
-              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+              <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest flex items-center gap-1.5">
                     <Newspaper className="w-3.5 h-3.5" /> Hisse Haberleri
@@ -592,7 +609,7 @@ export default function StockDetailPage() {
 
                 {newsLoading ? (
                   <div className="flex items-center gap-2 text-[11px] text-gray-500 py-3">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#10B981]" />
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#4A87C7]" />
                     Haberler yükleniyor...
                   </div>
                 ) : news.length > 0 ? (
@@ -634,7 +651,7 @@ export default function StockDetailPage() {
                                   href={n.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#10B981] hover:text-[#34d399] transition"
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#4A87C7] hover:text-[#34d399] transition"
                                 >
                                   Devamını Oku <ExternalLink className="w-3 h-3" />
                                 </a>
@@ -681,7 +698,7 @@ export default function StockDetailPage() {
 
               <CommunitySentimentGauge symbol={symbol} refreshTrigger={refreshTrigger} />
 
-              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4 space-y-3">
+              <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4 space-y-3">
                 <h4 className="text-xs font-bold text-white uppercase tracking-wide">Yorumlar</h4>
 
                 {token ? (
@@ -694,12 +711,12 @@ export default function StockDetailPage() {
                       // min-w-0 şart: flex öğesinin varsayılan min-width:auto değeri,
                       // input'un uzun placeholder metninin altına inmesini engelliyordu;
                       // input şişip "Gönder" butonunu dar ekranlarda sağa taşırıyordu.
-                      className="flex-1 min-w-0 bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3 py-2 text-white text-xs outline-none transition"
+                      className="flex-1 min-w-0 bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3 py-2 text-white text-xs outline-none transition"
                     />
                     <button
                       onClick={handlePostComment}
                       disabled={commentLoading || commentText.trim().length < 2}
-                      className="shrink-0 bg-[#10B981] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50"
+                      className="shrink-0 bg-[#4A87C7] hover:bg-[#0da271] text-[#0B0E14] font-bold text-xs px-4 py-2 rounded-lg transition disabled:opacity-50"
                     >
                       Gönder
                     </button>
@@ -732,7 +749,7 @@ export default function StockDetailPage() {
 
         {/* Trade Panel */}
         <div className="space-y-6">
-          <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-3">
+          <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-3">
             <h3 className="text-sm font-bold text-white uppercase tracking-wide">Sanal İşlem Paneli</h3>
 
             {/* Kullanılabilir bakiye ve mevcut pozisyon — kullanıcı ne kadar
@@ -741,7 +758,7 @@ export default function StockDetailPage() {
               const available = portfolio.available_balance ?? portfolio.balance ?? 0;
               const reserved = portfolio.reserved_balance ?? 0;
               const owned = (portfolio.items ?? []).find((it: any) => it.symbol === symbol)?.quantity ?? 0;
-              const total = tradeQty * stockDetail.current_price;
+              const total = (tradeQtyValid ? tradeQtyNum : 0) * stockDetail.current_price;
               const maxAffordable = stockDetail.current_price > 0 ? Math.floor(available / stockDetail.current_price) : 0;
               return (
                 <div className="bg-[#0B0E14] border border-[#242B35] rounded-lg p-3 space-y-1.5">
@@ -776,16 +793,31 @@ export default function StockDetailPage() {
               );
             })()}
 
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400 font-medium">Hisse Adeti:</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1 text-white w-20 text-center outline-none focus:border-[#10B981] font-semibold tabular-nums"
-                value={tradeQty}
-                onChange={(e) => setTradeQty(Math.max(1, parseInt(e.target.value) || 1))}
-              />
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="lot-adedi" className="text-xs text-[var(--text-secondary)] font-medium">
+                  Lot Adedi
+                </label>
+                <input
+                  id="lot-adedi"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="Adet girin"
+                  className="bg-[var(--background)] border rounded-[var(--radius-control)] px-3 min-h-[44px] w-32 text-center outline-none font-semibold tabular-nums text-[var(--text-primary)] transition-colors placeholder:text-[var(--text-muted)] placeholder:font-normal placeholder:text-xs border-[var(--line)] focus:border-[var(--brand)]"
+                  value={tradeQty}
+                  onChange={(e) => {
+                    // Yalnizca rakam kabul edilir. Bos string'e IZIN VERILIR --
+                    // kullanicinin alani temizleyip yeni deger yazabilmesi icin.
+                    setTradeQty(e.target.value.replace(/\D/g, ""));
+                  }}
+                />
+              </div>
+              {tradeQty !== "" && !tradeQtyValid && (
+                <p className="text-[10px] text-[var(--down)] text-right">
+                  Lot adedi 0'dan büyük olmalı.
+                </p>
+              )}
             </div>
 
             {/* Komisyon işlem ÖNCESİNDE gösterilir. Alımda bakiyeden brüt tutar +
@@ -793,7 +825,7 @@ export default function StockDetailPage() {
                 (/api/backtest/strategies) çekilir, burada yalnızca önizleme amaçlı
                 tekrarlanıyor — kesin tutarı her zaman backend belirler. */}
             {(() => {
-              const brut = tradeQty * stockDetail.current_price;
+              const brut = (tradeQtyValid ? tradeQtyNum : 0) * stockDetail.current_price;
               const komisyon = brut * komisyonOraniPct / 100;
               const tl = (v: number) =>
                 v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -829,14 +861,14 @@ export default function StockDetailPage() {
               <button
                 onClick={() => handleTrade("AL")}
                 disabled={tradeLoading}
-                className="bg-[#10B981] hover:bg-[#0da271] active:scale-95 text-[#0B0E14] font-bold py-2 rounded-lg text-xs transition duration-150 disabled:opacity-50"
+                className="bg-[#10B981] hover:brightness-110 active:scale-[0.98] text-[#0B0E14] font-bold min-h-[44px] rounded-[var(--radius-control)] text-xs transition-colors duration-150 disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 SANAL AL
               </button>
               <button
                 onClick={() => handleTrade("SAT")}
                 disabled={tradeLoading}
-                className="bg-[#F43F5E] hover:bg-[#e11d48] active:scale-95 text-white font-bold py-2 rounded-lg text-xs transition duration-150 disabled:opacity-50"
+                className="bg-[#F43F5E] hover:brightness-110 active:scale-[0.98] text-white font-bold min-h-[44px] rounded-[var(--radius-control)] text-xs transition-colors duration-150 disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 SANAL SAT
               </button>

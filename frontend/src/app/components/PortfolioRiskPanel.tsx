@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { ShieldAlert, Info } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import { marketColor } from "../../lib/marketColor";
 
 interface RiskData {
   day_count: number;
@@ -20,7 +21,7 @@ interface RiskData {
 }
 
 const RISK_COLORS: Record<string, string> = {
-  "Düşük": "#10B981",
+  "Düşük": "#4A87C7",
   "Orta": "#F59E0B",
   "Yüksek": "#F43F5E",
 };
@@ -80,7 +81,7 @@ export default function PortfolioRiskPanel({ refreshKey }: { refreshKey?: number
       label: "Getiri / Risk",
       value: data.return_risk_ratio === null ? "—" : data.return_risk_ratio.toFixed(2),
       sub: "birim risk başına",
-      color: (data.return_risk_ratio ?? 0) >= 0 ? "#10B981" : "#F43F5E",
+      color: marketColor(data.return_risk_ratio),
     },
     {
       label: "Artıda Kapanan Gün",
@@ -91,7 +92,7 @@ export default function PortfolioRiskPanel({ refreshKey }: { refreshKey?: number
   ];
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-4">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-4">
       <div className="flex items-center gap-2">
         <ShieldAlert className="w-4 h-4 text-[#F59E0B]" />
         <h3 className="text-xs font-bold text-white uppercase tracking-wide">Risk Profili</h3>
@@ -121,7 +122,7 @@ export default function PortfolioRiskPanel({ refreshKey }: { refreshKey?: number
         <div className="flex items-center gap-4 text-[10px] text-gray-500">
           <span>
             En iyi gün:{" "}
-            <span className="text-[#10B981] font-semibold tabular-nums">
+            <span className="text-[#4A87C7] font-semibold tabular-nums">
               +%{data.best_day_pct?.toFixed(2)}
             </span>
           </span>

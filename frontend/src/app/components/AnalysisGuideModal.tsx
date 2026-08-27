@@ -52,7 +52,7 @@ export default function AnalysisGuideModal({ onClose }: AnalysisGuideModalProps)
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg bg-[#151921] border border-[#242B35] rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+        className="relative w-full max-w-lg bg-[#151921] border border-[#242B35] rounded-2xl overflow-hidden max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-[#F59E0B]/10 border-b border-[#F59E0B]/20 px-5 py-4 flex items-center justify-between shrink-0">
@@ -88,7 +88,7 @@ export default function AnalysisGuideModal({ onClose }: AnalysisGuideModalProps)
             <div className="bg-[#0B0E14] border border-[#242B35] rounded-xl p-3 space-y-2">
               {CHECKLIST_ITEMS.map((text, i) => (
                 <p key={i} className="text-[11px] text-gray-400 leading-relaxed flex items-start gap-2">
-                  <span className="text-[#10B981] font-bold shrink-0">✓</span>
+                  <span className="text-[#4A87C7] font-bold shrink-0">✓</span>
                   {text}
                 </p>
               ))}

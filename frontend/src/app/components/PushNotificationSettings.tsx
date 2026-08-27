@@ -204,9 +204,9 @@ export default function PushNotificationSettings() {
   if (state === "yukleniyor" || state === "desteklenmiyor") return null;
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
       <div className="flex items-center gap-2 mb-1">
-        <Bell className="w-4 h-4 text-[#10B981]" />
+        <Bell className="w-4 h-4 text-[#4A87C7]" />
         <h2 className="text-sm font-bold text-white">Anlık Bildirimler</h2>
       </div>
       <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
@@ -257,7 +257,7 @@ export default function PushNotificationSettings() {
               className={`shrink-0 min-h-[40px] px-4 rounded-lg text-xs font-bold transition disabled:opacity-50 ${
                 state === "acik"
                   ? "bg-[#242B35] text-gray-300 hover:text-white"
-                  : "bg-[#10B981] text-[#0B0E14] hover:bg-[#059669]"
+                  : "bg-[#4A87C7] text-[#0B0E14] hover:bg-[#059669]"
               }`}
             >
               {busy ? (

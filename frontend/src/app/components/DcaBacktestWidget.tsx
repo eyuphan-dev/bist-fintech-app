@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Calculator, Loader2, TrendingUp, TrendingDown, HelpCircle } from "lucide-react";
 import CalculatorHelpModal from "./CalculatorHelpModal";
+import { marketTextClass } from "../../lib/marketColor";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
@@ -137,8 +138,8 @@ export default function DcaBacktestWidget({ symbol }: DcaBacktestWidgetProps) {
                 ) : (
                   <TrendingDown className="w-4 h-4 text-[#F43F5E]" />
                 )}
-                <span className={`font-bold tabular-nums ${(result.profit_pct ?? 0) >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"}`}>
-                  {result.profit?.toLocaleString("tr-TR")} TL ({(result.profit_pct ?? 0) >= 0 ? "+" : ""}
+                <span className={`font-bold tabular-nums ${marketTextClass(result.profit_pct)}`}>
+                  {result.profit?.toLocaleString("tr-TR")} TL ({(result.profit_pct ?? 0) > 0 ? "+" : ""}
                   {result.profit_pct?.toFixed(2)}%)
                 </span>
               </div>

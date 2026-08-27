@@ -131,13 +131,13 @@ export default function ComparePage() {
       </div>
 
       {!token ? (
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 text-center">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 text-center">
           <p className="text-xs text-gray-400">Karşılaştırma yapmak için giriş yapmalısınız.</p>
         </div>
       ) : (
         <>
           {/* Seçim alanı */}
-          <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-3">
+          <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-3">
             <div className="flex flex-wrap gap-2">
               {selected.map((sym) => (
                 <span
@@ -185,14 +185,14 @@ export default function ComparePage() {
 
           {/* Karşılaştırma tablosu */}
           {items.length === 0 ? (
-            <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-8 text-center">
+            <div className="bg-[#151921] border border-[#242B35] rounded-xl p-8 text-center">
               <GitCompareArrows className="w-8 h-8 text-gray-600 mx-auto mb-2" />
               <p className="text-xs text-gray-400">
                 Karşılaştırmak için yukarıdan en az bir hisse seçin.
               </p>
             </div>
           ) : (
-            <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+            <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs min-w-[560px]">
                   <thead>
@@ -202,7 +202,7 @@ export default function ComparePage() {
                         <th key={it.symbol} className="pb-3 px-3 text-right">
                           <Link
                             href={`/hisse/${it.symbol}`}
-                            className="font-bold text-white hover:text-[#10B981] transition inline-flex items-center gap-1"
+                            className="font-bold text-white hover:text-[#4A87C7] transition inline-flex items-center gap-1"
                           >
                             {it.symbol} <ArrowRight className="w-3 h-3" />
                           </Link>
@@ -230,7 +230,7 @@ export default function ComparePage() {
                               <td
                                 key={it.symbol}
                                 className={`py-2.5 px-3 text-right tabular-nums font-semibold ${
-                                  isBest ? "text-[#10B981]" : "text-gray-300"
+                                  isBest ? "text-[#4A87C7]" : "text-gray-300"
                                 }`}
                               >
                                 {isNum ? `${raw}${metric.suffix ?? ""}` : "—"}
@@ -245,7 +245,7 @@ export default function ComparePage() {
                       {items.map((it) => (
                         <td key={it.symbol} className="py-2.5 px-3 text-right">
                           {it.is_katilim_compliant ? (
-                            <span className="text-[10px] font-bold text-[#10B981] bg-[#10B981]/10 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] font-bold text-[#4A87C7] bg-[#4A87C7]/10 px-1.5 py-0.5 rounded">
                               Uygun
                             </span>
                           ) : (

@@ -122,7 +122,7 @@ export default function TransactionsPage() {
   if (authLoading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <RefreshCw className="w-10 h-10 text-[#10B981] animate-spin mb-4" />
+        <RefreshCw className="w-10 h-10 text-[#4A87C7] animate-spin mb-4" />
         <p className="text-gray-400 font-medium">Yükleniyor...</p>
       </div>
     );
@@ -131,7 +131,7 @@ export default function TransactionsPage() {
   if (!token) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 text-center">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 text-center">
           <p className="text-xs text-gray-400">İşlem geçmişinizi görmek için giriş yapmalısınız.</p>
         </div>
       </div>
@@ -158,11 +158,11 @@ export default function TransactionsPage() {
       <PerformanceScorecard />
 
       {loading ? (
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-8 text-center">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-8 text-center">
           <p className="text-xs text-gray-500">Yükleniyor...</p>
         </div>
       ) : !data || data.items.length === 0 ? (
-        <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-8 text-center">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-8 text-center">
           <History className="w-8 h-8 text-gray-600 mx-auto mb-2" />
           <p className="text-xs text-gray-400">Henüz kayıtlı bir işleminiz yok.</p>
           <p className="text-[10px] text-gray-600 mt-1.5">
@@ -170,7 +170,7 @@ export default function TransactionsPage() {
           </p>
           <Link
             href="/piyasalar"
-            className="inline-flex items-center gap-1 mt-3 text-[11px] font-semibold text-[#10B981] hover:underline"
+            className="inline-flex items-center gap-1 mt-3 text-[11px] font-semibold text-[#4A87C7] hover:underline"
           >
             Piyasalara git <ArrowRight className="w-3 h-3" />
           </Link>
@@ -179,7 +179,7 @@ export default function TransactionsPage() {
         <>
           {/* Özet kartları */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+            <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
               <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1.5">
                 {pnlPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                 Gerçekleşen K/Z
@@ -193,7 +193,7 @@ export default function TransactionsPage() {
               <p className="text-[10px] text-gray-600 mt-0.5">Kapanan pozisyonlardan</p>
             </div>
 
-            <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+            <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
               <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1.5">
                 <Target className="w-3 h-3" /> Başarı Oranı
               </div>
@@ -205,7 +205,7 @@ export default function TransactionsPage() {
               </p>
             </div>
 
-            <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+            <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
               <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1.5">
                 <Wallet className="w-3 h-3" /> Toplam Alım
               </div>
@@ -213,7 +213,7 @@ export default function TransactionsPage() {
               <p className="text-[10px] text-gray-600 mt-0.5">{data.buy_count} işlem</p>
             </div>
 
-            <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-4">
+            <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
               <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1.5">
                 <Wallet className="w-3 h-3" /> Toplam Satım
               </div>
@@ -229,14 +229,14 @@ export default function TransactionsPage() {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="bg-[#151921] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 md:py-1.5 text-white outline-none"
+              className="bg-[#151921] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-2.5 md:py-1.5 text-white outline-none"
             />
             <span className="text-gray-600">—</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="bg-[#151921] border border-[#242B35] focus:border-[#10B981] rounded-lg px-2.5 py-2.5 md:py-1.5 text-white outline-none"
+              className="bg-[#151921] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-2.5 py-2.5 md:py-1.5 text-white outline-none"
             />
             {(startDate || endDate) && (
               <button
@@ -261,7 +261,7 @@ export default function TransactionsPage() {
                 onClick={() => setFilter(key)}
                 className={`px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold transition ${
                   filter === key
-                    ? "bg-[#10B981] text-[#0B0E14]"
+                    ? "bg-[#4A87C7] text-[#0B0E14]"
                     : "bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white"
                 }`}
                 type="button"
@@ -275,7 +275,7 @@ export default function TransactionsPage() {
               disabled={exporting}
               type="button"
               title="İşlem geçmişini Excel'de açılabilir CSV olarak indir"
-              className="ml-auto flex items-center gap-1.5 px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white hover:border-[#10B981]/40 transition disabled:opacity-50"
+              className="ml-auto flex items-center gap-1.5 px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white hover:border-[#4A87C7]/40 transition disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
               {exporting ? "Hazırlanıyor..." : "CSV indir"}
@@ -283,7 +283,7 @@ export default function TransactionsPage() {
           </div>
 
           {/* İşlem tablosu */}
-          <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+          <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs min-w-[680px]">
                 <thead>
@@ -319,7 +319,7 @@ export default function TransactionsPage() {
                         <td className="py-2.5 px-3">
                           <Link
                             href={`/hisse/${t.symbol}`}
-                            className="font-bold text-white hover:text-[#10B981] transition"
+                            className="font-bold text-white hover:text-[#4A87C7] transition"
                           >
                             {t.symbol}
                           </Link>

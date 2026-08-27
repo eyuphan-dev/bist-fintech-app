@@ -88,7 +88,7 @@ export default function PortfolioAnalytics({ refreshKey }: { refreshKey?: number
   const concentrated = data.top_position_pct >= 50 || data.top_sector_pct >= 60;
 
   return (
-    <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 space-y-5">
+    <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 space-y-5">
       <h3 className="text-sm font-bold text-white tracking-wide uppercase flex items-center gap-1.5">
         <PieChart className="w-4 h-4 text-[#F59E0B]" /> Portföy Dağılım Analizi
       </h3>
@@ -118,7 +118,7 @@ export default function PortfolioAnalytics({ refreshKey }: { refreshKey?: number
           <span className="text-[9px] text-gray-500 uppercase font-bold flex items-center gap-1">
             <ShieldCheck className="w-2.5 h-2.5" /> Katılım
           </span>
-          <p className="text-sm font-bold text-[#10B981] tabular-nums mt-0.5">
+          <p className="text-sm font-bold text-[#4A87C7] tabular-nums mt-0.5">
             %{data.katilim_compliant_pct}
           </p>
           <p className="text-[9px] text-gray-500 mt-0.5">uyumlu hisse</p>

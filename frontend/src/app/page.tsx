@@ -16,6 +16,8 @@ import PortfolioRiskPanel from "./components/PortfolioRiskPanel";
 import PortfolioPerformanceChart from "./components/PortfolioPerformanceChart";
 import CounterfactualPanel from "./components/CounterfactualPanel";
 import { useAuth, API_BASE } from "./context/AuthContext";
+import { marketTextClass, formatPct } from "../lib/marketColor";
+import Card from "./components/ui/Card";
 
 interface PortfolioItem {
   symbol: string;
@@ -118,7 +120,7 @@ export default function Home() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <RefreshCw className="w-10 h-10 text-[#10B981] animate-spin mb-4" />
+        <RefreshCw className="w-10 h-10 text-[#4A87C7] animate-spin mb-4" />
         <p className="text-gray-400 font-medium">BIST Simülasyonu Yükleniyor...</p>
       </div>
     );
@@ -137,8 +139,8 @@ export default function Home() {
 
         <div className="w-full max-w-md p-8 rounded-2xl bg-[#151921] border border-[#242B35]">
           <div className="flex flex-col items-center mb-6">
-            <div className="w-12 h-12 bg-[#10B981]/10 rounded-xl flex items-center justify-center mb-3">
-              <LineChart className="w-7 h-7 text-[#10B981]" />
+            <div className="w-12 h-12 bg-[#4A87C7]/10 rounded-xl flex items-center justify-center mb-3">
+              <LineChart className="w-7 h-7 text-[#4A87C7]" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white">BIST Simülasyonu</h1>
             <p className="text-gray-400 text-sm mt-1">Yapay Zeka Destekli Borsa Deneyimi</p>
@@ -150,7 +152,7 @@ export default function Home() {
               <input
                 type="text"
                 required
-                className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
+                className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
                 value={authForm.username}
                 onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
               />
@@ -162,7 +164,7 @@ export default function Home() {
                 <input
                   type="email"
                   required
-                  className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
+                  className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
                   value={authForm.email}
                   onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
                 />
@@ -174,7 +176,7 @@ export default function Home() {
               <input
                 type="password"
                 required
-                className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#10B981] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
+                className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#4A87C7] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm"
                 value={authForm.password}
                 onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
               />
@@ -189,7 +191,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={authLoading}
-              className="w-full bg-[#10B981] hover:bg-[#0da271] active:scale-95 text-[#0B0E14] font-semibold py-2.5 rounded-lg transition duration-200 flex items-center justify-center text-sm disabled:opacity-50"
+              className="w-full bg-[#4A87C7] hover:bg-[#0da271] active:scale-95 text-[#0B0E14] font-semibold py-2.5 rounded-lg transition duration-200 flex items-center justify-center text-sm disabled:opacity-50"
             >
               {authLoading ? (
                 <RefreshCw className="w-5 h-5 animate-spin" />
@@ -207,7 +209,7 @@ export default function Home() {
                 setIsRegister(!isRegister);
                 setAuthError("");
               }}
-              className="text-[#10B981] hover:text-[#34d399] text-xs font-medium transition"
+              className="text-[#4A87C7] hover:text-[#34d399] text-xs font-medium transition"
             >
               {isRegister ? "Zaten hesabınız var mı? Giriş Yapın" : "Hesabınız yok mu? Yeni Hesap Oluşturun"}
             </button>
@@ -262,48 +264,51 @@ export default function Home() {
         <div className="md:col-span-2 lg:col-span-2 space-y-6">
           {dashLoading || !portfolio ? (
             <div className="flex items-center justify-center py-16 text-gray-500 text-xs">
-              <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+              <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
               Portföy yükleniyor...
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-gray-400 font-medium">Toplam Portföy Değeri</span>
-                    <h3 className="text-2xl font-bold text-white mt-1 tabular-nums">
+              {/* TEK OZET SERIDI. Onceden iki ayri dev kart vardi; ikisi de
+                  buyuk puntoyla "100.000 TL" gosteriyor ve mobilde dikey alanin
+                  ucte birini yiyordu. Kurumsal terminallerde bu bilgi tek satirda
+                  ozetlenir; asil ekran alani veriye ayrilir. Golge YOK -- ayrim
+                  yalnizca ince cizgiyle yapilir. */}
+              <Card padding="none" className="overflow-hidden">
+                <div className="grid grid-cols-2 divide-x divide-[var(--line)]">
+                  <div className="p-4">
+                    <p className="text-[10px] text-[var(--text-secondary)] font-medium uppercase tracking-wide">
+                      Portföy Değeri
+                    </p>
+                    <p className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">
                       {portfolio.total_portfolio_value.toLocaleString("tr-TR")} TL
-                    </h3>
-                    <p className={`text-xs mt-1 font-semibold flex items-center ${
-                      portfolio.profit_loss_pct >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"
-                    }`}>
-                      {portfolio.profit_loss_pct >= 0 ? <TrendingUp className="w-3.5 h-3.5 mr-1" /> : <TrendingDown className="w-3.5 h-3.5 mr-1" />}
-                      %{portfolio.profit_loss_pct.toFixed(2)} Toplam K/Z
+                    </p>
+                    <p className={`text-xs mt-1 font-semibold flex items-center gap-1 ${marketTextClass(portfolio.profit_loss_pct)}`}>
+                      {portfolio.profit_loss_pct > 0 ? (
+                        <TrendingUp className="w-3.5 h-3.5" />
+                      ) : portfolio.profit_loss_pct < 0 ? (
+                        <TrendingDown className="w-3.5 h-3.5" />
+                      ) : null}
+                      {formatPct(portfolio.profit_loss_pct)} K/Z
                     </p>
                   </div>
-                  <div className="w-10 h-10 bg-[#10B981]/10 rounded-xl flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-[#10B981]" />
-                  </div>
-                </div>
 
-                <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-gray-400 font-medium">Kullanılabilir Nakit</span>
-                    <h3 className="text-2xl font-bold text-white mt-1 tabular-nums">
+                  <div className="p-4">
+                    <p className="text-[10px] text-[var(--text-secondary)] font-medium uppercase tracking-wide">
+                      Kullanılabilir Nakit
+                    </p>
+                    <p className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">
                       {portfolio.balance.toLocaleString("tr-TR")} TL
-                    </h3>
+                    </p>
                     <button
                       onClick={() => setShowBalanceModal(true)}
-                      className="text-[11px] text-[#F59E0B] hover:text-[#fbbf24] font-semibold transition mt-1"
+                      className="text-[11px] text-[var(--brand)] hover:text-[var(--brand-hover)] font-semibold transition-colors mt-1 min-h-[44px] -my-2 flex items-center"
                     >
-                      Bakiye Güncelle / Sıfırla
+                      Bakiye Güncelle
                     </button>
                   </div>
-                  <div className="w-10 h-10 bg-[#F59E0B]/10 rounded-xl flex items-center justify-center">
-                    <ArrowLeftRight className="w-5 h-5 text-[#F59E0B]" />
-                  </div>
                 </div>
-              </div>
+              </Card>
 
               <PortfolioPerformanceChart refreshKey={refreshTrigger} />
 
@@ -315,7 +320,7 @@ export default function Home() {
 
               <DividendIncomePanel refreshKey={refreshTrigger} />
 
-              <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+              <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
                 <h3 className="text-sm font-bold text-white tracking-wide uppercase mb-4">Hisse Pozisyonlarım</h3>
                 {portfolio.items.length === 0 ? (
                   <div className="text-center py-8">
@@ -323,7 +328,7 @@ export default function Home() {
                     <p className="text-gray-400 text-xs">Portföyünüzde henüz hisse bulunmamaktadır.</p>
                     <Link
                       href="/piyasalar"
-                      className="mt-3 inline-flex items-center gap-1 text-[#10B981] hover:text-[#34d399] text-xs font-semibold transition"
+                      className="mt-3 inline-flex items-center gap-1 text-[#4A87C7] hover:text-[#34d399] text-xs font-semibold transition"
                     >
                       Piyasalardan hisse alın <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
@@ -347,7 +352,7 @@ export default function Home() {
                         {portfolio.items.map((item) => (
                           <tr key={item.symbol} className="hover:bg-[#0B0E14]/60 transition">
                             <td className="py-3 font-bold text-white">
-                              <Link href={`/hisse/${item.symbol}`} className="hover:text-[#10B981] transition">
+                              <Link href={`/hisse/${item.symbol}`} className="hover:text-[#4A87C7] transition">
                                 {item.symbol}
                               </Link>
                               <span className="block text-[10px] text-gray-500 font-normal">{item.company_name}</span>
@@ -355,8 +360,8 @@ export default function Home() {
                             <td className="py-3 text-gray-300 tabular-nums">{item.quantity}</td>
                             <td className="py-3 text-gray-300 tabular-nums">{item.average_cost} TL</td>
                             <td className="py-3 text-gray-300 tabular-nums">{item.current_price} TL</td>
-                            <td className={`py-3 font-semibold tabular-nums ${item.profit_loss_pct >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"}`}>
-                              %{item.profit_loss_pct >= 0 ? "+" : ""}{item.profit_loss_pct}
+                            <td className={`py-3 font-semibold tabular-nums ${marketTextClass(item.profit_loss_pct)}`}>
+                              %{item.profit_loss_pct > 0 ? "+" : ""}{item.profit_loss_pct}
                             </td>
                             <td className="py-3 font-bold text-white text-right tabular-nums">
                               {item.current_value.toLocaleString("tr-TR")} TL
@@ -381,7 +386,7 @@ export default function Home() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+          <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
             <div className="flex items-center gap-1.5 mb-4">
               <Award className="w-5 h-5 text-[#F59E0B]" />
               <h3 className="text-sm font-bold text-white tracking-wide uppercase">Liderlik Tablosu</h3>
@@ -393,7 +398,7 @@ export default function Home() {
                   key={player.username}
                   className={`flex items-center justify-between text-xs p-2.5 rounded-lg border ${
                     user && (player.username === user.username || player.username === `${user.username} — Kişisel Bot`)
-                      ? "bg-[#10B981]/10 border-[#10B981]/30 font-semibold"
+                      ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 font-semibold"
                       : "bg-[#0B0E14] border-[#242B35]"
                   }`}
                 >
@@ -417,8 +422,8 @@ export default function Home() {
                       </span>
                     </div>
                   </div>
-                  <span className={`font-semibold tabular-nums ${player.profit_loss_pct >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"}`}>
-                    {player.profit_loss_pct >= 0 ? "+" : ""}{player.profit_loss_pct.toFixed(2)}%
+                  <span className={`font-semibold tabular-nums ${marketTextClass(player.profit_loss_pct)}`}>
+                    {player.profit_loss_pct > 0 ? "+" : ""}{player.profit_loss_pct.toFixed(2)}%
                   </span>
                 </div>
               ))}

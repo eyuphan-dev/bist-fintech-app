@@ -56,7 +56,7 @@ export default function InsiderTrackerBadge({ symbol }: InsiderTrackerBadgeProps
         onClick={() => setExpanded((v) => !v)}
         className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 border text-xs font-bold transition ${
           recentBuys.length > 0
-            ? "bg-[#10B981]/10 border-[#10B981]/25 text-[#10B981]"
+            ? "bg-[#4A87C7]/10 border-[#4A87C7]/25 text-[#4A87C7]"
             : "bg-[#F43F5E]/10 border-[#F43F5E]/25 text-[#F43F5E]"
         }`}
       >
@@ -76,7 +76,7 @@ export default function InsiderTrackerBadge({ symbol }: InsiderTrackerBadgeProps
       {expanded && (
         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
           {trades.map((t) => (
-            <div key={t.id} className="flex items-center justify-between bg-[#151921] border border-[#242B35] rounded-lg px-3 py-2 text-[11px]">
+            <div key={t.id} className="flex items-center justify-between bg-[#151921] border border-[#242B35] rounded-xl px-3 py-2 text-[11px]">
               <div>
                 <p className="text-gray-300 font-medium">{t.title_person}</p>
                 <p className="text-gray-500 text-[10px]">

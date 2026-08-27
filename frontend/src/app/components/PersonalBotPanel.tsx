@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import BalanceUpdateModal from "./BalanceUpdateModal";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import { marketTextClass } from "../../lib/marketColor";
 
 interface UserBotStatus {
   bot_name: string;
@@ -265,7 +266,7 @@ export default function PersonalBotPanel() {
           onClick={() => setShowStopConfirm(false)}
         >
           <div
-            className="relative w-full max-w-sm bg-[#151921] border border-[#242B35] rounded-2xl shadow-2xl overflow-hidden"
+            className="relative w-full max-w-sm bg-[#151921] border border-[#242B35] rounded-xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-[#F43F5E]/10 border-b border-[#F43F5E]/20 px-5 py-4 flex items-center justify-between">
@@ -306,14 +307,14 @@ export default function PersonalBotPanel() {
       )}
 
       {toast && (
-        <div className="flex items-center gap-2 bg-[#10B981]/10 border border-[#10B981]/25 text-[#10B981] rounded-lg px-3 py-2 text-[11px] font-medium">
+        <div className="flex items-center gap-2 bg-[#4A87C7]/10 border border-[#4A87C7]/25 text-[#4A87C7] rounded-lg px-3 py-2 text-[11px] font-medium">
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
           {toast}
         </div>
       )}
 
       {/* Bot Durum Kartı */}
-      <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+      <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-sm font-bold text-white">{status.bot_name}</h3>
@@ -322,7 +323,7 @@ export default function PersonalBotPanel() {
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${
               status.is_active
-                ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/25"
+                ? "bg-[#4A87C7]/10 text-[#4A87C7] border-[#4A87C7]/25"
                 : "bg-[#F43F5E]/10 text-[#F43F5E] border-[#F43F5E]/25"
             }`}>
               {status.is_active ? "AKTİF" : "PASİF"}
@@ -362,10 +363,10 @@ export default function PersonalBotPanel() {
           <div className="bg-[#0B0E14] border border-[#242B35] rounded-lg p-3">
             <span className="text-[9px] text-gray-500 uppercase font-bold">Toplam Getiri</span>
             <p className={`text-sm font-bold tabular-nums mt-0.5 flex items-center gap-1 ${
-              status.total_return_pct >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"
+              marketTextClass(status.total_return_pct)
             }`}>
               {status.total_return_pct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-              {status.total_return_pct >= 0 ? "+" : ""}{status.total_return_pct}%
+              {status.total_return_pct > 0 ? "+" : ""}{status.total_return_pct}%
             </p>
           </div>
           <div className="bg-[#0B0E14] border border-[#242B35] rounded-lg p-3">
@@ -384,7 +385,7 @@ export default function PersonalBotPanel() {
       </div>
 
       {/* Süre / Strateji Seçici */}
-      <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+      <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
         <h4 className="text-xs font-bold text-white uppercase tracking-wide mb-3">Bot Süresi & Stratejisi</h4>
         <div className="space-y-2">
           {TIME_FRAME_OPTIONS.map((opt) => (
@@ -415,7 +416,7 @@ export default function PersonalBotPanel() {
       </div>
 
       {/* Risk Modu Seçici */}
-      <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+      <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
         <h4 className="text-xs font-bold text-white uppercase tracking-wide mb-3">Risk Modu</h4>
         <div className="grid grid-cols-3 gap-2">
           {RISK_MODE_OPTIONS.map((opt) => (
@@ -444,7 +445,7 @@ export default function PersonalBotPanel() {
       </div>
 
       {/* İşlem Günlüğü — Oturum Bazlı */}
-      <div className="bg-[#151921] border border-[#242B35] rounded-2xl p-5">
+      <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
         <h4 className="text-xs font-bold text-white uppercase tracking-wide mb-4 flex items-center gap-1.5">
           <ArrowLeftRight className="w-3.5 h-3.5" /> Kişisel Bot İşlem Günlüğü
         </h4>
@@ -474,7 +475,7 @@ export default function PersonalBotPanel() {
                         {sessionNo}. Oturum
                       </span>
                       {s.is_active && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#10B981]/10 text-[#10B981]">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#4A87C7]/10 text-[#4A87C7]">
                           AKTİF
                         </span>
                       )}

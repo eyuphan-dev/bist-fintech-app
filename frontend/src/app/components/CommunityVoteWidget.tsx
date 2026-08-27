@@ -100,8 +100,8 @@ export default function CommunityVoteWidget({ symbol }: { symbol: string }) {
           type="button"
           className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition disabled:opacity-50 ${
             myVote === "UP"
-              ? "bg-[#10B981] text-[#0B0E14]"
-              : "bg-[#0B0E14] border border-[#242B35] text-gray-300 hover:text-[#10B981] hover:border-[#10B981]/40"
+              ? "bg-[#4A87C7] text-[#0B0E14]"
+              : "bg-[#0B0E14] border border-[#242B35] text-gray-300 hover:text-[#4A87C7] hover:border-[#4A87C7]/40"
           }`}
         >
           <TrendingUp className="w-3.5 h-3.5" /> Yükselir

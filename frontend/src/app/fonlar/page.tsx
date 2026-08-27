@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { RefreshCw, PiggyBank, Rocket } from "lucide-react";
 import { API_BASE } from "../context/AuthContext";
+import { marketTextClass } from "../../lib/marketColor";
 
 interface FundPrice {
   price: number;
@@ -57,7 +58,7 @@ export default function FonlarPage() {
 
   const riskColor = (level: number | null) => {
     if (level === null) return "text-gray-400";
-    if (level <= 2) return "text-[#10B981]";
+    if (level <= 2) return "text-[#4A87C7]";
     if (level <= 4) return "text-[#F59E0B]";
     return "text-[#F43F5E]";
   };
@@ -79,7 +80,7 @@ export default function FonlarPage() {
             onClick={() => setKatilimOnly((v) => !v)}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition ${
               katilimOnly
-                ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
+                ? "bg-[#4A87C7]/10 border-[#4A87C7]/30 text-[#4A87C7]"
                 : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
             }`}
           >
@@ -89,7 +90,7 @@ export default function FonlarPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-10 text-gray-500 text-xs">
-            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#10B981]" />
+            <RefreshCw className="w-4 h-4 animate-spin mr-2 text-[#4A87C7]" />
             Fonlar yükleniyor...
           </div>
         ) : funds.length === 0 ? (
@@ -97,14 +98,14 @@ export default function FonlarPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {funds.map((fund) => (
-              <div key={fund.code} className="bg-[#151921] border border-[#242B35] rounded-2xl p-4 space-y-2">
+              <div key={fund.code} className="bg-[#151921] border border-[#242B35] rounded-xl p-4 space-y-2">
                 <div className="flex items-start justify-between">
                   <div>
                     <span className="font-bold text-white">{fund.code}</span>
                     <p className="text-[11px] text-gray-500 mt-0.5 truncate max-w-[180px]">{fund.name}</p>
                   </div>
                   {fund.is_katilim_compliant && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#10B981]/10 text-[#10B981] whitespace-nowrap">
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#4A87C7]/10 text-[#4A87C7] whitespace-nowrap">
                       KATILIM
                     </span>
                   )}
@@ -124,9 +125,9 @@ export default function FonlarPage() {
                     </span>
                     {fund.latest_price.daily_return !== null && (
                       <span className={`text-xs font-semibold tabular-nums ${
-                        fund.latest_price.daily_return >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"
+                        marketTextClass(fund.latest_price.daily_return)
                       }`}>
-                        {fund.latest_price.daily_return >= 0 ? "+" : ""}{fund.latest_price.daily_return}%
+                        {fund.latest_price.daily_return > 0 ? "+" : ""}{fund.latest_price.daily_return}%
                       </span>
                     )}
                   </div>
@@ -170,7 +171,7 @@ export default function FonlarPage() {
                     <span className="font-bold text-white">{ipo.company_name}</span>
                     {ipo.symbol && <span className="text-[10px] text-gray-500">({ipo.symbol})</span>}
                     {ipo.is_katilim_compliant && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#10B981]/10 text-[#10B981]">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#4A87C7]/10 text-[#4A87C7]">
                         KATILIM
                       </span>
                     )}
