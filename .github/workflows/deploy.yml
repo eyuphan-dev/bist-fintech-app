@@ -20,7 +20,14 @@ jobs:
           script_stop: true
           script: |
             cd /opt/borsa
-            git pull origin master
+            # `git pull` YERINE fetch + reset: sunucu deponun bir AYNASIDIR,
+            # uzerinde yerel commit yapilmaz. `pull` birlestirme denedigi icin
+            # uzak gecmis yeniden yazildiginda "divergent branches" hatasiyla
+            # deploy'u kiriyordu (olculdu: 2026-08-28, gecmis temizligi sonrasi
+            # deploy 128 koduyla dustu). Reset her durumda uzaktakiyle birebir
+            # ayni duruma getirir.
+            git fetch origin master
+            git reset --hard origin/master
 
             cd /opt/borsa/backend
             ./venv/bin/pip install -r requirements.txt -q
