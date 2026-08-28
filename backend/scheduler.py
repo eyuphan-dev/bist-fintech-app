@@ -265,6 +265,18 @@ def refresh_market_data_job():
             db.rollback()
 
         print("[Scheduler] KAP Katılım Finansı formları tazeleniyor...")
+        # HAFTADA BİR geçmiş tarama: şirketler bu formu DÖNEMSEL yayımlıyor
+        # (yılda 2-4 kez), günlük taramanın hiçbir faydası yok ama KAP istek
+        # sınırını yiyor. Pazar günü tarama, hafta boyunca da günlük
+        # senkronizasyon bulunanları güne yayarak indiriyor.
+        try:
+            if datetime.now(TR_TZ).weekday() == 6:  # Pazar
+                from katilim_kap import gecmisi_tara
+                gecmisi_tara(db)
+        except Exception as e:
+            print(f"[Scheduler] Katılım geçmiş tarama hatası: {e}")
+            db.rollback()
+
         try:
             # KAP bildirimleri BU İŞTE yukarıda tazelendiği için formlar da
             # hemen ardından işlenir; sıralama önemli, önce bildirim listesi

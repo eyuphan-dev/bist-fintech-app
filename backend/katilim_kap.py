@@ -51,10 +51,12 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 import requests
+
+from text_utils import tr_fold
 
 KAP_BILDIRIM_URL = "https://www.kap.org.tr/tr/Bildirim/{index}"
 
@@ -216,8 +218,9 @@ def index_coz(kap_url: Optional[str]) -> Optional[int]:
 
 
 def kap_katilim_formlarini_senkronize_et(db, limit: Optional[int] = None,
-                                         gecikme_sn: float = 0.7,
-                                         zorla: bool = False) -> Dict[str, int]:
+                                         gecikme_sn: float = 1.2,
+                                         zorla: bool = False,
+                                         tur_basi_indirme: int = 25) -> Dict[str, int]:
     """
     Veritabanındaki "Katılım Finansı İlkeleri Bilgi Formu" KAP bildirimlerini
     gezip her hisse için en YENİ formu indirir, ayrıştırır ve `stocks`
@@ -251,7 +254,8 @@ def kap_katilim_formlarini_senkronize_et(db, limit: Optional[int] = None,
     if limit:
         semboller = semboller[:limit]
 
-    sayac = {"islenen": 0, "yazilan": 0, "atlanan": 0, "hatali": 0, "degismemis": 0}
+    sayac = {"islenen": 0, "yazilan": 0, "atlanan": 0, "hatali": 0,
+             "degismemis": 0, "ertelenen": 0}
     for sembol in semboller:
         bildirim = en_yeni[sembol]
         index = index_coz(bildirim.kap_url)
@@ -273,6 +277,15 @@ def kap_katilim_formlarini_senkronize_et(db, limit: Optional[int] = None,
         # Durağan durumda bu döngü artık sıfır istek atar.
         if not zorla and stock.kap_katilim_url == bildirim.kap_url:
             sayac["degismemis"] = sayac.get("degismemis", 0) + 1
+            continue
+
+        # TUR BAŞINA İNDİRME SINIRI. Geçmiş tarama 147 hissede form buldu;
+        # hepsini tek turda indirmeye çalışmak KAP'ın istek sınırına
+        # tosluyor (ölçüldü: 101 indirmeden sonra 429, ve ardından SORGU
+        # API'si de kısıtlandı). Güne yayılınca birkaç turda tamamlanıyor
+        # ve zaten indirilen atlandığı için her tur ilerliyor.
+        if sayac["islenen"] >= tur_basi_indirme:
+            sayac["ertelenen"] = sayac.get("ertelenen", 0) + 1
             continue
 
         sayac["islenen"] += 1
@@ -304,5 +317,131 @@ def kap_katilim_formlarini_senkronize_et(db, limit: Optional[int] = None,
     db.commit()
     print(f"[KatilimKAP] {sayac['islenen']} form işlendi, {sayac['yazilan']} hisse "
           f"güncellendi, {sayac['hatali']} ayrıştırılamadı, {sayac['atlanan']} atlandı, "
-          f"{sayac['degismemis']} değişmemiş (indirilmedi).")
+          f"{sayac['degismemis']} değişmemiş, {sayac['ertelenen']} sonraki tura ertelendi.")
+    return sayac
+
+
+def _tarih_coz(ham: Optional[str]) -> Optional[datetime]:
+    """KAP'ın '20.08.2026 22:54:15' biçimini çözer."""
+    if not ham:
+        return None
+    for bicim in ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(ham.strip(), bicim)
+        except ValueError:
+            continue
+    return None
+
+
+# Üst üste bu kadar 429 alınırsa tarama durdurulur. Devam etmek yalnızca
+# sınırı daha da zorlar; ölçüldü — ısrar edince KAP SORGU API'sini de
+# kısıtlıyor ve tarama 147 yerine 31 form döndürür hale geliyor.
+ARDISIK_HATA_SINIRI = 3
+
+
+def gecmisi_tara(db, ay: int = 14, pencere_gun: int = 5,
+                 sorgu_gecikme_sn: float = 1.5) -> Dict[str, int]:
+    """
+    KAP'ın GEÇMİŞ akışını tarayıp katılım formu bildirimlerini KENDİ
+    `kap_notifications` tablomuza yazar. DETAY SAYFASI İNDİRMEZ.
+
+    NEDEN AYRI BİR TARAMA GEREKTİ
+    ----------------------------
+    Günlük senkronizasyon yalnızca kendi tablomuzdaki bildirimlere bakar; o
+    tablo son birkaç haftayı tutuyor. Sonuç: 165 hissenin yalnızca 36'sında
+    katılım beyanı vardı. Oysa şirketler bu formu dönemsel yayımlıyor ve
+    eskileri KAP'ta duruyor — geçmiş tarandığında 165 hissenin 147'sinde
+    form bulundu.
+
+    PENCERE NEDEN 5 GÜN
+    -------------------
+    KAP sorgusu tek istekte EN FAZLA 2000 kayıt döndürüp fazlasını SESSİZCE
+    KESİYOR. Ölçüldü: aynı ay 30 günlük tek pencerede 68 form verirken, 5
+    günlük dilimlere bölününce 173 form verdi — geniş pencerede formların
+    %60'ı kayboluyordu.
+
+    NEDEN DETAY İNDİRMİYOR
+    ----------------------
+    İlk sürüm bulduğu formların detay sayfalarını da indiriyordu ve KAP'ın
+    istek sınırına toslıyordu (ölçüldü: 101 indirmeden sonra 429, ve ikinci
+    denemede SORGU API'si de kısıtlanıp 147 yerine 31 form döndürdü — yani
+    hırslı davranmak taramanın kendisini bozuyor).
+
+    Artık iş bölünüyor: burası yalnızca "hangi hissenin hangi bildirimi var"
+    bilgisini kendi tablomuza yazar, indirmeyi günlük senkronizasyon
+    (`kap_katilim_formlarini_senkronize_et`) kendi hız sınırıyla, güne
+    yayarak yapar. Zaten indirileni atladığı için her gün biraz ilerler.
+    """
+    import models
+    from kap_client import _query_disclosures
+
+    bugun = datetime.utcnow()
+    baslangic = bugun - timedelta(days=30 * ay)
+    katalog = {s.symbol for s in db.query(models.Stock).all()}
+    hisse_id = {s.symbol: s.id for s in db.query(models.Stock).all()}
+
+    # sembol -> (publish_date, disclosure_index)
+    en_yeni: Dict[str, tuple] = {}
+    pencere_sayisi = 0
+    ardisik_hata = 0
+
+    imlec = baslangic
+    while imlec < bugun:
+        bit = min(imlec + timedelta(days=pencere_gun), bugun)
+        pencere_sayisi += 1
+        try:
+            kayitlar = _query_disclosures(imlec, bit)
+            ardisik_hata = 0
+        except Exception as e:
+            ardisik_hata += 1
+            print(f"[KatilimKAP] {imlec.date()}..{bit.date()} sorgulanamadı: {e}")
+            if ardisik_hata >= ARDISIK_HATA_SINIRI:
+                print(f"[KatilimKAP] {ardisik_hata} ardışık hata — tarama durduruldu. "
+                      "İstek sınırı dolmuş olabilir, bir sonraki turda denenecek.")
+                break
+            imlec = bit
+            time.sleep(sorgu_gecikme_sn * 2)
+            continue
+
+        for kayit in kayitlar:
+            baslik = kayit.get("summary") or kayit.get("subject") or ""
+            if BASLIK_ISARETI not in tr_fold(baslik):
+                continue
+            sembol = (kayit.get("stockCodes") or "").strip().upper()
+            index = kayit.get("disclosureIndex")
+            if not sembol or sembol not in katalog or not index:
+                continue
+            tarih = _tarih_coz(kayit.get("publishDate")) or datetime.min
+            mevcut = en_yeni.get(sembol)
+            if mevcut is None or tarih > mevcut[0]:
+                en_yeni[sembol] = (tarih, index)
+
+        imlec = bit
+        if sorgu_gecikme_sn:
+            time.sleep(sorgu_gecikme_sn)
+
+    sayac = {"pencere": pencere_sayisi, "bulunan": len(en_yeni), "eklenen": 0, "zaten_var": 0}
+
+    for sembol, (tarih, index) in sorted(en_yeni.items()):
+        url = KAP_BILDIRIM_URL.format(index=index)
+        var = (
+            db.query(models.KapNotification)
+            .filter_by(symbol=sembol, kap_url=url)
+            .first()
+        )
+        if var:
+            sayac["zaten_var"] += 1
+            continue
+        db.add(models.KapNotification(
+            stock_id=hisse_id.get(sembol),
+            symbol=sembol,
+            title="Katılım Finansı İlkeleri Bilgi Formu",
+            kap_url=url,
+            publish_date=tarih if tarih != datetime.min else bugun,
+        ))
+        sayac["eklenen"] += 1
+
+    db.commit()
+    print("[KatilimKAP] Geçmiş tarama: {pencere} pencere, {bulunan} hissede form, "
+          "{eklenen} yeni bildirim kaydedildi, {zaten_var} zaten vardı.".format(**sayac))
     return sayac
