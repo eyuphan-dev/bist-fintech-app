@@ -1,20 +1,17 @@
 # BIST Sanal Borsa Simülatörü
 
 Borsa İstanbul hisseleri için **gerçek para kullanılmayan** bir yatırım
-simülatörü. Kullanıcı sanal bakiyeyle başlar, gerçek fiyatlarla alım-satım
-yapar ve ücretli terminallerde para karşılığı sunulan analiz araçlarına
-ücretsiz erişir.
+simülatörü. Sanal bakiyeyle başlarsınız, gerçek fiyatlarla alım-satım
+yaparsınız.
 
 **https://borsa-trader.duckdns.org**
 
-## Öne çıkanlar
+Odağı **katılım (faizsiz) finans**. Uygunluk bilgisi tahmin değil, şirketlerin
+KAP'a bildirdiği resmî beyandan okunur ve kaynağıyla birlikte gösterilir.
 
-- Katılım (faizsiz) uygunluk taraması
-- Strateji backtest'i ve DCA simülasyonu
-- Piotroski F-Skoru, analist konsensüsü, finansal tablolar
-- Performans karnesi — isabet oranı ve ortalama tutma süresi
-- KAP bildirimleri, içeriden öğrenen işlemleri, yabancı takas trendi
-- Kişisel işlem botu, web push bildirimleri, PWA
+Analiz araçları, temettü ve halka arz takvimi, KAP bildirimleri, Türkçe piyasa
+haberleri, portföy risk ve performans panelleri, işlem botu ve push bildirimi
+içerir.
 
 ## Teknoloji
 
@@ -24,18 +21,31 @@ FastAPI · SQLAlchemy · PostgreSQL · Next.js 16 · TailwindCSS · APScheduler
 
 ```bash
 # Backend
-cd backend && python -m venv venv
+cd backend
+python -m venv venv
 ./venv/Scripts/python.exe -m pip install -r requirements.txt
 ./venv/Scripts/python.exe -m uvicorn main:app --reload --port 4000
 
 # Frontend
-cd frontend && npm install && npm run dev
+cd frontend
+npm install
+npm run dev
 ```
 
 `DATABASE_URL` tanımlı değilse yerelde SQLite kullanılır.
+`DISABLE_SCHEDULER=1` zamanlanmış işleri kapatır.
+
+## Test
+
+```bash
+cd backend && python smoke_test.py
+```
+
+Backend'in ayakta olması gerekir. Her push'ta GitHub Actions aynı testi
+Python 3.9 ve 3.12 üzerinde koşar ve ön yüzü derler.
 
 ---
 
 > Yatırım tavsiyesi değildir. Gerçek para kullanılmaz, veriler gecikmelidir.
 >
-
+> Design by Eyüphan İpek
