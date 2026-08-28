@@ -9,6 +9,7 @@ kap_client.py ile aynı savunmacı (defensive) yaklaşımı izler: uç değişir
 veya erişilemezse sessizce boş liste döner, uygulamayı düşürmez.
 """
 
+import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
@@ -88,7 +89,9 @@ def fetch_insider_trades(db: Session, symbol: str, limit: int = 10) -> List[Dict
     return results
 
 
-def refresh_all_insider_trades(db: Session, lookback_days: int = 30) -> int:
+def refresh_all_insider_trades(db: Session, lookback_days: int = 30,
+                               pencere_gun: int = 5,
+                               sorgu_gecikme_sn: float = 1.0) -> int:
     """
     TÜM aktif hisseler için içeriden öğrenenler ticaretini TEK KAP çağrısıyla tazeler.
 
@@ -100,18 +103,48 @@ def refresh_all_insider_trades(db: Session, lookback_days: int = 30) -> int:
     `_query_disclosures` zaten TÜM şirketlerin bildirimini tek seferde
     döndürüyor, yani 165 hisse için 165 istek yerine TEK istek yeterli.
 
-    Bu fonksiyon o tek isteği atar, sonucu tüm aktif hisselere dağıtır.
+    Bu fonksiyon o isteği atar, sonucu tüm aktif hisselere dağıtır.
+
+    PENCERE NEDEN 5 GÜN (ölçülerek bulundu)
+    ---------------------------------------
+    Tek bir geniş sorgu yetmiyor: KAP `byCriteria` ucu istek başına EN FAZLA
+    2000 kayıt döndürüp fazlasını SESSİZCE KESİYOR — en yeniden geriye doğru.
+    Yani 30 günlük tek sorgu, o dönemde 2000'den fazla bildirim varsa
+    eskilerini hiç görmez. Aynı tuzak katılım formlarında ölçüldü: 30 günlük
+    tek pencere 68 form verirken 5 günlük dilimler 173 form verdi, yani
+    %60'ı kayboluyordu.
+
+    Dilimler arasında gecikme var; KAP istek sınırı uyguluyor ve ısrarcı
+    tarama sorgu ucunun kendisini kısıtlatıyor.
     """
     stocks = db.query(models.Stock).filter_by(is_active=True).all()
     by_symbol = {s.symbol.upper(): s for s in stocks}
     if not by_symbol:
         return 0
 
-    try:
-        now = datetime.utcnow()
-        items = _query_disclosures(now - timedelta(days=lookback_days), now)
-    except Exception as e:
-        print(f"[InsiderClient] Toplu KAP sorgusu başarısız: {e}")
+    now = datetime.utcnow()
+    items: List[Dict[str, Any]] = []
+    imlec = now - timedelta(days=lookback_days)
+    ardisik_hata = 0
+    while imlec < now:
+        bit = min(imlec + timedelta(days=pencere_gun), now)
+        try:
+            items.extend(_query_disclosures(imlec, bit))
+            ardisik_hata = 0
+        except Exception as e:
+            ardisik_hata += 1
+            print(f"[InsiderClient] {imlec.date()}..{bit.date()} sorgulanamadı: {e}")
+            if ardisik_hata >= 3:
+                # Israr etmek KAP'ın sorgu ucunu da kısıtlatıyor; elde
+                # olanla devam et, kalanı bir sonraki tur alsın.
+                print("[InsiderClient] 3 ardışık hata — tarama durduruldu.")
+                break
+        imlec = bit
+        if sorgu_gecikme_sn:
+            time.sleep(sorgu_gecikme_sn)
+
+    if not items:
+        print("[InsiderClient] KAP sorgusundan kayıt gelmedi.")
         return 0
 
     yazilan = 0
