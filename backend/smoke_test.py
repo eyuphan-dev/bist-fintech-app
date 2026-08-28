@@ -190,7 +190,14 @@ test("Haber: KAP akisi", PROD, "/api/kap/news", kontrol=dolu(1))
 test("Haber: onemli pay sahibi", PROD, "/api/kap/major-holder-news", kontrol=dolu(1))
 test("Haber: hisse KAP bildirimleri", PROD, "/api/stocks/{}/kap-disclosures".format(S), kontrol=dolu(1))
 test("Haber: hisse haberleri", PROD, "/api/stocks/{}/news".format(S), kontrol=dolu(1))
-test("Kurumsal: iceriden ogrenen", PROD, "/api/stocks/{}/insider-trades".format(S), kontrol=dolu(1))
+# ICERIDEN OGRENEN: belirli bir hisseye BAKILMAZ. Ilk yazimda THYAO'ya
+# bakiliyordu ve test surekli "bos" veriyordu — ama sebep hata degildi,
+# THYAO'da gercekten bildirilmis iceriden ogrenen islemi yok. Veri KAP'ta
+# dogal olarak seyrek (uretimde 23 hissede 91 kayit). Dogru soru "bu hissede
+# var mi" degil, "boru hatti calisiyor mu": uc 200 donmeli ve verisi OLAN bir
+# hissede kayit gelmeli.
+test("Kurumsal: iceriden ogrenen (uc)", PROD, "/api/stocks/{}/insider-trades".format(S))
+test("Kurumsal: iceriden ogrenen (veri)", PROD, "/api/stocks/GLYHO/insider-trades", kontrol=dolu(1))
 test("Kurumsal: yabanci takas trendi", PROD, "/api/stocks/{}/foreign-holding-trend".format(S), kontrol=dolu(1))
 test("Kurumsal: temettu gecmisi", PROD, "/api/stocks/{}/dividend-history".format(S), kontrol=dolu(1))
 test("Takvim: bilanco takvimi", PROD, "/api/earnings-calendar", kontrol=dolu(1))
