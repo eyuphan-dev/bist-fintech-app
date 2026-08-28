@@ -1,0 +1,11 @@
+# Kabuk betikleri ve YAML HER ZAMAN LF ile saklanir ve checkout edilir.
+#
+# NEDEN: gelistirme Windows'ta yapiliyor ve git varsayilan olarak
+# core.autocrlf ile satir sonlarini CRLF'e cevirebiliyor. Bir kabuk
+# betigi CRLF ile Linux sunucuya inerse bash "\r: command not found"
+# hatasi verir ve servis acilmaz. Bu gercekten yasandi: backend/start.sh
+# repoya CRLF olarak kaydedildi ve bir sonraki deploy'da pm2'nin
+# yeniden baslatmasini kiracakti.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
