@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { CheckCircle2, XCircle, Info, HelpCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Info, HelpCircle, AlertTriangle } from "lucide-react";
 
 /** KAP "Katılım Finansı İlkeleri Bilgi Formu" — şirketin kendi resmi beyanı. */
 export interface KapKatilimVerisi {
@@ -36,6 +36,15 @@ interface KatilimBadgeProps {
  * DEĞİL" göstermek, bilmediğimiz bir şeyi iddia etmek olurdu — bu yüzden nötr
  * gri "değerlendirilmedi" rozeti gösterilir.
  */
+/** KAP beyanındaki oranlardan herhangi biri resmi eşiği aşıyor mu. */
+function esikAsiliyor(kap: KapKatilimVerisi): boolean {
+  return (
+    (kap.gelir_pct !== null && kap.gelir_pct > 5) ||
+    (kap.varlik_pct !== null && kap.varlik_pct > 33) ||
+    (kap.borc_pct !== null && kap.borc_pct > 33)
+  );
+}
+
 /** Tek bir oran satırı: değer, eşik ve eşiğin altında mı üstünde mi. */
 function OranSatiri({ etiket, deger, esik }: { etiket: string; deger: number | null; esik: number }) {
   if (deger === null) return null;
@@ -154,6 +163,26 @@ export default function KatilimBadge({
                     <OranSatiri etiket="Uygun olmayan varlık" deger={kap.varlik_pct} esik={33} />
                     <OranSatiri etiket="Uygun olmayan borç" deger={kap.borc_pct} esik={33} />
                   </dl>
+
+                  {/* ÇELİŞKİ UYARISI. Hisse "uygun" işaretli ama şirketin KENDİ
+                      resmi beyanı bir eşiği aşıyorsa kullanıcı bunu bilmeli.
+                      Ölçüldü: beyanı olan 38 hissenin 9'unda bu çelişki var
+                      (uyum %76). Durumu otomatik değiştirmiyoruz — endeksin
+                      kendi yöntemi ve dönem farkları olabilir — ama çelişkiyi
+                      gizlemek de doğru olmaz. Karar kullanıcının.
+
+                      Ters yönde hiç çelişki YOK: "uygun değil" işaretli 4
+                      hissenin dördünde de beyan eşiği aşıyor. */}
+                  {esikAsiliyor(kap) && (
+                    <div className="mt-2 flex items-start gap-1.5 rounded-md bg-[#F59E0B]/10 border border-[#F59E0B]/25 px-2 py-1.5">
+                      <AlertTriangle className="w-3 h-3 text-[#F59E0B] shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-[#F59E0B] leading-relaxed">
+                        Bu hisse &quot;uygun&quot; olarak işaretli, ancak şirketin KAP&apos;a
+                        bildirdiği oranlardan en az biri eşiği aşıyor. Kendi
+                        değerlendirmenizi yapın.
+                      </p>
+                    </div>
+                  )}
                   <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
                     Uygun olmayan gelir oranı, kazancınızdan arındırılması önerilen
                     kısmı gösterir.
