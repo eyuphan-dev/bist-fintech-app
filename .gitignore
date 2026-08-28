@@ -34,10 +34,7 @@ Thumbs.db
 # Kişisel deploy notları (yalnızca yerelde, repoya dahil değil)
 eyup.md
 
-# Proje rehberi ve ajan yonergeleri — yerelde kalir, GitHub'da gorunmez.
-# GitHub'da YALNIZCA README.md gorunsun isteniyor.
-projem.md
-CLAUDE.md
-AGENTS.md
-frontend/CLAUDE.md
-frontend/AGENTS.md
+# GitHub'da YALNIZCA README.md gorunsun; diger tum .md dosyalari
+# yerelde kalir (proje notlari, calisma dosyalari).
+*.md
+!README.md
