@@ -1,9 +1,16 @@
 # Environment / secrets
+#
+# TUM .env turevleri yoksayilir, YALNIZCA .env.example takip edilir.
+# Onceki kurallar yalnizca bilinen adlari sayiyordu (.env, .env.local) ve
+# .env.bak-20260823, .env.prod gibi turevleri KAPSAMIYORDU — sunucuda
+# olusan iki yedek bu yuzden "takip edilmeyen" olarak goruluyordu, yani
+# dikkatsiz bir `git add -A` onlari commit edebilirdi.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 **/.env
-**/.env.local
+**/.env.*
+!**/.env.example
 
 # Python
 backend/venv/
