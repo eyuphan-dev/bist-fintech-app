@@ -296,6 +296,12 @@ class StockPriceResponse(BaseModel):
     price: float
     volume: Optional[int]
     recorded_at: datetime
+    # Yalnizca gunluk (1W/1M/1Y/5Y) araliklarda dolu gelir -- mum grafigi
+    # icin gerekir. Gun ici (1D) fiyat tikinde yuksek/dusuk/acilis kavrami
+    # yoktur, o yuzden orada hep None doner.
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -1083,3 +1089,29 @@ class ExtraIndicatorsResponse(BaseModel):
     adx: Optional[float] = None
     obv: Optional[float] = None
     obv_slope: Optional[float] = None
+
+
+class IndicatorSeriesResponse(BaseModel):
+    """
+    Grafik üzerine bindirilecek/altına eklenecek göstergelerin TAM SERİSİ.
+    Her liste `dates` ile aynı uzunlukta ve aynı sırada; hesaplanamayan
+    noktalarda None döner (ör. SMA200'ün ilk 200 günü).
+    """
+    available: bool
+    reason: Optional[str] = None
+    dates: List[str] = Field(default_factory=list)
+    sma20: List[Optional[float]] = Field(default_factory=list)
+    sma50: List[Optional[float]] = Field(default_factory=list)
+    sma200: List[Optional[float]] = Field(default_factory=list)
+    ema20: List[Optional[float]] = Field(default_factory=list)
+    bollinger_upper: List[Optional[float]] = Field(default_factory=list)
+    bollinger_mid: List[Optional[float]] = Field(default_factory=list)
+    bollinger_lower: List[Optional[float]] = Field(default_factory=list)
+    rsi14: List[Optional[float]] = Field(default_factory=list)
+    macd: List[Optional[float]] = Field(default_factory=list)
+    macd_signal: List[Optional[float]] = Field(default_factory=list)
+    macd_hist: List[Optional[float]] = Field(default_factory=list)
+    stochastic_k: List[Optional[float]] = Field(default_factory=list)
+    stochastic_d: List[Optional[float]] = Field(default_factory=list)
+    adx: List[Optional[float]] = Field(default_factory=list)
+    obv: List[Optional[float]] = Field(default_factory=list)

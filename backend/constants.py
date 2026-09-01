@@ -27,3 +27,12 @@ EXTREME_CHANGE_GUARD_PCT = 50.0
 # emir, bot.py) ayni sabiti ve ayni yardimci fonksiyonlari kullaniyor
 # (bkz. transactions.py: alim_maliyeti / satim_geliri).
 KOMISYON_ORANI_PCT = 0.02
+
+
+# ---------------------------------------------------------------------------
+# Grafik/gosterge zaman araligi kodlari
+# ---------------------------------------------------------------------------
+# "1D" haric (o, gun ici stock_prices tablosundan gelir). Hem /history hem
+# /indicator-series ayni araliklari kullanir; tek yerden tanimlanir ki ikisi
+# zamanla birbirinden sapmasin.
+HISTORY_RANGE_DAYS = {"1W": 7, "1M": 31, "1Y": 366, "5Y": 1827}

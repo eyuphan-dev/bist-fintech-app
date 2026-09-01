@@ -524,6 +524,7 @@ export default function StockDetailPage() {
                     // aralığın ilk noktasıdır, yani "bu dönemde ne kadar değişti".
                     baseline={chartRange === "1D" ? stockDetail.previous_close ?? null : null}
                     intraday={chartRange === "1D"}
+                    range={chartRange}
                   />
                 )}
               </div>

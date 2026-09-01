@@ -42,7 +42,7 @@ from schemas import (
     NotificationPreferenceRequest, NotificationPreferenceResponse, NotificationResponse, UnreadCountResponse,
     WatchlistItemResponse, ScreenerItemResponse,
     PushSubscribeRequest, PushStatusResponse,
-    ScorecardResponse, BacktestResponse, ExtraIndicatorsResponse,
+    ScorecardResponse, BacktestResponse, ExtraIndicatorsResponse, IndicatorSeriesResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -68,7 +68,7 @@ from kap_topics import is_major_holder_news
 from sentiment import score_sentiment
 from yfinance_client import fetch_stock_news
 from cache import get_cached_news, set_cached_news
-from constants import EXTREME_CHANGE_GUARD_PCT
+from constants import EXTREME_CHANGE_GUARD_PCT, HISTORY_RANGE_DAYS
 
 def _rate_limit_key(request: Request) -> str:
     """
@@ -899,10 +899,6 @@ def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
     )
 
 
-# Aralık kodu -> kaç gün geriye gidileceği (1D hariç, o intraday tablosundan gelir)
-HISTORY_RANGE_DAYS = {"1W": 7, "1M": 31, "1Y": 366, "5Y": 1827}
-
-
 @app.get("/api/stocks/{symbol}/history", response_model=List[StockPriceResponse])
 def get_stock_history(symbol: str, range: str = "1D", db: Session = Depends(get_db)):
     """
@@ -961,6 +957,9 @@ def get_stock_history(symbol: str, range: str = "1D", db: Session = Depends(get_
             price=float(r.close),
             volume=r.volume,
             recorded_at=datetime.combine(r.trade_date, datetime.min.time()),
+            open=float(r.open) if r.open is not None else None,
+            high=float(r.high) if r.high is not None else None,
+            low=float(r.low) if r.low is not None else None,
         )
         for r in daily_records
     ]
@@ -2447,6 +2446,20 @@ def get_extra_indicators(symbol: str, db: Session = Depends(get_db)):
     """
     from indicators import compute_extra_indicators
     return ExtraIndicatorsResponse(**compute_extra_indicators(db, symbol))
+
+
+@app.get("/api/stocks/{symbol}/indicator-series", response_model=IndicatorSeriesResponse)
+def get_indicator_series(symbol: str, range: str = "1Y", db: Session = Depends(get_db)):
+    """
+    Grafik üzerine bindirilecek (SMA/EMA/Bollinger) ve altına panel olarak
+    eklenecek (RSI/MACD/Stochastic/ADX/OBV) göstergelerin TAM ZAMAN SERİSİ.
+    TradingView/Midas'taki "gösterge ekle" özelliğinin karşılığı.
+
+    1D desteklenmez: gün içi fiyat tikinde yüksek/düşük yok, göstergelerin
+    çoğu (Bollinger, Stochastic, ADX) tanımı gereği bunlara ihtiyaç duyar.
+    """
+    from indicator_series import compute_indicator_series
+    return IndicatorSeriesResponse(**compute_indicator_series(db, symbol, range))
 
 
 @app.get("/api/backtest/strategies")
