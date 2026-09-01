@@ -753,7 +753,12 @@ def calculate_dca_backtest(db: Session, symbol: str, monthly_amount: float, mont
 
     for idx, row in history.iterrows():
         price = float(row["Close"])
-        if price <= 0:
+        # `price <= 0` NaN'i YAKALAMAZ -- Python'da nan ile her karsilastirma
+        # False doner. yfinance bazen islem gormeyen aylar icin NaN kapanis
+        # dondurur; bu satir atlanmazsa total_shares/total_invested NaN'a
+        # bulasir ve yanit JSON'a serialize edilemeyip HTTP 500 verir
+        # (CI'da yakalandi: "Out of range float values are not JSON compliant: nan").
+        if price <= 0 or math.isnan(price):
             continue
         shares_bought = monthly_amount / price
         total_shares += shares_bought
