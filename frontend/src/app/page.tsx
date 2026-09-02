@@ -140,8 +140,8 @@ export default function Home() {
 
         <div className="w-full max-w-md p-8 rounded-2xl bg-[#151921] border border-[#242B35]">
           <div className="flex flex-col items-center mb-6">
-            <div className="w-12 h-12 bg-[#10B981]/10 rounded-xl flex items-center justify-center mb-3">
-              <LineChart className="w-7 h-7 text-[#10B981]" />
+            <div className="w-12 h-12 bg-[#C46D2C] rounded-xl flex items-center justify-center mb-3">
+              <LineChart className="w-7 h-7 text-white" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white">BIST Simülasyonu</h1>
             <p className="text-gray-400 text-sm mt-1">Yapay Zeka Destekli Borsa Deneyimi</p>

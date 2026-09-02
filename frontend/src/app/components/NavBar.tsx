@@ -106,7 +106,9 @@ export default function NavBar() {
     >
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2 shrink-0 min-h-[44px] md:min-h-0 -ml-1 pl-1 pr-1 md:ml-0 md:px-0">
-          <LineChart className="w-6 h-6 text-[#10B981]" />
+          <span className="w-8 h-8 rounded-lg bg-[#C46D2C] flex items-center justify-center shrink-0">
+            <LineChart className="w-5 h-5 text-white" />
+          </span>
           <span className="font-bold text-lg tracking-tight text-white hidden sm:inline">BIST Simülasyonu</span>
         </Link>
 
