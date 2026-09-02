@@ -26,6 +26,11 @@ import {
   Gauge,
   RotateCcw,
   PanelBottom,
+  Anchor,
+  Flame,
+  Percent,
+  Radar,
+  Droplets,
 } from "lucide-react";
 import { marketColor, UP, DOWN } from "../../lib/marketColor";
 import { API_BASE } from "../context/AuthContext";
@@ -61,8 +66,8 @@ interface Okuma {
   pct: number | null;
 }
 
-type OverlayKey = "sma20" | "sma50" | "sma200" | "ema20" | "bollinger";
-type SubpaneKey = "hacim" | "rsi" | "macd" | "stochastic" | "adx" | "obv";
+type OverlayKey = "sma20" | "sma50" | "sma200" | "ema20" | "bollinger" | "vwap" | "supertrend";
+type SubpaneKey = "hacim" | "rsi" | "macd" | "stochastic" | "adx" | "obv" | "williams_r" | "cci" | "mfi";
 
 interface IndicatorSeriesData {
   available: boolean;
@@ -82,6 +87,12 @@ interface IndicatorSeriesData {
   stochastic_d: (number | null)[];
   adx: (number | null)[];
   obv: (number | null)[];
+  supertrend_up: (number | null)[];
+  supertrend_down: (number | null)[];
+  williams_r: (number | null)[];
+  cci: (number | null)[];
+  mfi: (number | null)[];
+  vwap: (number | null)[];
 }
 
 const OVERLAY_TANIM: { key: OverlayKey; label: string; renk: string; aciklama: string; icon: any }[] = [
@@ -90,6 +101,8 @@ const OVERLAY_TANIM: { key: OverlayKey; label: string; renk: string; aciklama: s
   { key: "sma200", label: "SMA 200", renk: "#A855F7", aciklama: "Uzun vadeli trend ortalaması", icon: TrendingUp },
   { key: "ema20", label: "EMA 20", renk: "#EC4899", aciklama: "Son fiyatlara daha duyarlı ortalama", icon: Zap },
   { key: "bollinger", label: "Bollinger Bantları", renk: "#8A99AD", aciklama: "Volatilite bandı — dar/geniş açılım", icon: Layers },
+  { key: "vwap", label: "VWAP (Haftalık)", renk: "#22D3EE", aciklama: "Hacim ağırlıklı ortalama fiyat, adil değer referansı", icon: Anchor },
+  { key: "supertrend", label: "SuperTrend", renk: "#F97316", aciklama: "Tek çizgiyle trend yönü — altında al, üstünde sat", icon: Flame },
 ];
 
 const SUBPANE_TANIM: { key: SubpaneKey; label: string; aciklama: string; icon: any }[] = [
@@ -99,6 +112,9 @@ const SUBPANE_TANIM: { key: SubpaneKey; label: string; aciklama: string; icon: a
   { key: "stochastic", label: "Stochastic (14,3)", aciklama: "Kapanışın son bandın neresinde olduğu", icon: ArrowUpDown },
   { key: "adx", label: "ADX (14)", aciklama: "Trendin GÜCÜNÜ ölçer, yönünü değil", icon: Gauge },
   { key: "obv", label: "OBV", aciklama: "Hacmin yönlü birikimi", icon: LineChartIcon },
+  { key: "williams_r", label: "Williams %R (14)", aciklama: "Stochastic'in ters ölçekli hali (-100..0)", icon: Percent },
+  { key: "cci", label: "CCI (20)", aciklama: "Fiyatın ortalamadan sapması, dönüş sinyali", icon: Radar },
+  { key: "mfi", label: "MFI (14)", aciklama: "Hacimli RSI — fiyat + hacmi birlikte ölçer", icon: Droplets },
 ];
 
 // Mobilde ekranın altındaki paneller kalabalıklaşıp kullanılamaz hale
@@ -387,6 +403,26 @@ export default function TradingViewChart({
         });
         orta.setData(buildLineData(indicatorData.bollinger_mid));
       }
+
+      // NEDEN AÇIK CAM GÖBEĞİ: koyu teal (#14B8A6 gibi) alan grafiğinin
+      // kendi yeşil dolgusuna görsel olarak çok yakın kalıyor ve ince
+      // çizgi neredeyse kayboluyordu (ölçüldü). Yüksek parlaklıktaki
+      // #22D3EE her zeminde net ayırt ediliyor.
+      overlayCizgi("vwap", indicatorData.vwap, "#22D3EE");
+
+      if (tercih.overlays.includes("supertrend")) {
+        // İki ayrı seri: yükseliş/düşüş bölümleri farklı renklerde --
+        // lightweight-charts'ta tek seri nokta başına renk değiştiremiyor.
+        // NEDEN UP/DOWN (yeşil/kırmızı) DEĞİL: "Alan" grafik türünde fiyat
+        // serisinin dolgusu zaten yeşil -- SuperTrend'i de yeşil çizince
+        // aynı renk üst üste binip görünmez oluyordu (ölçüldü, ekran
+        // görüntüsünde SuperTrend'in yükseliş bölümü fark edilmiyordu).
+        // Amber/mor ikilisi hem alan hem mum modunda her zaman ayırt edilir.
+        const yukselis = chart.addSeries(LineSeries, { color: "#FBBF24", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+        yukselis.setData(buildLineData(indicatorData.supertrend_up));
+        const dusus = chart.addSeries(LineSeries, { color: "#8B5CF6", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+        dusus.setData(buildLineData(indicatorData.supertrend_down));
+      }
     }
 
     // --- Alt paneller (RSI/MACD/Stochastic/ADX/OBV/Hacim) ---
@@ -470,6 +506,35 @@ export default function TradingViewChart({
       } else if (key === "obv") {
         const s = chart.addSeries(LineSeries, { color: "#8A99AD", lineWidth: 2, priceLineVisible: false }, paneIndex);
         s.setData(buildLineData(indicatorData.obv));
+      } else if (key === "williams_r") {
+        const s = chart.addSeries(LineSeries, { color: "#0EA5E9", lineWidth: 2, priceLineVisible: false }, paneIndex);
+        s.setData(buildLineData(indicatorData.williams_r));
+        [-20, -80].forEach((seviye) =>
+          s.createPriceLine({
+            price: seviye,
+            color: "rgba(138,153,173,0.4)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: "",
+          })
+        );
+      } else if (key === "cci") {
+        const s = chart.addSeries(LineSeries, { color: "#F472B6", lineWidth: 2, priceLineVisible: false }, paneIndex);
+        s.setData(buildLineData(indicatorData.cci));
+      } else if (key === "mfi") {
+        const s = chart.addSeries(LineSeries, { color: "#84CC16", lineWidth: 2, priceLineVisible: false }, paneIndex);
+        s.setData(buildLineData(indicatorData.mfi));
+        [20, 80].forEach((seviye) =>
+          s.createPriceLine({
+            price: seviye,
+            color: "rgba(138,153,173,0.4)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: "",
+          })
+        );
       }
     });
 

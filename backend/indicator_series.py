@@ -160,6 +160,147 @@ def _obv_serisi(closes: List[float], volumes: List[float]) -> List[Optional[floa
     return out
 
 
+def _atr_serisi(highs: List[float], lows: List[float], closes: List[float], period: int = 10) -> List[Optional[float]]:
+    """Wilder ATR (Average True Range). SuperTrend'in bant genişliğini belirler."""
+    n = len(closes)
+    out: List[Optional[float]] = [None] * n
+    if n < period + 1:
+        return out
+    tr = [0.0] * n
+    for i in range(1, n):
+        tr[i] = max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
+    atr = sum(tr[1 : period + 1]) / period
+    out[period] = atr
+    for i in range(period + 1, n):
+        atr = (atr * (period - 1) + tr[i]) / period
+        out[i] = atr
+    return out
+
+
+def _supertrend_serisi(highs: List[float], lows: List[float], closes: List[float], period: int = 10, mult: float = 3.0):
+    """
+    SuperTrend — ATR bazlı trend çizgisi. Çizgi fiyatın ALTINDAYSA yükseliş,
+    ÜSTÜNDEYSE düşüş trendini işaret eder.
+
+    NEDEN İKİ AYRI DİZİ DÖNER (yükseliş/düşüş): lightweight-charts'ta tek bir
+    LineSeries'in noktası başına renk değiştirmesi desteklenmiyor. Bunun
+    yerine trend yönüne göre değeri iki ayrı diziye (biri None, diğeri değer)
+    dağıtıp iki renkte iki seri çizmek, platformların SuperTrend'i çizerken
+    kullandığı standart yöntemdir.
+    """
+    n = len(closes)
+    atr = _atr_serisi(highs, lows, closes, period)
+    yukselis: List[Optional[float]] = [None] * n
+    dusus: List[Optional[float]] = [None] * n
+
+    final_ust: Optional[float] = None
+    final_alt: Optional[float] = None
+    trend = 1  # 1 = yukselis, -1 = dusus
+
+    for i in range(n):
+        if atr[i] is None:
+            continue
+        orta = (highs[i] + lows[i]) / 2
+        ham_ust = orta + mult * atr[i]
+        ham_alt = orta - mult * atr[i]
+
+        if final_ust is None:
+            final_ust, final_alt = ham_ust, ham_alt
+            trend = 1 if closes[i] >= orta else -1
+        else:
+            onceki_kapanis = closes[i - 1]
+            final_ust = ham_ust if (ham_ust < final_ust or onceki_kapanis > final_ust) else final_ust
+            final_alt = ham_alt if (ham_alt > final_alt or onceki_kapanis < final_alt) else final_alt
+            if trend == 1 and closes[i] < final_alt:
+                trend = -1
+            elif trend == -1 and closes[i] > final_ust:
+                trend = 1
+
+        if trend == 1:
+            yukselis[i] = round(final_alt, 4)
+        else:
+            dusus[i] = round(final_ust, 4)
+
+    return yukselis, dusus
+
+
+def _williams_r_serisi(highs: List[float], lows: List[float], closes: List[float], period: int = 14) -> List[Optional[float]]:
+    """Williams %R — Stochastic'in -100..0 ölçeğindeki karşılığı."""
+    n = len(closes)
+    out: List[Optional[float]] = [None] * n
+    for i in range(period - 1, n):
+        en_yuksek = max(highs[i - period + 1 : i + 1])
+        en_dusuk = min(lows[i - period + 1 : i + 1])
+        genislik = en_yuksek - en_dusuk
+        out[i] = -50.0 if genislik == 0 else round((en_yuksek - closes[i]) / genislik * -100, 2)
+    return out
+
+
+def _cci_serisi(highs: List[float], lows: List[float], closes: List[float], period: int = 20) -> List[Optional[float]]:
+    """Commodity Channel Index — tipik fiyatın kendi ortalamasından sapması."""
+    n = len(closes)
+    tipik = [(highs[i] + lows[i] + closes[i]) / 3 for i in range(n)]
+    out: List[Optional[float]] = [None] * n
+    for i in range(period - 1, n):
+        pencere = tipik[i - period + 1 : i + 1]
+        ort = sum(pencere) / period
+        ort_sapma = sum(abs(x - ort) for x in pencere) / period
+        out[i] = None if ort_sapma == 0 else round((tipik[i] - ort) / (0.015 * ort_sapma), 2)
+    return out
+
+
+def _mfi_serisi(highs: List[float], lows: List[float], closes: List[float], volumes: List[float], period: int = 14) -> List[Optional[float]]:
+    """Money Flow Index — hacimle ağırlıklandırılmış RSI."""
+    n = len(closes)
+    tipik = [(highs[i] + lows[i] + closes[i]) / 3 for i in range(n)]
+    ham_akis = [tipik[i] * (volumes[i] or 0) for i in range(n)]
+    out: List[Optional[float]] = [None] * n
+    for i in range(period, n):
+        pozitif = negatif = 0.0
+        for j in range(i - period + 1, i + 1):
+            if tipik[j] > tipik[j - 1]:
+                pozitif += ham_akis[j]
+            elif tipik[j] < tipik[j - 1]:
+                negatif += ham_akis[j]
+        if negatif == 0:
+            out[i] = 100.0 if pozitif > 0 else 50.0
+        else:
+            oran = pozitif / negatif
+            out[i] = round(100 - 100 / (1 + oran), 2)
+    return out
+
+
+def _vwap_serisi(highs: List[float], lows: List[float], closes: List[float], volumes: List[float], dates: List[date]) -> List[Optional[float]]:
+    """
+    VWAP — hacim ağırlıklı ortalama fiyat, HAFTALIK olarak sıfırlanır.
+
+    NEDEN HAFTALIK ANKRAJ: Gerçek (seans içi) VWAP, güne özel gün-içi tik
+    verisi ister; bizim günlük bar tablomuzda bu yok. Bunun yerine kümülatif
+    bir ankraj noktası seçilir -- TradingView'ın günlük grafikte VWAP için
+    varsayılan davranışı da budur (Hafta/Ay gibi periyotlarla sıfırlanan
+    "Anchored VWAP"). Haftalık sıfırlama, günlük grafikte anlamlı bir denge
+    noktası verirken seriyi tek bir kümülatif değere (tüm geçmiş) yığıp
+    anlamsızlaştırmaz.
+    """
+    n = len(closes)
+    out: List[Optional[float]] = [None] * n
+    kumulatif_pv = 0.0
+    kumulatif_hacim = 0.0
+    onceki_hafta: Optional[tuple] = None
+    for i in range(n):
+        hafta = dates[i].isocalendar()[:2]
+        if hafta != onceki_hafta:
+            kumulatif_pv = 0.0
+            kumulatif_hacim = 0.0
+            onceki_hafta = hafta
+        tipik = (highs[i] + lows[i] + closes[i]) / 3
+        hacim = volumes[i] or 0
+        kumulatif_pv += tipik * hacim
+        kumulatif_hacim += hacim
+        out[i] = round(kumulatif_pv / kumulatif_hacim, 4) if kumulatif_hacim > 0 else None
+    return out
+
+
 def compute_indicator_series(db: Session, symbol: str, range_code: str) -> Dict[str, Any]:
     range_code = (range_code or "").upper()
     if range_code == "1D" or range_code not in HISTORY_RANGE_DAYS:
@@ -220,6 +361,11 @@ def compute_indicator_series(db: Session, symbol: str, range_code: str) -> Dict[
     stoch_k, stoch_d = _stochastic_serisi(highs, lows, closes, 14, 3)
     adx = _adx_serisi(highs, lows, closes, 14)
     obv = _obv_serisi(closes, volumes)
+    supertrend_up, supertrend_down = _supertrend_serisi(highs, lows, closes, 10, 3.0)
+    williams_r = _williams_r_serisi(highs, lows, closes, 14)
+    cci = _cci_serisi(highs, lows, closes, 20)
+    mfi = _mfi_serisi(highs, lows, closes, volumes, 14)
+    vwap = _vwap_serisi(highs, lows, closes, volumes, dates)
 
     # Görüntülenecek aralığa geri kırp -- ısınma payı yalnızca hesap içindi.
     baslangic = next((i for i, d in enumerate(dates) if d >= cutoff), 0)
@@ -245,6 +391,12 @@ def compute_indicator_series(db: Session, symbol: str, range_code: str) -> Dict[
         "stochastic_d": dilimle(stoch_d),
         "adx": dilimle(adx),
         "obv": dilimle(obv),
+        "supertrend_up": dilimle(supertrend_up),
+        "supertrend_down": dilimle(supertrend_down),
+        "williams_r": dilimle(williams_r),
+        "cci": dilimle(cci),
+        "mfi": dilimle(mfi),
+        "vwap": dilimle(vwap),
     }
 
     with _cache_lock:
