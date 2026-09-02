@@ -10,7 +10,23 @@ import {
   HistogramSeries,
   LineStyle,
 } from "lightweight-charts";
-import { SlidersHorizontal, X, CandlestickChart, LineChart as LineChartIcon, Check } from "lucide-react";
+import {
+  SlidersHorizontal,
+  X,
+  CandlestickChart,
+  LineChart as LineChartIcon,
+  Check,
+  TrendingUp,
+  Zap,
+  Layers,
+  BarChart3,
+  Activity,
+  Waves,
+  ArrowUpDown,
+  Gauge,
+  RotateCcw,
+  PanelBottom,
+} from "lucide-react";
 import { marketColor, UP, DOWN } from "../../lib/marketColor";
 import { API_BASE } from "../context/AuthContext";
 
@@ -68,21 +84,21 @@ interface IndicatorSeriesData {
   obv: (number | null)[];
 }
 
-const OVERLAY_TANIM: { key: OverlayKey; label: string; renk: string }[] = [
-  { key: "sma20", label: "SMA 20", renk: "#F59E0B" },
-  { key: "sma50", label: "SMA 50", renk: "#3B82F6" },
-  { key: "sma200", label: "SMA 200", renk: "#A855F7" },
-  { key: "ema20", label: "EMA 20", renk: "#EC4899" },
-  { key: "bollinger", label: "Bollinger Bantları (20,2)", renk: "#8A99AD" },
+const OVERLAY_TANIM: { key: OverlayKey; label: string; renk: string; aciklama: string; icon: any }[] = [
+  { key: "sma20", label: "SMA 20", renk: "#F59E0B", aciklama: "Kısa vadeli trend ortalaması", icon: TrendingUp },
+  { key: "sma50", label: "SMA 50", renk: "#3B82F6", aciklama: "Orta vadeli trend ortalaması", icon: TrendingUp },
+  { key: "sma200", label: "SMA 200", renk: "#A855F7", aciklama: "Uzun vadeli trend ortalaması", icon: TrendingUp },
+  { key: "ema20", label: "EMA 20", renk: "#EC4899", aciklama: "Son fiyatlara daha duyarlı ortalama", icon: Zap },
+  { key: "bollinger", label: "Bollinger Bantları", renk: "#8A99AD", aciklama: "Volatilite bandı — dar/geniş açılım", icon: Layers },
 ];
 
-const SUBPANE_TANIM: { key: SubpaneKey; label: string }[] = [
-  { key: "hacim", label: "Hacim" },
-  { key: "rsi", label: "RSI (14)" },
-  { key: "macd", label: "MACD (12,26,9)" },
-  { key: "stochastic", label: "Stochastic (14,3)" },
-  { key: "adx", label: "ADX (14)" },
-  { key: "obv", label: "OBV" },
+const SUBPANE_TANIM: { key: SubpaneKey; label: string; aciklama: string; icon: any }[] = [
+  { key: "hacim", label: "Hacim", aciklama: "İşlem hacmi, her hareketin arkasındaki güç", icon: BarChart3 },
+  { key: "rsi", label: "RSI (14)", aciklama: "Aşırı alım/satım ölçer (0-100)", icon: Activity },
+  { key: "macd", label: "MACD (12,26,9)", aciklama: "İki ortalama arasındaki fark, trend dönüşü", icon: Waves },
+  { key: "stochastic", label: "Stochastic (14,3)", aciklama: "Kapanışın son bandın neresinde olduğu", icon: ArrowUpDown },
+  { key: "adx", label: "ADX (14)", aciklama: "Trendin GÜCÜNÜ ölçer, yönünü değil", icon: Gauge },
+  { key: "obv", label: "OBV", aciklama: "Hacmin yönlü birikimi", icon: LineChartIcon },
 ];
 
 // Mobilde ekranın altındaki paneller kalabalıklaşıp kullanılamaz hale
@@ -214,6 +230,8 @@ export default function TradingViewChart({
       return { ...t, subpanes: [...t.subpanes, key] };
     });
   };
+
+  const sifirlaGostergeler = () => setTercih((t) => ({ ...t, overlays: [], subpanes: [] }));
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return;
@@ -524,7 +542,11 @@ export default function TradingViewChart({
           )}
           <button
             onClick={() => setPickerOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-[#0B0E14] border border-[#242B35] text-gray-400 hover:text-white transition"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition ${
+              secimSayisi > 0
+                ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
+                : "bg-[#0B0E14] border-[#242B35] text-gray-400 hover:text-white"
+            }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
             Göstergeler
@@ -571,37 +593,70 @@ export default function TradingViewChart({
           onClick={() => setPickerOpen(false)}
         >
           <div
-            className="relative w-full sm:max-w-md bg-[#151921] border border-[#242B35] rounded-t-2xl sm:rounded-2xl max-h-[80vh] overflow-y-auto"
+            className="relative w-full sm:max-w-md bg-[#151921] border border-[#242B35] rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-[#151921] border-b border-[#242B35] px-4 py-3 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white">Grafik Göstergeleri</h3>
-              <button onClick={() => setPickerOpen(false)} className="text-gray-500 hover:text-white transition" title="Kapat">
-                <X className="w-4 h-4" />
-              </button>
+            {/* Mobilde alttan açılan sheet'i elle sürükleyip kapatma hissi veren tutamaç. */}
+            <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+              <div className="w-9 h-1 rounded-full bg-[#242B35]" />
             </div>
 
-            <div className="p-4 space-y-5">
+            <div className="shrink-0 px-4 pb-3 pt-1 sm:pt-4 flex items-center justify-between border-b border-[#242B35]">
               <div>
-                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  Fiyat üzerine bindirilir
-                </p>
-                <div className="space-y-1">
+                <h3 className="text-sm font-bold text-white">Grafik Göstergeleri</h3>
+                <p className="text-[10px] text-gray-500 mt-0.5">Fiyatın üstüne veya altına ekle</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {secimSayisi > 0 && (
+                  <button
+                    onClick={sifirlaGostergeler}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold text-gray-500 hover:text-white hover:bg-[#0B0E14] transition"
+                    title="Tümünü kaldır"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Sıfırla
+                  </button>
+                )}
+                <button
+                  onClick={() => setPickerOpen(false)}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#0B0E14] transition"
+                  title="Kapat"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto p-4 space-y-5">
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Layers className="w-3 h-3 text-gray-600" />
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Fiyat üzerine bindirilir</p>
+                </div>
+                <div className="space-y-1.5">
                   {OVERLAY_TANIM.map((o) => {
                     const secili = tercih.overlays.includes(o.key);
+                    const Icon = o.icon;
                     return (
                       <button
                         key={o.key}
                         onClick={() => toggleOverlay(o.key)}
-                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
-                          secili ? "bg-[#10B981]/10 text-white" : "text-gray-400 hover:bg-[#0B0E14]"
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition border-l-[3px] ${
+                          secili ? "bg-[#0B0E14]" : "border-l-transparent hover:bg-[#0B0E14]/60"
                         }`}
+                        style={{ borderLeftColor: secili ? o.renk : "transparent" }}
                       >
-                        <span className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: o.renk }} />
-                          {o.label}
+                        <span
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: `${o.renk}1A`, color: o.renk }}
+                        >
+                          <Icon className="w-4 h-4" />
                         </span>
-                        {secili && <Check className="w-3.5 h-3.5 text-[#10B981]" />}
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold text-white">{o.label}</span>
+                          <span className="block text-[10px] text-gray-500 truncate">{o.aciklama}</span>
+                        </span>
+                        {secili && <Check className="w-4 h-4 shrink-0" style={{ color: o.renk }} />}
                       </button>
                     );
                   })}
@@ -610,33 +665,52 @@ export default function TradingViewChart({
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Alt panel</p>
-                  <p className="text-[10px] text-gray-600">{tercih.subpanes.length}/{MAKS_ALT_PANEL} seçili</p>
+                  <div className="flex items-center gap-1.5">
+                    <PanelBottom className="w-3 h-3 text-gray-600" />
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Alt panel</p>
+                  </div>
+                  <p className="text-[10px] font-semibold text-gray-600 tabular-nums">
+                    {tercih.subpanes.length}/{MAKS_ALT_PANEL} seçili
+                  </p>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {SUBPANE_TANIM.map((s) => {
                     const secili = tercih.subpanes.includes(s.key);
                     const devreDisi = !secili && tercih.subpanes.length >= MAKS_ALT_PANEL;
+                    const Icon = s.icon;
+                    const renk = "#10B981";
                     return (
                       <button
                         key={s.key}
                         onClick={() => toggleSubpane(s.key)}
                         disabled={devreDisi}
-                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition border-l-[3px] ${
                           secili
-                            ? "bg-[#10B981]/10 text-white"
+                            ? "bg-[#0B0E14]"
                             : devreDisi
-                            ? "text-gray-700 cursor-not-allowed"
-                            : "text-gray-400 hover:bg-[#0B0E14]"
+                            ? "border-l-transparent opacity-40 cursor-not-allowed"
+                            : "border-l-transparent hover:bg-[#0B0E14]/60"
                         }`}
+                        style={{ borderLeftColor: secili ? renk : "transparent" }}
                       >
-                        {s.label}
-                        {secili && <Check className="w-3.5 h-3.5 text-[#10B981]" />}
+                        <span
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            secili ? "" : "bg-[#0B0E14] text-gray-500"
+                          }`}
+                          style={secili ? { backgroundColor: `${renk}1A`, color: renk } : undefined}
+                        >
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className={`block text-xs font-semibold ${secili ? "text-white" : "text-gray-300"}`}>{s.label}</span>
+                          <span className="block text-[10px] text-gray-500 truncate">{s.aciklama}</span>
+                        </span>
+                        {secili && <Check className="w-4 h-4 shrink-0" style={{ color: renk }} />}
                       </button>
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-gray-600 mt-2">
+                <p className="text-[10px] text-gray-600 mt-2.5 px-0.5">
                   Küçük ekranda okunabilirlik için aynı anda en fazla {MAKS_ALT_PANEL} alt panel açılabilir.
                 </p>
               </div>
