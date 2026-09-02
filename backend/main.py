@@ -43,6 +43,7 @@ from schemas import (
     WatchlistItemResponse, ScreenerItemResponse,
     PushSubscribeRequest, PushStatusResponse,
     ScorecardResponse, BacktestResponse, ExtraIndicatorsResponse, IndicatorSeriesResponse,
+    CustomFormulaRequest, CustomFormulaResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -2460,6 +2461,29 @@ def get_indicator_series(symbol: str, range: str = "1Y", db: Session = Depends(g
     """
     from indicator_series import compute_indicator_series
     return IndicatorSeriesResponse(**compute_indicator_series(db, symbol, range))
+
+
+@app.post("/api/stocks/{symbol}/custom-indicator", response_model=CustomFormulaResponse)
+@limiter.limit("30/minute")
+def compute_custom_indicator_series(
+    request: Request,
+    symbol: str,
+    body: CustomFormulaRequest,
+    range: str = "1Y",
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının kendi yazdığı formülü (ör. "close - sma(20)") gösterge
+    olarak hesaplar -- TradingView Pine Script'inin çok basitleştirilmiş,
+    güvenli karşılığı.
+
+    GÜVENLİK: formül asla eval()/exec() ile çalıştırılmaz; yalnızca
+    whitelist'li bir AST yorumlayıcısından geçer (bkz. custom_indicator.py).
+    Hız sınırı, ölçüm gerektirmeyen ama yine de tekrar tekrar istek
+    atılabilecek bu uca ekstra bir savunma katmanıdır.
+    """
+    from custom_indicator import compute_custom_formula
+    return CustomFormulaResponse(**compute_custom_formula(db, symbol, range, body.formula))
 
 
 @app.get("/api/backtest/strategies")

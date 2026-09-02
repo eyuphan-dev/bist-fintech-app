@@ -1121,3 +1121,14 @@ class IndicatorSeriesResponse(BaseModel):
     cci: List[Optional[float]] = Field(default_factory=list)
     mfi: List[Optional[float]] = Field(default_factory=list)
     vwap: List[Optional[float]] = Field(default_factory=list)
+
+
+class CustomFormulaRequest(BaseModel):
+    formula: str = Field(..., min_length=1, max_length=200)
+
+
+class CustomFormulaResponse(BaseModel):
+    available: bool
+    reason: Optional[str] = None
+    dates: List[str] = Field(default_factory=list)
+    values: List[Optional[float]] = Field(default_factory=list)

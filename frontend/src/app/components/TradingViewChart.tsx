@@ -31,6 +31,7 @@ import {
   Percent,
   Radar,
   Droplets,
+  FunctionSquare,
 } from "lucide-react";
 import { marketColor, UP, DOWN } from "../../lib/marketColor";
 import { API_BASE } from "../context/AuthContext";
@@ -154,6 +155,41 @@ function saveTercih(v: Tercih) {
   }
 }
 
+// --- Kendi formülünü kurma (TradingView Pine Script'in çok basitleştirilmiş,
+// güvenli hali -- bkz. backend/custom_indicator.py: formül asla eval/exec ile
+// çalıştırılmaz, whitelist'li bir AST yorumlayıcısından geçer). ---
+interface OzelFormul {
+  id: string;
+  formula: string;
+  hedef: "overlay" | "subpane";
+  renk: string;
+  aktif: boolean;
+}
+
+const OZEL_FORMUL_ANAHTARI = "bist-ozel-formuller-v1";
+const MAKS_OZEL_FORMUL = 5;
+const OZEL_FORMUL_RENK_PALETI = ["#E879F9", "#FB923C", "#4ADE80", "#60A5FA", "#FCD34D"];
+
+function loadOzelFormuller(): OzelFormul[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(OZEL_FORMUL_ANAHTARI);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, MAKS_OZEL_FORMUL) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveOzelFormuller(v: OzelFormul[]) {
+  try {
+    window.localStorage.setItem(OZEL_FORMUL_ANAHTARI, JSON.stringify(v));
+  } catch {
+    // kritik değil, oturum içinde hafızada kalır.
+  }
+}
+
 /**
  * ISO tarih/zaman damgasını lightweight-charts'ın zaman eksenine çevirir.
  *
@@ -199,14 +235,32 @@ export default function TradingViewChart({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [indicatorData, setIndicatorData] = useState<IndicatorSeriesData | null>(null);
 
+  const [ozelFormuller, setOzelFormuller] = useState<OzelFormul[]>(loadOzelFormuller);
+  const [ozelFormulVeri, setOzelFormulVeri] = useState<Record<string, { available: boolean; dates: string[]; values: (number | null)[] }>>({});
+  const [formulMetni, setFormulMetni] = useState("");
+  const [formulHedef, setFormulHedef] = useState<"overlay" | "subpane">("subpane");
+  const [formulHata, setFormulHata] = useState<string | null>(null);
+  const [formulYukleniyor, setFormulYukleniyor] = useState(false);
+
   // Gün içi (1D) aralıkta yüksek/düşük/açılış yok -- göstergelerin çoğu
   // (Bollinger, Stochastic, ADX) tanımı gereği bunlara ihtiyaç duyar.
   const gostergeDesteklenir = !intraday;
-  const gostergeSecili = tercih.overlays.length > 0 || tercih.subpanes.length > 0;
+  const aktifOzelAltPaneller = ozelFormuller.filter((f) => f.aktif && f.hedef === "subpane");
+  const aktifOzelOverlaylar = ozelFormuller.filter((f) => f.aktif && f.hedef === "overlay");
+  // Mobilde ekran kalabalıklaşmasın diye özel formüller de aynı alt panel
+  // sınırını (MAKS_ALT_PANEL) hazır göstergelerle PAYLAŞIR -- ayrı bir sınır
+  // olsaydı kullanıcı 2 hazır + 2 özel = 4 panel açıp mobilde aynı soruna
+  // geri dönerdi.
+  const toplamAltPanelSayisi = tercih.subpanes.length + aktifOzelAltPaneller.length;
+  const gostergeSecili = tercih.overlays.length > 0 || tercih.subpanes.length > 0 || ozelFormuller.some((f) => f.aktif);
 
   useEffect(() => {
     saveTercih(tercih);
   }, [tercih]);
+
+  useEffect(() => {
+    saveOzelFormuller(ozelFormuller);
+  }, [ozelFormuller]);
 
   useEffect(() => {
     // Sembol/aralık değişir değişmez ÖNCEKİ verisi hemen temizlenir. Aksi
@@ -232,6 +286,41 @@ export default function TradingViewChart({
     };
   }, [symbol, range, gostergeDesteklenir, gostergeSecili]);
 
+  // Aktif özel formüllerin serisini çeker. Her formül ayrı bir kullanıcı
+  // ifadesi olduğu için tek bir toplu uçtan (indicator-series gibi) gelemez
+  // -- her biri kendi POST isteğiyle hesaplanır.
+  useEffect(() => {
+    const aktifler = ozelFormuller.filter((f) => f.aktif);
+    if (!gostergeDesteklenir || aktifler.length === 0) {
+      setOzelFormulVeri({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const sonuclar: Record<string, { available: boolean; dates: string[]; values: (number | null)[] }> = {};
+      await Promise.all(
+        aktifler.map(async (f) => {
+          try {
+            const res = await fetch(`${API_BASE}/stocks/${symbol}/custom-indicator?range=${range}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ formula: f.formula }),
+            });
+            const json = await res.json();
+            sonuclar[f.id] = json;
+          } catch {
+            sonuclar[f.id] = { available: false, dates: [], values: [] };
+          }
+        })
+      );
+      if (!cancelled) setOzelFormulVeri(sonuclar);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, range, gostergeDesteklenir, JSON.stringify(ozelFormuller.filter((f) => f.aktif).map((f) => [f.id, f.formula]))]);
+
   const toggleOverlay = (key: OverlayKey) => {
     setTercih((t) => ({
       ...t,
@@ -242,12 +331,62 @@ export default function TradingViewChart({
   const toggleSubpane = (key: SubpaneKey) => {
     setTercih((t) => {
       if (t.subpanes.includes(key)) return { ...t, subpanes: t.subpanes.filter((k) => k !== key) };
-      if (t.subpanes.length >= MAKS_ALT_PANEL) return t;
+      if (toplamAltPanelSayisi >= MAKS_ALT_PANEL) return t;
       return { ...t, subpanes: [...t.subpanes, key] };
     });
   };
 
-  const sifirlaGostergeler = () => setTercih((t) => ({ ...t, overlays: [], subpanes: [] }));
+  const sifirlaGostergeler = () => {
+    setTercih((t) => ({ ...t, overlays: [], subpanes: [] }));
+    setOzelFormuller((fs) => fs.map((f) => ({ ...f, aktif: false })));
+  };
+
+  const formulEkle = async () => {
+    const formula = formulMetni.trim();
+    if (!formula) return;
+    if (ozelFormuller.length >= MAKS_OZEL_FORMUL) {
+      setFormulHata(`En fazla ${MAKS_OZEL_FORMUL} özel formül kaydedebilirsiniz.`);
+      return;
+    }
+    if (formulHedef === "subpane" && toplamAltPanelSayisi >= MAKS_ALT_PANEL) {
+      setFormulHata(`Alt panel dolu (en fazla ${MAKS_ALT_PANEL}). "Fiyat üzerine" seçip ekleyebilir ya da bir paneli kapatabilirsiniz.`);
+      return;
+    }
+    setFormulHata(null);
+    setFormulYukleniyor(true);
+    try {
+      const res = await fetch(`${API_BASE}/stocks/${symbol}/custom-indicator?range=${range}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formula }),
+      });
+      const json = await res.json();
+      if (!json.available) {
+        setFormulHata(json.reason || "Formül hesaplanamadı.");
+        return;
+      }
+      const renk = OZEL_FORMUL_RENK_PALETI[ozelFormuller.length % OZEL_FORMUL_RENK_PALETI.length];
+      const yeni: OzelFormul = { id: `${Date.now()}`, formula, hedef: formulHedef, renk, aktif: true };
+      setOzelFormuller((fs) => [...fs, yeni]);
+      setFormulMetni("");
+    } catch {
+      setFormulHata("Sunucuya ulaşılamadı, tekrar deneyin.");
+    } finally {
+      setFormulYukleniyor(false);
+    }
+  };
+
+  const formulSil = (id: string) => setOzelFormuller((fs) => fs.filter((f) => f.id !== id));
+
+  const formulAcKapat = (id: string) => {
+    setOzelFormuller((fs) => {
+      const hedefFormul = fs.find((f) => f.id === id);
+      if (hedefFormul && !hedefFormul.aktif && hedefFormul.hedef === "subpane" && toplamAltPanelSayisi >= MAKS_ALT_PANEL) {
+        return fs; // alt panel dolu -- açılamaz
+      }
+      return fs.map((f) => (f.id === id ? { ...f, aktif: !f.aktif } : f));
+    });
+  };
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return;
@@ -298,7 +437,7 @@ export default function TradingViewChart({
 
     const ANA_YUKSEKLIK = 320;
     const ALT_YUKSEKLIK = 110;
-    const toplamYukseklik = ANA_YUKSEKLIK + tercih.subpanes.length * ALT_YUKSEKLIK;
+    const toplamYukseklik = ANA_YUKSEKLIK + toplamAltPanelSayisi * ALT_YUKSEKLIK;
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -425,6 +564,20 @@ export default function TradingViewChart({
       }
     }
 
+    // --- Kullanıcının kendi formülleri (fiyat üzerine) ---
+    if (gostergeDesteklenir) {
+      aktifOzelOverlaylar.forEach((f) => {
+        const veri = ozelFormulVeri[f.id];
+        if (!veri || !veri.available) return;
+        const zamanlar = veri.dates.map((d) => toChartTime(d));
+        const noktalar = zamanlar
+          .map((t, i) => ({ time: t as any, value: veri.values[i] }))
+          .filter((p): p is { time: any; value: number } => p.value !== null && p.value !== undefined);
+        const s = chart.addSeries(LineSeries, { color: f.renk, lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+        s.setData(noktalar);
+      });
+    }
+
     // --- Alt paneller (RSI/MACD/Stochastic/ADX/OBV/Hacim) ---
     // Alt paneller SEÇİM SIRASINA göre değil, SUBPANE_TANIM'daki sabit sıraya
     // göre çizilir -- aksi halde "önce RSI sonra Hacim" seçen kullanıcı ile
@@ -538,6 +691,21 @@ export default function TradingViewChart({
       }
     });
 
+    // --- Kullanıcının kendi formülleri (ayrı panel) ---
+    aktifOzelAltPaneller.forEach((f) => {
+      const veri = ozelFormulVeri[f.id];
+      if (!veri || !veri.available) return;
+      const pane = chart.addPane();
+      pane.setHeight(ALT_YUKSEKLIK);
+      const paneIndex = pane.paneIndex();
+      const zamanlar = veri.dates.map((d) => toChartTime(d));
+      const noktalar = zamanlar
+        .map((t, i) => ({ time: t as any, value: veri.values[i] }))
+        .filter((p): p is { time: any; value: number } => p.value !== null && p.value !== undefined);
+      const s = chart.addSeries(LineSeries, { color: f.renk, lineWidth: 2, priceLineVisible: false }, paneIndex);
+      s.setData(noktalar);
+    });
+
     chart.subscribeCrosshairMove((param: any) => {
       if (!param.time || !param.point) {
         setOkuma(null);
@@ -561,7 +729,16 @@ export default function TradingViewChart({
       chart.remove();
       chartRef.current = null;
     };
-  }, [data, symbol, baseline, tercih, indicatorData, gostergeDesteklenir]);
+    // NOT: aktifOzelOverlaylar/aktifOzelAltPaneller BİLEREK bağımlılığa
+    // eklenmedi -- bunlar her render'da yeniden hesaplanan (.filter() ile
+    // üretilen) diziler, yani referansları her render'da değişir. Bunları
+    // bağımlılığa koymak "efekt çalışır -> setState -> yeniden render ->
+    // yeni dizi referansı -> efekt tekrar çalışır" sonsuz döngüsüne yol
+    // açıyordu (ölçüldü: "Maximum update depth exceeded"). Bunun yerine
+    // KAYNAK state olan `ozelFormuller`e bağımlı olunur -- o yalnızca
+    // gerçekten değiştiğinde (formül eklenip/silinip/açılıp kapatıldığında)
+    // yeni referans alır.
+  }, [data, symbol, baseline, tercih, indicatorData, gostergeDesteklenir, ozelFormulVeri, ozelFormuller]);
 
   const gosterilen = okuma ?? sonOkuma;
   const pct = gosterilen?.pct ?? null;
@@ -579,7 +756,7 @@ export default function TradingViewChart({
   })();
 
   const canCandlestickToggle = gostergeDesteklenir && data.every((d) => d.open != null && d.high != null && d.low != null);
-  const secimSayisi = tercih.overlays.length + tercih.subpanes.length;
+  const secimSayisi = tercih.overlays.length + tercih.subpanes.length + ozelFormuller.filter((f) => f.aktif).length;
 
   return (
     <div className="w-full relative">
@@ -649,7 +826,7 @@ export default function TradingViewChart({
             </span>
           )}
         </div>
-        <div ref={chartContainerRef} className="w-full" style={{ height: 320 + tercih.subpanes.length * 110 }} />
+        <div ref={chartContainerRef} className="w-full" style={{ height: 320 + toplamAltPanelSayisi * 110 }} />
       </div>
 
       {pickerOpen && gostergeDesteklenir && (
@@ -735,13 +912,13 @@ export default function TradingViewChart({
                     <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Alt panel</p>
                   </div>
                   <p className="text-[10px] font-semibold text-gray-600 tabular-nums">
-                    {tercih.subpanes.length}/{MAKS_ALT_PANEL} seçili
+                    {toplamAltPanelSayisi}/{MAKS_ALT_PANEL} seçili
                   </p>
                 </div>
                 <div className="space-y-1.5">
                   {SUBPANE_TANIM.map((s) => {
                     const secili = tercih.subpanes.includes(s.key);
-                    const devreDisi = !secili && tercih.subpanes.length >= MAKS_ALT_PANEL;
+                    const devreDisi = !secili && toplamAltPanelSayisi >= MAKS_ALT_PANEL;
                     const Icon = s.icon;
                     const renk = "#10B981";
                     return (
@@ -778,6 +955,92 @@ export default function TradingViewChart({
                 <p className="text-[10px] text-gray-600 mt-2.5 px-0.5">
                   Küçük ekranda okunabilirlik için aynı anda en fazla {MAKS_ALT_PANEL} alt panel açılabilir.
                 </p>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <FunctionSquare className="w-3 h-3 text-gray-600" />
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Kendi Formülün</p>
+                </div>
+
+                {ozelFormuller.length > 0 && (
+                  <div className="space-y-1.5 mb-2.5">
+                    {ozelFormuller.map((f) => (
+                      <div
+                        key={f.id}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl border-l-[3px] bg-[#0B0E14]"
+                        style={{ borderLeftColor: f.aktif ? f.renk : "transparent" }}
+                      >
+                        <button
+                          onClick={() => formulAcKapat(f.id)}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: `${f.renk}1A`, color: f.renk }}
+                          title={f.aktif ? "Devre dışı bırak" : "Etkinleştir"}
+                        >
+                          <FunctionSquare className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => formulAcKapat(f.id)} className="min-w-0 flex-1 text-left">
+                          <span className={`block text-xs font-mono font-semibold truncate ${f.aktif ? "text-white" : "text-gray-500"}`}>
+                            {f.formula}
+                          </span>
+                          <span className="block text-[10px] text-gray-500">{f.hedef === "overlay" ? "Fiyat üzerine" : "Ayrı panel"}</span>
+                        </button>
+                        <button
+                          onClick={() => formulSil(f.id)}
+                          className="p-1.5 text-gray-600 hover:text-[#F43F5E] transition shrink-0"
+                          title="Sil"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {ozelFormuller.length < MAKS_OZEL_FORMUL ? (
+                  <div className="bg-[#0B0E14] border border-[#242B35] rounded-xl p-3 space-y-2.5">
+                    <input
+                      value={formulMetni}
+                      onChange={(e) => {
+                        setFormulMetni(e.target.value);
+                        setFormulHata(null);
+                      }}
+                      placeholder="ör. close - sma(20)"
+                      className="w-full bg-transparent border border-[#242B35] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder:text-gray-600 outline-none focus:border-[#10B981]/50"
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setFormulHedef("overlay")}
+                        className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition ${
+                          formulHedef === "overlay" ? "bg-[#10B981] text-[#0B0E14]" : "bg-[#151921] text-gray-400"
+                        }`}
+                      >
+                        Fiyat üzerine
+                      </button>
+                      <button
+                        onClick={() => setFormulHedef("subpane")}
+                        className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition ${
+                          formulHedef === "subpane" ? "bg-[#10B981] text-[#0B0E14]" : "bg-[#151921] text-gray-400"
+                        }`}
+                      >
+                        Ayrı panel
+                      </button>
+                      <button
+                        onClick={formulEkle}
+                        disabled={formulYukleniyor || !formulMetni.trim()}
+                        className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-[#10B981] text-[#0B0E14] disabled:opacity-40 transition shrink-0"
+                      >
+                        {formulYukleniyor ? "..." : "Ekle"}
+                      </button>
+                    </div>
+                    {formulHata && <p className="text-[10px] text-[#F43F5E]">{formulHata}</p>}
+                    <p className="text-[10px] text-gray-600">
+                      Değişkenler: open, high, low, close, volume · Fonksiyonlar: sma(n), ema(n), rsi(n), abs(x), min(a,b), max(a,b)
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-gray-600 px-0.5">En fazla {MAKS_OZEL_FORMUL} özel formül kaydedebilirsiniz.</p>
+                )}
               </div>
             </div>
           </div>
