@@ -671,6 +671,15 @@ def _check_and_apply_expiry(db: Session, user_bot: "models.UserBot") -> bool:
         risk_mode=user_bot.risk_profile or DEFAULT_RISK_MODE, force_liquidate=True,
     )
 
+    # Manuel durdurmayla AYNI sıfırlama: aksi halde kullanıcı süresi dolmuş botu
+    # tekrar aktif ettiğinde eski bakiye/performans taşınır (bkz. main.py'deki
+    # update_user_bot_settings — is_active: True->False dalı bu sıfırlamayı yapar,
+    # ama otomatik süre dolumu o dalı hiç çalıştırmadığı için burada da yapılmalı).
+    liquidation_time = datetime.utcnow()
+    user_bot.virtual_balance = 100000.00
+    user_bot.baseline_value = 100000.00
+    user_bot.performance_reset_at = liquidation_time + timedelta(microseconds=1)
+
     user_bot.is_active = False
     close_open_bot_session(db, user_bot.user_id, f"Bot süresi doldu ({config['label']}).")
     db.add(models.UserLog(
