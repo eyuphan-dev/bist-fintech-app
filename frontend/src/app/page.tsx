@@ -65,6 +65,7 @@ export default function Home() {
   // Dashboard states
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardItem[]>([]);
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState<"all" | "weekly" | "monthly">("all");
   const [dashLoading, setDashLoading] = useState(true);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
 
@@ -76,7 +77,7 @@ export default function Home() {
         const headers = { Authorization: `Bearer ${token}` };
         const [portRes, leadRes] = await Promise.all([
           fetch(`${API_BASE}/portfolio`, { headers }),
-          fetch(`${API_BASE}/leaderboard`),
+          fetch(`${API_BASE}/leaderboard?period=${leaderboardPeriod}`),
         ]);
         if (portRes.ok) setPortfolio(await portRes.json());
         if (leadRes.ok) setLeaderboard(await leadRes.json());
@@ -87,7 +88,7 @@ export default function Home() {
       }
     };
     fetchDashboard();
-  }, [token, refreshTrigger]);
+  }, [token, refreshTrigger, leaderboardPeriod]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -393,9 +394,29 @@ export default function Home() {
 
         <div className="space-y-6">
           <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
-            <div className="flex items-center gap-1.5 mb-4">
+            <div className="flex items-center gap-1.5 mb-3">
               <Award className="w-5 h-5 text-[#F59E0B]" />
               <h3 className="text-sm font-bold text-white tracking-wide uppercase">Liderlik Tablosu</h3>
+            </div>
+
+            <div className="flex items-center gap-1 mb-4 bg-[#0B0E14] border border-[#242B35] rounded-lg p-1">
+              {([
+                { key: "all", label: "Tümü" },
+                { key: "weekly", label: "Bu Hafta" },
+                { key: "monthly", label: "Bu Ay" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setLeaderboardPeriod(opt.key)}
+                  className={`flex-1 min-h-[36px] text-[11px] font-semibold rounded-md transition ${
+                    leaderboardPeriod === opt.key
+                      ? "bg-[#242B35] text-white"
+                      : "text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
 
             <div className="space-y-3.5">

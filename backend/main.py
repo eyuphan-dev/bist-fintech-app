@@ -4136,7 +4136,7 @@ def _portfolio_value(db: Session, owner_user_id: int, is_bot_portfolio: bool, ca
 
 
 @app.get("/api/leaderboard", response_model=List[LeaderboardItem])
-def get_leaderboard(db: Session = Depends(get_db)):
+def get_leaderboard(period: str = "all", db: Session = Depends(get_db)):
     """
     Liderlik tablosu: topluluk demo botu artık gösterilmez — yalnızca gerçek kullanıcılar
     ve her kullanıcının kendi kişisel AI botu (ayrı bir satır olarak) listelenir.
@@ -4148,7 +4148,17 @@ def get_leaderboard(db: Session = Depends(get_db)):
     veritabanını en çok yoran yer olurdu.
 
     Artık TÜM pozisyonlar tek sorguda, tüm fiyatlar tek toplu çağrıda çekilir.
+
+    `period` — zaman-kutulu yarışma:
+      "all" (varsayılan)     → mevcut davranış, hesap açılışından bu yana getiri, TOPLAM DEĞERE göre sırala
+      "weekly" / "monthly"   → bu haftanın/ayın BAŞINDAKİ gün-sonu değerine göre getiri, GETİRİ YÜZDESİNE göre sırala
+    Haftalık/aylık başlangıç değeri, zaten var olan günlük performans anlık
+    görüntüsünden (`UserPerformanceHistory`/`BotPerformanceHistory`, hafta içi
+    15:30 UTC'de kaydediliyor) okunur — kaydı olmayan (bu dönemde yeni katılmış)
+    kullanıcı, mevcut değeriyle başlar (yani dönem içinde %0'dan başlar,
+    haksız yere negatif/pozitif gösterilmez).
     """
+    period = period if period in ("weekly", "monthly") else "all"
     users = db.query(models.User).filter_by(is_bot=False).all()
     if not users:
         return []
@@ -4176,6 +4186,37 @@ def get_leaderboard(db: Session = Depends(get_db)):
         for b in db.query(models.UserBot).filter(models.UserBot.user_id.in_(user_ids)).all()
     }
 
+    # Haftalık/aylık yarışma: dönem başlangıcındaki gün-sonu değeri baz alınır.
+    donem_baslangici = None
+    if period == "weekly":
+        bugun = bugun_tr()
+        donem_baslangici = bugun - timedelta(days=bugun.weekday())  # Pazartesi
+    elif period == "monthly":
+        donem_baslangici = bugun_tr().replace(day=1)
+
+    donem_bazlari: Dict[int, float] = {}
+    donem_bot_bazlari: Dict[int, float] = {}
+    if donem_baslangici is not None:
+        # Her kullanıcının dönem içindeki İLK kaydı baz alınır — o kayıttan
+        # sonraki hareket dönem getirisini oluşturur.
+        for row in (
+            db.query(models.UserPerformanceHistory)
+            .filter(models.UserPerformanceHistory.user_id.in_(user_ids))
+            .filter(models.UserPerformanceHistory.recorded_date >= donem_baslangici)
+            .order_by(models.UserPerformanceHistory.recorded_date.asc())
+            .all()
+        ):
+            donem_bazlari.setdefault(row.user_id, float(row.total_portfolio_value))
+
+        for row in (
+            db.query(models.BotPerformanceHistory)
+            .filter(models.BotPerformanceHistory.user_id.in_(user_ids))
+            .filter(models.BotPerformanceHistory.recorded_date >= donem_baslangici)
+            .order_by(models.BotPerformanceHistory.recorded_date.asc())
+            .all()
+        ):
+            donem_bot_bazlari.setdefault(row.user_id, float(row.total_portfolio_value))
+
     def deger(user_id: int, bot_mu: bool, nakit: float) -> float:
         toplam = nakit
         for poz in pozisyon_haritasi.get((user_id, bot_mu), []):
@@ -4188,7 +4229,10 @@ def get_leaderboard(db: Session = Depends(get_db)):
     leaderboard = []
     for user in users:
         total_value = deger(user.id, False, float(user.virtual_balance))
-        baseline = float(user.baseline_value or 100000.0)
+        if donem_baslangici is not None:
+            baseline = donem_bazlari.get(user.id, total_value)
+        else:
+            baseline = float(user.baseline_value or 100000.0)
         profit_loss_pct = ((total_value - baseline) / baseline) * 100 if baseline else 0.0
         leaderboard.append(LeaderboardItem(
             username=user.username,
@@ -4200,7 +4244,10 @@ def get_leaderboard(db: Session = Depends(get_db)):
         user_bot = botlar.get(user.id)
         if user_bot:
             bot_total_value = deger(user.id, True, float(user_bot.virtual_balance))
-            bot_baseline = float(user_bot.baseline_value or 100000.0)
+            if donem_baslangici is not None:
+                bot_baseline = donem_bot_bazlari.get(user.id, bot_total_value)
+            else:
+                bot_baseline = float(user_bot.baseline_value or 100000.0)
             bot_profit_loss_pct = ((bot_total_value - bot_baseline) / bot_baseline) * 100 if bot_baseline else 0.0
             leaderboard.append(LeaderboardItem(
                 username=f"{user.username} — Kişisel Bot",
@@ -4209,5 +4256,10 @@ def get_leaderboard(db: Session = Depends(get_db)):
                 is_bot=True,
             ))
 
-    leaderboard.sort(key=lambda x: x.total_portfolio_value, reverse=True)
+    if donem_baslangici is not None:
+        # Zaman-kutulu yarışma: getiri YÜZDESİNE göre sırala — herkes farklı
+        # sermayeyle başlasa da adil karşılaştırma budur.
+        leaderboard.sort(key=lambda x: x.profit_loss_pct, reverse=True)
+    else:
+        leaderboard.sort(key=lambda x: x.total_portfolio_value, reverse=True)
     return leaderboard
