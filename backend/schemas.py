@@ -654,6 +654,16 @@ class LeaderboardItem(BaseModel):
     is_bot: bool
 
 
+# --- BAŞARIM/ROZET SİSTEMİ ---
+
+class AchievementResponse(BaseModel):
+    id: str
+    isim: str
+    aciklama: str
+    kazanildi: bool
+    kazanilma_tarihi: Optional[datetime] = None
+
+
 # --- TEMATİK SEPETLER ---
 
 class BasketHolding(BaseModel):

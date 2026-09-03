@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays,
   Star, SlidersHorizontal, MoreHorizontal, GitCompareArrows, History, Settings,
-  ChevronDown, Radar, Layers, ShoppingBasket, Rewind,
+  ChevronDown, Radar, Layers, ShoppingBasket, Rewind, Trophy,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
@@ -37,6 +37,7 @@ const MORE_NAV_LINKS = [
 const USER_MENU_LINKS = [
   { href: "/favoriler", label: "Favori Hisselerim", icon: Star },
   { href: "/islemlerim", label: "İşlem Geçmişim", icon: History },
+  { href: "/basarimlar", label: "Başarımlarım", icon: Trophy },
   { href: "/ayarlar", label: "Hesap Ayarları", icon: Settings },
 ];
 

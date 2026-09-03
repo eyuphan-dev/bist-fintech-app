@@ -31,6 +31,7 @@ from schemas import (
     DividendPaymentItem, DividendHistoryResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     BasketSummary, BasketHolding, BasketInvestRequest, BasketInvestResponse,
+    AchievementResponse,
     CounterfactualResponse,
     SeasonalityResponse,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
@@ -58,6 +59,7 @@ from bot import (
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from baskets import sepet_tanimlari, sepet_tanimi, sepet_hisseleri
+from achievements import basarim_tanimlari, kazanilanlari_hesapla, Baglam
 from market_hours import get_market_status_dict, is_market_open, bugun_tr
 from transactions import record_transaction, alim_maliyeti, satim_geliri
 from analysis_engine import (
@@ -4265,6 +4267,75 @@ def get_leaderboard(period: str = "all", db: Session = Depends(get_db)):
     else:
         leaderboard.sort(key=lambda x: x.total_portfolio_value, reverse=True)
     return leaderboard
+
+
+# --- BAŞARIM/ROZET SİSTEMİ ---
+
+@app.get("/api/achievements", response_model=List[AchievementResponse])
+def get_achievements(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Kullanıcının başarım/rozet durumunu döner. Her çağrıda güncel bağlam
+    hesaplanır, yeni kazanılan rozetler `user_achievements`e YAZILIR (bkz.
+    achievements.py -- bir rozet kazanıldıktan sonra kalıcıdır, koşul
+    sonradan geçersiz olsa da geri alınmaz).
+    """
+    pozisyonlar = (
+        db.query(models.Portfolio)
+        .join(models.Stock, models.Stock.id == models.Portfolio.stock_id)
+        .filter(models.Portfolio.user_id == current_user.id, models.Portfolio.is_bot_portfolio.is_(False))
+        .all()
+    )
+    stock_ids = [p.stock_id for p in pozisyonlar]
+    sektorler = {p.stock.sector for p in pozisyonlar if p.stock.sector}
+    tam_katilim_uyumlu = len(pozisyonlar) >= 3 and all(p.stock.katilim_status == "UYGUN" for p in pozisyonlar)
+
+    temettu_hisse_sayisi = 0
+    if stock_ids:
+        temettu_hisse_sayisi = (
+            db.query(func.count(func.distinct(models.DividendHistory.stock_id)))
+            .filter(models.DividendHistory.stock_id.in_(stock_ids))
+            .scalar() or 0
+        )
+
+    islem_sayisi = db.query(func.count(models.Transaction.id)).filter_by(user_id=current_user.id).scalar() or 0
+
+    toplam_deger = _portfolio_value(db, current_user.id, False, float(current_user.virtual_balance))
+    baseline = float(current_user.baseline_value or 100000.0)
+    getiri_pct = ((toplam_deger - baseline) / baseline) * 100 if baseline else 0.0
+
+    hesap_yasi_gun = (datetime.utcnow() - current_user.created_at).days if current_user.created_at else 0
+
+    baglam: Baglam = {
+        "islem_sayisi": islem_sayisi,
+        "sektor_sayisi": len(sektorler),
+        "getiri_pct": getiri_pct,
+        "tam_katilim_uyumlu": tam_katilim_uyumlu,
+        "temettu_hisse_sayisi": temettu_hisse_sayisi,
+        "hesap_yasi_gun": hesap_yasi_gun,
+    }
+
+    kazanilan_idler = set(kazanilanlari_hesapla(baglam))
+    mevcut_kayitlar = {
+        r.achievement_id: r.earned_at
+        for r in db.query(models.UserAchievement).filter_by(user_id=current_user.id).all()
+    }
+
+    yeni_kazanilanlar = kazanilan_idler - set(mevcut_kayitlar.keys())
+    if yeni_kazanilanlar:
+        simdi = datetime.utcnow()
+        for aid in yeni_kazanilanlar:
+            db.add(models.UserAchievement(user_id=current_user.id, achievement_id=aid, earned_at=simdi))
+            mevcut_kayitlar[aid] = simdi
+        db.commit()
+
+    return [
+        AchievementResponse(
+            id=tanim["id"], isim=tanim["isim"], aciklama=tanim["aciklama"],
+            kazanildi=tanim["id"] in mevcut_kayitlar,
+            kazanilma_tarihi=mevcut_kayitlar.get(tanim["id"]),
+        )
+        for tanim in basarim_tanimlari()
+    ]
 
 
 # --- TEMATİK SEPETLER ---

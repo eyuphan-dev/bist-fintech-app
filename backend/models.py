@@ -346,6 +346,24 @@ class BotPerformanceHistory(Base):
     user = relationship("User", back_populates="performance_history")
 
 
+class UserAchievement(Base):
+    """
+    Kullanıcının kazandığı genel başarım/rozet (bkz. achievements.py). Bir
+    kez kazanılan rozet BURADA KALICI TUTULUR ve altındaki koşul sonradan
+    geçersiz olsa bile (örn. pozisyon satılırsa) silinmez -- oyunlaştırma
+    sistemlerinin standart davranışı budur.
+    """
+    __tablename__ = "user_achievements"
+    __table_args__ = (UniqueConstraint("user_id", "achievement_id", name="uq_user_achievement"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    achievement_id = Column(String(50), nullable=False)
+    earned_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+
+
 # ---------------------------------------------------------------------------
 # MODÜL 2: Kullanıcı İşlem Logları (UserLog)
 # ---------------------------------------------------------------------------
