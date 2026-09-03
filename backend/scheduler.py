@@ -664,7 +664,7 @@ def start_scheduler():
 
     Görev Listesi:
       bist_updater      → Hafta içi 10:00–18:55, her 5 dakika
-                          (market_guard içeride kontrol eder)
+                          (is_market_open() içeride kontrol eder)
       market_data_sync  → Her gün 08:00 UTC (KAP bildirimleri + TEFAS fon fiyatları)
       log_cleaner       → Her Pazar 03:00 (UTC+0)
     """

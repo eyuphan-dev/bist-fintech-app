@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   TrendingUp, TrendingDown, Wallet, Award, LineChart,
-  ArrowRight, UserPlus, LogIn, RefreshCw, ArrowLeftRight,
+  ArrowRight, UserPlus, LogIn, RefreshCw,
 } from "lucide-react";
 
 import LegalDisclaimerModal from "./components/LegalDisclaimerModal";

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Shield, AlertTriangle, CheckCircle, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { Shield, AlertTriangle, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 
 interface DisclaimerModalProps {
   /** Kullanıcı "Okudum, Onaylıyorum" seçeneğini işaretleyip formu gönderince çağrılır. */

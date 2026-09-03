@@ -169,29 +169,6 @@ def _minutes_until(now: datetime, target: time) -> int:
     return max(0, int(delta.total_seconds() // 60))
 
 
-def market_guard(func):
-    """
-    Dekoratör: Yalnızca BİST seans saatlerinde çalışması gereken
-    fonksiyonlar için kullanılır. Borsa kapalıysa fonksiyon çalıştırılmaz
-    ve bir uyarı logu yazılır.
-
-    Kullanım:
-        @market_guard
-        def my_job():
-            # sadece borsa saatlerinde çalışır
-            ...
-    """
-    def wrapper(*args, **kwargs):
-        open_flag, reason = is_market_open()
-        if not open_flag:
-            print(f"[market_guard] İşlem iptal edildi: {reason}")
-            return None
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    return wrapper
-
-
 def bugun_tr() -> "date_type":
     """
     Türkiye saatine göre BUGÜNÜN tarihi.
