@@ -30,6 +30,7 @@ from schemas import (
     TechnicalSignalItem, SectorSummaryItem, StockSectorComparison, WatchlistUpdateRequest,
     DividendPaymentItem, DividendHistoryResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
+    BasketSummary, BasketHolding, BasketInvestRequest, BasketInvestResponse,
     CounterfactualResponse,
     SeasonalityResponse,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
@@ -56,6 +57,7 @@ from bot import (
     open_bot_session, close_open_bot_session,
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
+from baskets import sepet_tanimlari, sepet_tanimi, sepet_hisseleri
 from market_hours import get_market_status_dict, is_market_open, bugun_tr
 from transactions import record_transaction, alim_maliyeti, satim_geliri
 from analysis_engine import (
@@ -69,7 +71,7 @@ from kap_topics import is_major_holder_news
 from sentiment import score_sentiment
 from yfinance_client import fetch_stock_news
 from cache import get_cached_news, set_cached_news
-from constants import EXTREME_CHANGE_GUARD_PCT, HISTORY_RANGE_DAYS
+from constants import EXTREME_CHANGE_GUARD_PCT, HISTORY_RANGE_DAYS, KOMISYON_ORANI_PCT
 
 def _rate_limit_key(request: Request) -> str:
     """
@@ -4263,3 +4265,141 @@ def get_leaderboard(period: str = "all", db: Session = Depends(get_db)):
     else:
         leaderboard.sort(key=lambda x: x.total_portfolio_value, reverse=True)
     return leaderboard
+
+
+# --- TEMATİK SEPETLER ---
+
+def _basket_holdings_response(db: Session, tanim: Dict[str, str]) -> BasketSummary:
+    hisseler = sepet_hisseleri(db, tanim["id"]) or []
+    holding_list = [
+        BasketHolding(
+            symbol=s.symbol, company_name=s.company_name,
+            # _get_latest_db_price fiyat yoksa 0.0 döner (kodun geri kalanıyla
+            # tutarlı) ama burada None'a çevriliyor — aksi halde arayüzde
+            # "0,00 TL" gibi hissenin gerçekten sıfır değerinde olduğu izlenimi
+            # verirdi (bkz. proje-özellikleri.md §11 "varsayılan iddia etme").
+            current_price=_get_latest_db_price(db, s.id) or None,
+        )
+        for s in hisseler
+    ]
+    return BasketSummary(id=tanim["id"], isim=tanim["isim"], aciklama=tanim["aciklama"], hisseler=holding_list)
+
+
+@app.get("/api/baskets", response_model=List[BasketSummary])
+def get_baskets(db: Session = Depends(get_db)):
+    """
+    Küratörlü tematik sepetler (Temettü Kralları, Katılım Uyumlu Sepet vb.).
+    Üyeler her istekte CANLI sorgulanır — ayrı bir "sepet üyeliği" tablosu
+    yok, bu yüzden bir hissenin katılım durumu/Piotroski skoru değiştiğinde
+    sepet içeriği elle senkronize edilmeden otomatik güncel kalır.
+    """
+    return [_basket_holdings_response(db, tanim) for tanim in sepet_tanimlari()]
+
+
+@app.get("/api/baskets/{basket_id}", response_model=BasketSummary)
+def get_basket_detail(basket_id: str, db: Session = Depends(get_db)):
+    tanim = sepet_tanimi(basket_id)
+    if not tanim:
+        raise HTTPException(status_code=404, detail="Sepet bulunamadı.")
+    return _basket_holdings_response(db, tanim)
+
+
+@app.post("/api/baskets/{basket_id}/invest", response_model=BasketInvestResponse)
+@limiter.limit("5/minute")
+def invest_in_basket(
+    request: Request, basket_id: str, body: BasketInvestRequest,
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """
+    Sepetteki her hisseye EŞİT TL tutarı ayırıp tek seferde alım yapar —
+    /api/trade (execute_trade) ile AYNI komisyon/bakiye/kayıt mantığını
+    kullanır, ayrı bir işlem yolu icat edilmedi. Fiyatı olmayan hisse
+    atlanır; payı diğerlerine yeniden dağıtılmaz (öngörülebilir kalsın diye
+    — kullanıcı "1000 TL'yi 10 hisseye eşit böl" der, 9 hisse alınırsa
+    kalan pay nakit olarak bakiyede kalır).
+    """
+    open_flag, _ = is_market_open()
+    if not open_flag:
+        raise HTTPException(
+            status_code=400,
+            detail="Borsa şu an kapalı. Sepet yatırımı yalnızca seans saatlerinde yapılabilir.",
+        )
+
+    tanim = sepet_tanimi(basket_id)
+    if not tanim:
+        raise HTTPException(status_code=404, detail="Sepet bulunamadı.")
+
+    hisseler = sepet_hisseleri(db, basket_id) or []
+    if not hisseler:
+        raise HTTPException(status_code=400, detail="Bu sepette şu an hiç hisse yok.")
+
+    fiyatli: List[tuple] = []
+    atlananlar: List[str] = []
+    for stock in hisseler:
+        fiyat = _get_latest_db_price(db, stock.id)
+        if fiyat:
+            fiyatli.append((stock, fiyat))
+        else:
+            atlananlar.append(stock.symbol)
+
+    if not fiyatli:
+        raise HTTPException(status_code=400, detail="Sepetteki hiçbir hissenin güncel fiyatı yok.")
+
+    pay = body.amount / len(fiyatli)
+    # Komisyon dahil toplam maliyet TAM OLARAK `pay`e eşit olsun diye miktar
+    # tersinden çözülür: total_cost = adet * fiyat * (1 + oran/100).
+    komisyon_carpani = 1 + (KOMISYON_ORANI_PCT / 100.0)
+
+    db.rollback()
+    begin_write_transaction(db)
+    try:
+        current_user = db.query(models.User).filter_by(id=current_user.id).first()
+
+        toplam_maliyet = 0.0
+        toplam_komisyon = 0.0
+        alinanlar: List[str] = []
+        for stock, fiyat in fiyatli:
+            adet = pay / (fiyat * komisyon_carpani)
+            brut_tutar, komisyon, total_cost = alim_maliyeti(adet, fiyat)
+
+            if float(current_user.virtual_balance) < total_cost:
+                atlananlar.append(f"{stock.symbol} (yetersiz bakiye)")
+                continue
+
+            current_user.virtual_balance = float(current_user.virtual_balance) - total_cost
+
+            portfolio_entry = db.query(models.Portfolio).filter_by(
+                user_id=current_user.id, stock_id=stock.id, is_bot_portfolio=False
+            ).first()
+            if portfolio_entry:
+                old_qty = float(portfolio_entry.quantity)
+                old_cost = float(portfolio_entry.average_cost)
+                new_qty = old_qty + adet
+                portfolio_entry.quantity = new_qty
+                portfolio_entry.average_cost = ((old_qty * old_cost) + total_cost) / new_qty
+            else:
+                db.add(models.Portfolio(
+                    user_id=current_user.id, stock_id=stock.id, quantity=adet,
+                    average_cost=total_cost / adet, is_bot_portfolio=False,
+                ))
+
+            record_transaction(
+                db, user_id=current_user.id, stock_id=stock.id, action_type="AL",
+                quantity=adet, price=fiyat, source="MANUAL", commission=komisyon,
+            )
+            toplam_maliyet += total_cost
+            toplam_komisyon += komisyon
+            alinanlar.append(stock.symbol)
+
+        db.commit()
+        return BasketInvestResponse(
+            message=f"{tanim['isim']} sepetinden {len(alinanlar)} hisse alındı.",
+            toplam_harcanan=round(toplam_maliyet, 2),
+            toplam_komisyon=round(toplam_komisyon, 2),
+            alinanlar=alinanlar,
+            atlananlar=atlananlar,
+            balance=round(float(current_user.virtual_balance), 2),
+        )
+    except Exception:
+        db.rollback()
+        raise

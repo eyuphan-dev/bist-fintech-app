@@ -654,6 +654,34 @@ class LeaderboardItem(BaseModel):
     is_bot: bool
 
 
+# --- TEMATİK SEPETLER ---
+
+class BasketHolding(BaseModel):
+    symbol: str
+    company_name: str
+    current_price: Optional[float] = None
+
+
+class BasketSummary(BaseModel):
+    id: str
+    isim: str
+    aciklama: str
+    hisseler: List[BasketHolding]
+
+
+class BasketInvestRequest(BaseModel):
+    amount: float = Field(..., gt=0, le=10_000_000, allow_inf_nan=False)
+
+
+class BasketInvestResponse(BaseModel):
+    message: str
+    toplam_harcanan: float
+    toplam_komisyon: float
+    alinanlar: List[str]
+    atlananlar: List[str]
+    balance: float
+
+
 # --- MIDAS PRO / HELAL FİNANS EK ŞEMALARI ---
 
 class InsiderTradeResponse(BaseModel):
