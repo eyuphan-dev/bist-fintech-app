@@ -138,12 +138,17 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
 
       {showForm && (
         <div className="space-y-2.5 bg-[#0B0E14] border border-[#242B35] rounded-xl p-3">
-          <div className="grid grid-cols-3 gap-1.5">
-            {ORDER_TYPES.map((t) => (
+          <div className="grid grid-cols-2 gap-1.5">
+            {ORDER_TYPES.map((t, i) => (
               <button
                 key={t}
                 onClick={() => setOrderType(t)}
+                // 5 emir tipi cift sayida bir gridde tek kalir -- son eleman
+                // tek basina yarim genislikte "eksik" durmasin diye tam
+                // genislik (col-span-2) verilir.
                 className={`py-2.5 rounded-lg text-[10px] font-bold transition min-h-[44px] ${
+                  i === ORDER_TYPES.length - 1 ? "col-span-2" : ""
+                } ${
                   orderType === t ? "bg-[#10B981] text-[#0B0E14]" : "bg-[#151921] text-gray-400 border border-[#242B35]"
                 }`}
               >

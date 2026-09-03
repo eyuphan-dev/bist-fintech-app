@@ -866,8 +866,6 @@ class UserBotResponse(BaseModel):
 
 # --- BEKLEYEN EMİRLER (LİMİT / ZAMANLI ALIM-SATIM) ---
 
-ORDER_TYPES = ("LIMIT_BUY", "LIMIT_SELL", "SCHEDULED_BUY")
-
 class PendingOrderCreate(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=10)
     order_type: str = Field(..., pattern="^(LIMIT_BUY|LIMIT_SELL|SCHEDULED_BUY|STOP_LOSS_SELL|TRAILING_STOP_SELL)$")

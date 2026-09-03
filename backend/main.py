@@ -213,6 +213,16 @@ def register(request: Request, user_data: UserCreate, db: Session = Depends(get_
 
     # Referans kodu geçerliyse davet eden de bulunur -- bonus ikisine de
     # kayıt İŞLEMİ İÇİNDE (aynı commit'te) verilir, ayrı bir adım gerekmez.
+    #
+    # BEGIN IMMEDIATE ile: bu işlem ÜÇÜNCÜ BİR KULLANICININ (referrer) satırını
+    # okuyup güncelliyor -- kilit olmadan aynı kodla eşzamanlı iki kayıt isteği
+    # referrer.virtual_balance'ı aynı eski değerden okuyup ikisi de +5000
+    # ekleyebilir, son commit diğerini ezer ve referrer bonusun yalnızca
+    # birini alır ("lost update"). execute_trade/orders.py'deki aynı
+    # atomiklik deseni burada da uygulanır.
+    db.rollback()
+    begin_write_transaction(db)
+
     referrer = None
     if user_data.referral_code:
         referrer = db.query(models.User).filter_by(
@@ -2084,11 +2094,13 @@ def _reserved_shares_for_pending_sells(
     """
     Bir hisse için bekleyen satış emirlerinde bloke edilen lot adedi — TÜRE GÖRE ayrı.
 
-    LIMIT_SELL (kâr-al) ve STOP_LOSS_SELL (zarar-kes) bilerek AYRI havuzlarda
-    sayılır: aynı pozisyona hem yukarıdan kâr-al hem aşağıdan zarar-kes koymak
-    standart risk yönetimi kurgusudur ve ikisi aynı havuzda blokelenirse bu
-    mümkün olmazdı. Biri tetiklendiğinde diğeri otomatik iptal edilir
-    (bkz. _cancel_sibling_sell_orders), böylece açıkta emir kalmaz.
+    LIMIT_SELL (kâr-al), STOP_LOSS_SELL (zarar-kes) ve TRAILING_STOP_SELL
+    (iz süren zarar-kes) bilerek AYRI havuzlarda sayılır: aynı pozisyona
+    hem yukarıdan kâr-al hem aşağıdan zarar-kes koymak standart risk
+    yönetimi kurgusudur ve ikisi aynı havuzda blokelenirse bu mümkün
+    olmazdı. Biri tetiklendiğinde diğerleri otomatik iptal edilir (OCO
+    mantığı bkz. orders.py::_execute_single_order), böylece açıkta emir
+    kalmaz.
 
     Aynı TÜRDEN emirlerin toplamı ise sahip olunan lotu aşamaz — aksi halde
     kullanıcı tek pozisyon için iki ayrı tam-lot kâr-al emri verebilirdi.
