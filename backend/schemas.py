@@ -870,10 +870,14 @@ ORDER_TYPES = ("LIMIT_BUY", "LIMIT_SELL", "SCHEDULED_BUY")
 
 class PendingOrderCreate(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=10)
-    order_type: str = Field(..., pattern="^(LIMIT_BUY|LIMIT_SELL|SCHEDULED_BUY|STOP_LOSS_SELL)$")
+    order_type: str = Field(..., pattern="^(LIMIT_BUY|LIMIT_SELL|SCHEDULED_BUY|STOP_LOSS_SELL|TRAILING_STOP_SELL)$")
     quantity: float = Field(..., gt=0, le=10_000_000, allow_inf_nan=False)
     target_price: Optional[float] = Field(None, gt=0, le=1_000_000, allow_inf_nan=False)
     execution_time: Optional[datetime] = None
+    # Yalnızca TRAILING_STOP_SELL için: "en yüksek görülen fiyattan en fazla
+    # %X düşerse sat". %50 üst sınır -- bunun üstü pratikte hiç tetiklenmeyen,
+    # anlamsız bir emir olurdu.
+    trail_pct: Optional[float] = Field(None, gt=0, le=50, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def _validate_type_specific_fields(self):
@@ -881,6 +885,11 @@ class PendingOrderCreate(BaseModel):
         if self.order_type in ("LIMIT_BUY", "LIMIT_SELL", "STOP_LOSS_SELL"):
             if self.target_price is None:
                 raise ValueError("Fiyat şartlı emirler için target_price zorunludur.")
+        elif self.order_type == "TRAILING_STOP_SELL":
+            if self.trail_pct is None:
+                raise ValueError("TRAILING_STOP_SELL emirleri için trail_pct zorunludur.")
+            if self.target_price is not None:
+                raise ValueError("TRAILING_STOP_SELL emirlerinde target_price kullanılmaz, trail_pct kullanın.")
         elif self.order_type == "SCHEDULED_BUY":
             if self.execution_time is None:
                 raise ValueError("SCHEDULED_BUY emirleri için execution_time zorunludur.")
@@ -897,6 +906,7 @@ class PendingOrderUpdate(BaseModel):
     quantity: Optional[float] = Field(None, gt=0, le=10_000_000, allow_inf_nan=False)
     target_price: Optional[float] = Field(None, gt=0, le=1_000_000, allow_inf_nan=False)
     execution_time: Optional[datetime] = None
+    trail_pct: Optional[float] = Field(None, gt=0, le=50, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def _validate_execution_time(self):
@@ -919,6 +929,8 @@ class PendingOrderResponse(BaseModel):
     fail_reason: Optional[str]
     created_at: datetime
     executed_at: Optional[datetime]
+    trail_pct: Optional[float] = None
+    highest_price_seen: Optional[float] = None
 
     class Config:
         from_attributes = True

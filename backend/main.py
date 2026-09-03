@@ -2157,7 +2157,10 @@ def create_pending_order(
         sellable = owned - reserved_qty
 
         if float(order.quantity) > sellable:
-            tur = "zarar-kes" if order.order_type == "STOP_LOSS_SELL" else "kâr-al"
+            tur = {
+                "STOP_LOSS_SELL": "zarar-kes",
+                "TRAILING_STOP_SELL": "iz süren zarar-kes",
+            }.get(order.order_type, "kâr-al")
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -2167,6 +2170,13 @@ def create_pending_order(
             )
     # ────────────────────────────────────────────────────────────────────────
 
+    # TRAILING_STOP_SELL'in başlangıç "en yüksek fiyatı" emir oluşturulduğu ANDAKİ
+    # fiyattır -- aksi halde bir sonraki 5 dakikalık fiyat taramasına kadar
+    # highest_price_seen boş kalır ve emir o süre boyunca hiç tetiklenemez.
+    baslangic_en_yuksek = None
+    if order.order_type == "TRAILING_STOP_SELL":
+        baslangic_en_yuksek = _get_latest_db_price(db, stock.id) or None
+
     new_order = models.PendingOrder(
         user_id=current_user.id,
         stock_id=stock.id,
@@ -2175,6 +2185,8 @@ def create_pending_order(
         execution_time=order.execution_time.replace(tzinfo=None) if order.execution_time else None,
         quantity=order.quantity,
         status="PENDING",
+        trail_pct=order.trail_pct,
+        highest_price_seen=baslangic_en_yuksek,
     )
     db.add(new_order)
     db.commit()
@@ -2193,6 +2205,8 @@ def create_pending_order(
         execution_time=new_order.execution_time, status=new_order.status,
         fail_reason=new_order.fail_reason, created_at=new_order.created_at,
         executed_at=new_order.executed_at,
+        trail_pct=float(new_order.trail_pct) if new_order.trail_pct is not None else None,
+        highest_price_seen=float(new_order.highest_price_seen) if new_order.highest_price_seen is not None else None,
     )
 
 
@@ -2216,6 +2230,8 @@ def list_pending_orders(
             target_price=float(o.target_price) if o.target_price is not None else None,
             execution_time=o.execution_time, status=o.status,
             fail_reason=o.fail_reason, created_at=o.created_at, executed_at=o.executed_at,
+            trail_pct=float(o.trail_pct) if o.trail_pct is not None else None,
+            highest_price_seen=float(o.highest_price_seen) if o.highest_price_seen is not None else None,
         ) for o in orders
     ]
 
@@ -2250,10 +2266,15 @@ def update_pending_order(
 
         if req.quantity is not None:
             order.quantity = req.quantity
-        if req.target_price is not None and order.order_type in ("LIMIT_BUY", "LIMIT_SELL"):
+        # STOP_LOSS_SELL eskiden bu listede yoktu -- kullanıcı zarar-kes fiyatını
+        # güncelleyemiyor, iptal edip yeniden kurmak zorunda kalıyordu (fark edilip
+        # düzeltildi, trailing stop eklenirken).
+        if req.target_price is not None and order.order_type in ("LIMIT_BUY", "LIMIT_SELL", "STOP_LOSS_SELL"):
             order.target_price = req.target_price
         if req.execution_time is not None and order.order_type == "SCHEDULED_BUY":
             order.execution_time = req.execution_time.replace(tzinfo=None)
+        if req.trail_pct is not None and order.order_type == "TRAILING_STOP_SELL":
+            order.trail_pct = req.trail_pct
 
         db.commit()
         db.refresh(order)
@@ -2268,6 +2289,8 @@ def update_pending_order(
             execution_time=order.execution_time, status=order.status,
             fail_reason=order.fail_reason, created_at=order.created_at,
             executed_at=order.executed_at,
+            trail_pct=float(order.trail_pct) if order.trail_pct is not None else None,
+            highest_price_seen=float(order.highest_price_seen) if order.highest_price_seen is not None else None,
         )
     except HTTPException:
         raise

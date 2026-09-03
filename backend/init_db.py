@@ -207,6 +207,11 @@ MIGRATIONS = {
         "referral_code": "VARCHAR(12)",
         "referred_by_id": "INTEGER",
     },
+    "pending_orders": {
+        # Takip eden stop (TRAILING_STOP_SELL) — bkz. models.PendingOrder, orders.py
+        "trail_pct": "NUMERIC(5, 2)",
+        "highest_price_seen": "NUMERIC(10, 2)",
+    },
     "watchlist": {
         "target_price": "NUMERIC(10, 2)",
         "note": "VARCHAR(280)",

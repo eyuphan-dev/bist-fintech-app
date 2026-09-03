@@ -1,8 +1,9 @@
 """
 orders.py
 ---------
-Bekleyen (LIMIT_BUY / LIMIT_SELL / SCHEDULED_BUY) emirlerin borsa seans saatlerinde
-otomatik kontrolü ve gerçekleştirilmesi.
+Bekleyen (LIMIT_BUY / LIMIT_SELL / SCHEDULED_BUY / STOP_LOSS_SELL /
+TRAILING_STOP_SELL) emirlerin borsa seans saatlerinde otomatik kontrolü ve
+gerçekleştirilmesi.
 
 Tasarım notları:
 - Bu modül scheduler.py'deki update_bist_prices_job() içinden, fiyat güncellemesi
@@ -50,6 +51,13 @@ def _should_execute(order: "models.PendingOrder", current_price: float, now_utc:
     # anda çalışması demek olurdu.
     if order.order_type == "STOP_LOSS_SELL":
         return current_price > 0 and current_price <= float(order.target_price)
+    if order.order_type == "TRAILING_STOP_SELL":
+        # highest_price_seen bu fonksiyondan ÖNCE (process_pending_orders içinde,
+        # ayrı bir adımda) güncellenmiş olmalı -- bu fonksiyon salt-okunur kalır.
+        if not order.highest_price_seen:
+            return False
+        efektif_stop = float(order.highest_price_seen) * (1 - float(order.trail_pct) / 100.0)
+        return current_price > 0 and current_price <= efektif_stop
     if order.order_type == "SCHEDULED_BUY":
         return order.execution_time is not None and order.execution_time <= now_utc
     return False
@@ -150,14 +158,14 @@ def _execute_single_order(db: Session, order_id: int) -> None:
         # "Yetersiz hisse miktarı" ile FAILED olup kullanıcıya hata gibi görünürlerdi.
         # Tipik kullanım: aynı pozisyona kâr-al + zarar-kes koymak; biri çalışınca
         # diğeri kendiliğinden iptal olur.
-        if order.order_type in ("LIMIT_SELL", "STOP_LOSS_SELL"):
+        if order.order_type in ("LIMIT_SELL", "STOP_LOSS_SELL", "TRAILING_STOP_SELL"):
             remaining_qty = float(portfolio_entry.quantity) if (portfolio_entry and remaining > 0) else 0.0
             siblings = db.query(models.PendingOrder).filter(
                 models.PendingOrder.user_id == user.id,
                 models.PendingOrder.stock_id == order.stock_id,
                 models.PendingOrder.status == "PENDING",
                 models.PendingOrder.id != order.id,
-                models.PendingOrder.order_type.in_(("LIMIT_SELL", "STOP_LOSS_SELL")),
+                models.PendingOrder.order_type.in_(("LIMIT_SELL", "STOP_LOSS_SELL", "TRAILING_STOP_SELL")),
             ).all()
             for sib in siblings:
                 if float(sib.quantity) > remaining_qty:
@@ -187,6 +195,21 @@ def process_pending_orders(db: Session) -> None:
     pending_orders = db.query(models.PendingOrder).filter_by(status="PENDING").all()
     if not pending_orders:
         return
+
+    # TRAILING_STOP_SELL emirlerinin "en yüksek görülen fiyatı" tetikleme
+    # kontrolünden ÖNCE, ayrı bir adımda güncellenir ve KALICI yazılır --
+    # aksi halde _should_execute salt-okunur kalamaz ve bir sonraki taramada
+    # bu güncelleme kaybolurdu (fiyat düşüp tekrar yükseldiğinde stop yanlış
+    # yere "unutulmuş" olurdu).
+    trailing_orders = [o for o in pending_orders if o.order_type == "TRAILING_STOP_SELL"]
+    if trailing_orders:
+        for order in trailing_orders:
+            fiyat = _get_latest_price(db, order.stock_id)
+            if fiyat <= 0:
+                continue
+            if not order.highest_price_seen or fiyat > float(order.highest_price_seen):
+                order.highest_price_seen = fiyat
+        db.commit()
 
     to_execute = [
         order.id for order in pending_orders

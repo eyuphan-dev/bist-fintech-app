@@ -9,7 +9,7 @@ import { formatIstanbulDateTime } from "../lib/formatDate";
 interface PendingOrder {
   id: number;
   symbol: string;
-  order_type: "LIMIT_BUY" | "LIMIT_SELL" | "STOP_LOSS_SELL" | "SCHEDULED_BUY";
+  order_type: "LIMIT_BUY" | "LIMIT_SELL" | "STOP_LOSS_SELL" | "TRAILING_STOP_SELL" | "SCHEDULED_BUY";
   quantity: number;
   target_price: number | null;
   execution_time: string | null;
@@ -17,12 +17,15 @@ interface PendingOrder {
   fail_reason: string | null;
   created_at: string;
   executed_at: string | null;
+  trail_pct: number | null;
+  highest_price_seen: number | null;
 }
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
   LIMIT_BUY: "Limit Alış",
   LIMIT_SELL: "Limit Satış",
   STOP_LOSS_SELL: "Zarar Kes",
+  TRAILING_STOP_SELL: "İz Süren Stop",
   SCHEDULED_BUY: "Zamanlı Alış",
 };
 
@@ -48,6 +51,7 @@ export default function PendingOrdersSection() {
   const [editingOrder, setEditingOrder] = useState<PendingOrder | null>(null);
   const [editQuantity, setEditQuantity] = useState<number>(1);
   const [editTargetPrice, setEditTargetPrice] = useState<number>(0);
+  const [editTrailPct, setEditTrailPct] = useState<number>(5);
   const [editExecutionTime, setEditExecutionTime] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -81,6 +85,7 @@ export default function PendingOrdersSection() {
     setEditingOrder(order);
     setEditQuantity(order.quantity);
     setEditTargetPrice(order.target_price ?? 0);
+    setEditTrailPct(order.trail_pct ?? 5);
     setEditExecutionTime(order.execution_time ? toDatetimeLocalValue(order.execution_time) : "");
     setEditError(null);
   };
@@ -98,6 +103,8 @@ export default function PendingOrdersSection() {
           return;
         }
         payload.execution_time = new Date(editExecutionTime).toISOString();
+      } else if (editingOrder.order_type === "TRAILING_STOP_SELL") {
+        payload.trail_pct = editTrailPct;
       } else {
         payload.target_price = editTargetPrice;
       }
@@ -191,7 +198,9 @@ export default function PendingOrdersSection() {
                   <td className="py-3 text-gray-300">{ORDER_TYPE_LABELS[o.order_type] || o.order_type}</td>
                   <td className="py-3 text-gray-300 tabular-nums">{o.quantity}</td>
                   <td className="py-3 text-gray-300 tabular-nums">
-                    {o.target_price !== null ? `${o.target_price} TL` : "Piyasa Fiyatı"}
+                    {o.order_type === "TRAILING_STOP_SELL"
+                      ? `%${o.trail_pct} iz sürüyor${o.highest_price_seen ? ` (en yüksek: ${o.highest_price_seen} TL)` : ""}`
+                      : o.target_price !== null ? `${o.target_price} TL` : "Piyasa Fiyatı"}
                   </td>
                   <td className="py-3 text-gray-400 tabular-nums whitespace-nowrap text-[11px]">
                     {o.execution_time ? formatIstanbulDateTime(o.execution_time) : formatIstanbulDateTime(o.created_at)}
@@ -266,6 +275,22 @@ export default function PendingOrdersSection() {
                   value={editExecutionTime}
                   onChange={(e) => setEditExecutionTime(e.target.value)}
                 />
+              </div>
+            ) : editingOrder.order_type === "TRAILING_STOP_SELL" ? (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 font-medium">İz Sürme Yüzdesi:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="0.1"
+                    max="50"
+                    step="0.5"
+                    className="bg-[#0B0E14] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-20 text-center outline-none focus:border-[#10B981] font-semibold tabular-nums"
+                    value={editTrailPct}
+                    onChange={(e) => setEditTrailPct(parseFloat(e.target.value) || 0)}
+                  />
+                  <span className="text-gray-500">%</span>
+                </div>
               </div>
             ) : (
               <div className="flex items-center justify-between text-xs">

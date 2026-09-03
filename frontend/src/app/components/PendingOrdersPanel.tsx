@@ -16,14 +16,17 @@ interface PendingOrder {
   fail_reason: string | null;
   created_at: string;
   executed_at: string | null;
+  trail_pct: number | null;
+  highest_price_seen: number | null;
 }
 
-const ORDER_TYPES = ["LIMIT_BUY", "LIMIT_SELL", "STOP_LOSS_SELL", "SCHEDULED_BUY"] as const;
+const ORDER_TYPES = ["LIMIT_BUY", "LIMIT_SELL", "STOP_LOSS_SELL", "TRAILING_STOP_SELL", "SCHEDULED_BUY"] as const;
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
   LIMIT_BUY: "Limit Alış",
   LIMIT_SELL: "Limit Satış",
   STOP_LOSS_SELL: "Zarar Kes",
+  TRAILING_STOP_SELL: "İz Süren Stop",
   SCHEDULED_BUY: "Zamanlı Alış",
 };
 
@@ -40,6 +43,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
   const [orderType, setOrderType] = useState<(typeof ORDER_TYPES)[number]>("LIMIT_BUY");
   const [quantity, setQuantity] = useState(1);
   const [targetPrice, setTargetPrice] = useState<number>(currentPrice);
+  const [trailPct, setTrailPct] = useState<number>(5);
   const [executionTime, setExecutionTime] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
@@ -76,6 +80,8 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
           return;
         }
         payload.execution_time = new Date(executionTime).toISOString();
+      } else if (orderType === "TRAILING_STOP_SELL") {
+        payload.trail_pct = trailPct;
       } else {
         payload.target_price = targetPrice;
       }
@@ -168,6 +174,24 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
                 onChange={(e) => setExecutionTime(e.target.value)}
               />
             </div>
+          ) : orderType === "TRAILING_STOP_SELL" ? (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400 font-medium flex items-center gap-1">
+                <Target className="w-3 h-3" /> İz Sürme Yüzdesi:
+              </span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="0.1"
+                  max="50"
+                  step="0.5"
+                  className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white w-20 text-center outline-none focus:border-[#10B981] font-semibold tabular-nums"
+                  value={trailPct}
+                  onChange={(e) => setTrailPct(parseFloat(e.target.value) || 0)}
+                />
+                <span className="text-gray-500">%</span>
+              </div>
+            </div>
           ) : (
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-400 font-medium flex items-center gap-1">
@@ -188,6 +212,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
             {orderType === "LIMIT_BUY" && "Fiyat bu değere veya altına düşerse otomatik alım yapılır."}
             {orderType === "LIMIT_SELL" && "Fiyat bu değere veya üstüne çıkarsa otomatik satış yapılır (kâr al)."}
             {orderType === "STOP_LOSS_SELL" && "Fiyat bu değere veya altına DÜŞERSE otomatik satış yapılır (zararı sınırlar). Aynı pozisyona hem kâr-al hem zarar-kes koyabilirsiniz; biri gerçekleşince diğeri otomatik iptal olur."}
+            {orderType === "TRAILING_STOP_SELL" && "Stop seviyesi, gördüğü EN YÜKSEK fiyattan bu yüzde kadar geride otomatik olarak yükselir. Fiyat düşerken bu seviyeye değerse satılır — kârı korurken yükseliş potansiyelini bırakır."}
             {orderType === "SCHEDULED_BUY" && "Seçilen zaman geldiğinde (borsa açıkken) piyasa fiyatından alım yapılır."}
             {" "}
             Kontroller yalnızca borsa açıkken (hafta içi 10:00-18:15) birkaç dakikada bir çalışır.
@@ -221,6 +246,9 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
                   {o.quantity} adet
                   {o.target_price ? ` @ ${o.target_price} TL` : ""}
                   {o.execution_time ? ` — ${formatIstanbulDateTime(o.execution_time)}` : ""}
+                  {o.order_type === "TRAILING_STOP_SELL" && o.trail_pct
+                    ? ` — %${o.trail_pct} iz sürüyor${o.highest_price_seen ? ` (en yüksek: ${o.highest_price_seen} TL)` : ""}`
+                    : ""}
                 </span>
               </div>
               <button

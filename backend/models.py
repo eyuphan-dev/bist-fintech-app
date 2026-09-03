@@ -814,14 +814,23 @@ class PendingOrder(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
-    order_type = Column(String(20), nullable=False)  # 'LIMIT_BUY' | 'LIMIT_SELL' | 'SCHEDULED_BUY'
-    target_price = Column(Numeric(10, 2), nullable=True)   # LIMIT_BUY / LIMIT_SELL için zorunlu
+    order_type = Column(String(20), nullable=False)  # 'LIMIT_BUY' | 'LIMIT_SELL' | 'SCHEDULED_BUY' | 'STOP_LOSS_SELL' | 'TRAILING_STOP_SELL'
+    target_price = Column(Numeric(10, 2), nullable=True)   # LIMIT_BUY / LIMIT_SELL / STOP_LOSS_SELL için zorunlu
     execution_time = Column(DateTime, nullable=True)        # SCHEDULED_BUY için zorunlu (UTC)
     quantity = Column(Numeric(12, 4), nullable=False)
     status = Column(String(20), default="PENDING", nullable=False, index=True)  # PENDING | EXECUTED | CANCELLED | FAILED
     fail_reason = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     executed_at = Column(DateTime, nullable=True)
+
+    # TRAILING_STOP_SELL için: sabit target_price YERİNE, fiyat yükseldikçe
+    # stop seviyesi de birlikte yükselir (kârı korurken potansiyeli bırakır).
+    # trail_pct: "en yüksek görülen fiyattan en fazla %X düşerse sat".
+    # highest_price_seen: emir oluşturulduğundan bu yana görülen en yüksek fiyat
+    # -- her fiyat taramasında (orders.py) yalnızca YUKARI güncellenir, asla
+    # düşürülmez. Efektif stop = highest_price_seen * (1 - trail_pct/100).
+    trail_pct = Column(Numeric(5, 2), nullable=True)
+    highest_price_seen = Column(Numeric(10, 2), nullable=True)
 
     user = relationship("User")
     stock = relationship("Stock")
