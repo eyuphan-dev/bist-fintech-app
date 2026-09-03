@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   History, TrendingUp, TrendingDown, ArrowRight, Wallet, Target, Clock, RefreshCw, Download,
+  FileText,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
 import PerformanceScorecard from "../components/PerformanceScorecard";
@@ -109,6 +110,31 @@ export default function TransactionsPage() {
       console.error("CSV indirilemedi:", err);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const exportPdf = async () => {
+    if (!token || exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const res = await fetch(`${API_BASE}/portfolio/report`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `portfoy-raporu-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF rapor indirilemedi:", err);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -271,11 +297,22 @@ export default function TransactionsPage() {
             ))}
 
             <button
+              onClick={exportPdf}
+              disabled={exportingPdf}
+              type="button"
+              title="Portföy karnesini PDF olarak indir"
+              className="ml-auto flex items-center gap-1.5 px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white hover:border-[#F59E0B]/40 transition disabled:opacity-50"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {exportingPdf ? "Hazırlanıyor..." : "PDF rapor"}
+            </button>
+
+            <button
               onClick={exportCsv}
               disabled={exporting}
               type="button"
               title="İşlem geçmişini Excel'de açılabilir CSV olarak indir"
-              className="ml-auto flex items-center gap-1.5 px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white hover:border-[#10B981]/40 transition disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3.5 py-3 md:py-1.5 rounded-lg text-[11px] font-semibold bg-[#151921] border border-[#242B35] text-gray-400 hover:text-white hover:border-[#10B981]/40 transition disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
               {exporting ? "Hazırlanıyor..." : "CSV indir"}

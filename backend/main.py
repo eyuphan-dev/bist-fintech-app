@@ -2543,6 +2543,32 @@ def get_portfolio_scorecard(
     return ScorecardResponse(**build_scorecard(db, current_user.id, year))
 
 
+@app.get("/api/portfolio/report")
+@limiter.limit("10/minute")
+def get_portfolio_report_pdf(
+    request: Request, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """
+    Portföy karnesini indirilebilir bir PDF'e döker. `/api/portfolio` ve
+    `/api/portfolio/scorecard` ile AYNI fonksiyonlar doğrudan çağrılır --
+    rapordaki rakamlar bu yüzden uygulamanın geri kalanıyla her zaman
+    birebir tutarlıdır, ikinci bir hesaplama yolu yoktur.
+    """
+    from scorecard import build_scorecard
+    from report_pdf import build_portfolio_report_pdf
+
+    portfolio = get_portfolio(current_user, db).model_dump()
+    scorecard = build_scorecard(db, current_user.id, None)
+    pdf_bytes = build_portfolio_report_pdf(current_user.username, portfolio, scorecard)
+
+    tarih = datetime.utcnow().strftime("%Y-%m-%d")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="portfoy-raporu-{tarih}.pdf"'},
+    )
+
+
 @app.get("/api/portfolio/counterfactual", response_model=CounterfactualResponse)
 def get_portfolio_counterfactual(
     current_user: models.User = Depends(get_current_user),
