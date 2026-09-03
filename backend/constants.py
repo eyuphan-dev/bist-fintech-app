@@ -30,6 +30,14 @@ KOMISYON_ORANI_PCT = 0.02
 
 
 # ---------------------------------------------------------------------------
+# Referans/davet sistemi
+# ---------------------------------------------------------------------------
+# Hem davet eden hem davet edilen ayni miktari alir -- tek tarafli bonus
+# "arkadasini getir, o kazansin sen kazanma" gibi cazibesiz bir teklif olurdu.
+REFERANS_BONUS_TL = 5000.00
+
+
+# ---------------------------------------------------------------------------
 # Grafik/gosterge zaman araligi kodlari
 # ---------------------------------------------------------------------------
 # "1D" haric (o, gun ici stock_prices tablosundan gelir). Hem /history hem

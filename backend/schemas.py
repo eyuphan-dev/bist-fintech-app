@@ -24,6 +24,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)
     terms_accepted: bool = Field(..., description="Kullanıcı sözleşmesi, KVKK ve sorumluluk reddi feragatnamesi onayı (zorunlu)")
+    referral_code: Optional[str] = Field(None, max_length=12, description="Davet eden kullanıcının referans kodu (isteğe bağlı)")
 
 class UserResponse(BaseModel):
     id: int
@@ -652,6 +653,14 @@ class LeaderboardItem(BaseModel):
     total_portfolio_value: float
     profit_loss_pct: float
     is_bot: bool
+
+
+# --- REFERANS/DAVET SİSTEMİ ---
+
+class ReferralInfoResponse(BaseModel):
+    code: str
+    referral_count: int
+    total_bonus: float
 
 
 # --- BAŞARIM/ROZET SİSTEMİ ---

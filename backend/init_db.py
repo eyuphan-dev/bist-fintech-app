@@ -203,6 +203,9 @@ INITIAL_STOCKS = [
 MIGRATIONS = {
     "users": {
         "baseline_value": "NUMERIC(15, 2) DEFAULT 100000.00",
+        # Referans/davet sistemi (bkz. models.User, main.py register)
+        "referral_code": "VARCHAR(12)",
+        "referred_by_id": "INTEGER",
     },
     "watchlist": {
         "target_price": "NUMERIC(10, 2)",

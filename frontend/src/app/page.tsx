@@ -57,7 +57,7 @@ export default function Home() {
 
   // Auth form states
   const [isRegister, setIsRegister] = useState(false);
-  const [authForm, setAuthForm] = useState({ username: "", email: "", password: "" });
+  const [authForm, setAuthForm] = useState({ username: "", email: "", password: "", referralCode: "" });
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
@@ -108,10 +108,10 @@ export default function Home() {
   const handleDisclaimerAccept = async () => {
     setShowDisclaimer(false);
     setAuthLoading(true);
-    const result = await register(authForm.username, authForm.email, authForm.password);
+    const result = await register(authForm.username, authForm.email, authForm.password, authForm.referralCode);
     if (result.ok) {
       setIsRegister(false);
-      setAuthForm({ ...authForm, password: "" });
+      setAuthForm({ ...authForm, password: "", referralCode: "" });
       setAuthError("Kayıt başarılı! Giriş yapabilirsiniz.");
     } else {
       setAuthError(result.message || "Kayıt başarısız.");
@@ -170,6 +170,23 @@ export default function Home() {
                   value={authForm.email}
                   onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
                 />
+              </div>
+            )}
+
+            {isRegister && (
+              <div>
+                <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Referans Kodu <span className="normal-case text-gray-600">(opsiyonel)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Bir arkadaşın davet kodu varsa gir"
+                  className="w-full bg-[#0B0E14] border border-[#242B35] focus:border-[#F59E0B] rounded-lg px-3.5 py-2 text-white outline-none transition text-sm uppercase placeholder:normal-case"
+                  value={authForm.referralCode}
+                  onChange={(e) => setAuthForm({ ...authForm, referralCode: e.target.value })}
+                  maxLength={12}
+                />
+                <p className="text-[10px] text-gray-600 mt-1">Girersen ikiniz de 5.000 TL sanal bonus kazanır.</p>
               </div>
             )}
 

@@ -30,6 +30,13 @@ class User(Base):
     terms_accepted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Referans/davet sistemi: her kullanıcının kendi benzersiz kodu vardır
+    # (kayıt anında üretilir). `referred_by_id`, kaydolurken BAŞKASININ kodunu
+    # kullandıysa o kullanıcıyı işaret eder -- bonus yalnızca kayıt anında BİR
+    # KEZ verilir, ikinci bir işlemle tekrar tetiklenemez (bkz. main.py register).
+    referral_code = Column(String(12), unique=True, nullable=True, index=True)
+    referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     # Relationships
     portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
     bot_logs = relationship("BotLog", back_populates="user", cascade="all, delete-orphan")

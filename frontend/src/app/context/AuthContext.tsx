@@ -24,7 +24,7 @@ interface AuthContextValue {
   refreshTrigger: number;
   bumpRefresh: () => void;
   login: (username: string, password: string) => Promise<{ ok: boolean; message?: string }>;
-  register: (username: string, email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
+  register: (username: string, email: string, password: string, referralCode?: string) => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
 }
 
@@ -116,12 +116,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const register = useCallback(async (username: string, email: string, password: string) => {
+  const register = useCallback(async (username: string, email: string, password: string, referralCode?: string) => {
     try {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password, terms_accepted: true }),
+        body: JSON.stringify({
+          username, email, password, terms_accepted: true,
+          ...(referralCode?.trim() ? { referral_code: referralCode.trim() } : {}),
+        }),
       });
       const data = await res.json();
       if (res.ok) return { ok: true };

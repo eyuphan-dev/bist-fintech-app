@@ -1,5 +1,6 @@
 import os
 import re
+import secrets
 import pandas as pd
 from datetime import datetime, date, timedelta, time as dt_time
 from typing import List, Dict, Any, Optional
@@ -31,7 +32,7 @@ from schemas import (
     DividendPaymentItem, DividendHistoryResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     BasketSummary, BasketHolding, BasketInvestRequest, BasketInvestResponse,
-    AchievementResponse,
+    AchievementResponse, ReferralInfoResponse,
     CounterfactualResponse,
     SeasonalityResponse,
     StockProResponse, KatilimInfoResponse, CompanyAnalysisResponse,
@@ -73,7 +74,7 @@ from kap_topics import is_major_holder_news
 from sentiment import score_sentiment
 from yfinance_client import fetch_stock_news
 from cache import get_cached_news, set_cached_news
-from constants import EXTREME_CHANGE_GUARD_PCT, HISTORY_RANGE_DAYS, KOMISYON_ORANI_PCT
+from constants import EXTREME_CHANGE_GUARD_PCT, HISTORY_RANGE_DAYS, KOMISYON_ORANI_PCT, REFERANS_BONUS_TL
 
 def _rate_limit_key(request: Request) -> str:
     """
@@ -184,6 +185,16 @@ def startup_event():
 
 # --- AUTHENTICATION ---
 
+def _generate_referral_code(db: Session) -> str:
+    """6 haneli benzersiz referans kodu üretir. Çarpışma ölçülemeyecek kadar
+    düşük olasılıklı (36^6 ≈ 2 milyar) ama yine de garanti için kontrol edilir."""
+    for _ in range(10):
+        code = secrets.token_hex(3).upper()  # örn. "A3F9BC"
+        if not db.query(models.User).filter_by(referral_code=code).first():
+            return code
+    raise RuntimeError("Referans kodu üretilemedi.")
+
+
 @app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
@@ -199,7 +210,15 @@ def register(request: Request, user_data: UserCreate, db: Session = Depends(get_
             status_code=400,
             detail="Kullanıcı sözleşmesi, KVKK Aydınlatma Metni ve Sorumluluk Reddi Feragatnamesi'ni onaylamak zorunludur."
         )
-        
+
+    # Referans kodu geçerliyse davet eden de bulunur -- bonus ikisine de
+    # kayıt İŞLEMİ İÇİNDE (aynı commit'te) verilir, ayrı bir adım gerekmez.
+    referrer = None
+    if user_data.referral_code:
+        referrer = db.query(models.User).filter_by(
+            referral_code=user_data.referral_code.strip().upper()
+        ).first()
+
     hashed_password = get_password_hash(user_data.password)
     new_user = models.User(
         username=user_data.username,
@@ -209,10 +228,25 @@ def register(request: Request, user_data: UserCreate, db: Session = Depends(get_
         is_bot=False,
         terms_accepted=True,
         terms_accepted_at=datetime.utcnow(),
+        referral_code=_generate_referral_code(db),
     )
+    if referrer:
+        new_user.referred_by_id = referrer.id
+        # Bonus HEM bakiyeye HEM referans sermayesine (baseline_value) eklenir
+        # -- aksi halde bedava bonus, liderlik tablosunda sahte bir "getiri"
+        # gibi görünürdü (bkz. User.baseline_value docstring'i, aynı ilke).
+        new_user.virtual_balance = float(new_user.virtual_balance) + REFERANS_BONUS_TL
+        new_user.baseline_value = 100000.00 + REFERANS_BONUS_TL
+        referrer.virtual_balance = float(referrer.virtual_balance) + REFERANS_BONUS_TL
+        referrer.baseline_value = float(referrer.baseline_value or 100000.0) + REFERANS_BONUS_TL
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    if referrer:
+        _log_user_action(db, referrer.id, "REFERRAL_BONUS", f"{new_user.username} senin referans kodunla katıldı: +{REFERANS_BONUS_TL:.0f} TL.")
+        _log_user_action(db, new_user.id, "REFERRAL_BONUS", f"{referrer.username} kullanıcısının referans koduyla katıldın: +{REFERANS_BONUS_TL:.0f} TL.")
+        db.commit()
 
     # Her yeni kullanıcı için kişisel AI Bot otomatik oluşturulur (100.000 TL başlangıç bakiyesi, 1 Günlük varsayılan strateji)
     now = datetime.utcnow()
@@ -251,6 +285,26 @@ def login(request: Request, login_data: LoginRequest, background_tasks: Backgrou
 @app.get("/api/auth/me", response_model=UserResponse)
 def get_me(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+
+@app.get("/api/user/referral", response_model=ReferralInfoResponse)
+def get_referral_info(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Kullanıcının kendi referans kodu + kaç kişiyi davet ettiği + toplam
+    kazandığı bonus. Kod yoksa (referans sistemi eklenmeden ÖNCE kaydolmuş
+    eski kullanıcı) burada TEMBEL ÜRETİLİR -- geriye dönük backfill script'i
+    gerekmez, kullanıcı bu sayfayı ilk açtığında kendiliğinden oluşur.
+    """
+    if not current_user.referral_code:
+        current_user.referral_code = _generate_referral_code(db)
+        db.commit()
+
+    referral_count = db.query(func.count(models.User.id)).filter_by(referred_by_id=current_user.id).scalar() or 0
+    return ReferralInfoResponse(
+        code=current_user.referral_code,
+        referral_count=referral_count,
+        total_bonus=round(referral_count * REFERANS_BONUS_TL, 2),
+    )
 
 
 @app.post("/api/auth/change-password")

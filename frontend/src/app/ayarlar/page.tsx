@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Settings, KeyRound, Check, AlertCircle, User as UserIcon, RefreshCw } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
 import PushNotificationSettings from "../components/PushNotificationSettings";
+import ReferralWidget from "../components/ReferralWidget";
 
 export default function SettingsPage() {
   const { token, user, loading: authLoading } = useAuth();
@@ -118,6 +119,8 @@ export default function SettingsPage() {
       </div>
 
       {/* Anlık bildirimler */}
+      <ReferralWidget />
+
       <PushNotificationSettings />
 
       {/* Şifre değiştirme */}
