@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays,
   Star, SlidersHorizontal, MoreHorizontal, GitCompareArrows, History, Settings,
-  ChevronDown, Radar, Layers, ShoppingBasket,
+  ChevronDown, Radar, Layers, ShoppingBasket, Rewind,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
@@ -25,6 +25,7 @@ const PRIMARY_NAV_LINKS = [
 const MORE_NAV_LINKS = [
   { href: "/sinyaller", label: "Teknik Sinyaller", icon: Radar },
   { href: "/sepetler", label: "Tematik Sepetler", icon: ShoppingBasket },
+  { href: "/replay", label: "Replay Modu", icon: Rewind },
   { href: "/sektorler", label: "Sektör Analizi", icon: Layers },
   { href: "/karsilastir", label: "Hisse Karşılaştır", icon: GitCompareArrows },
   { href: "/heatmap", label: "Isı Haritası", icon: Flame },

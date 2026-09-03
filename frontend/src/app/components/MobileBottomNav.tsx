@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Wallet, TrendingUp, Bot, PiggyBank, Flame, Menu, X, Star, History,
   Settings, SlidersHorizontal, GitCompareArrows, CalendarDays, LogOut, Radar, Layers,
-  ShoppingBasket,
+  ShoppingBasket, Rewind,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -30,6 +30,7 @@ const MENU_GROUPS: {
       { href: "/tarayici", label: "Tarayıcı", icon: SlidersHorizontal },
       { href: "/sinyaller", label: "Teknik Sinyaller", icon: Radar },
       { href: "/sepetler", label: "Tematik Sepetler", icon: ShoppingBasket },
+      { href: "/replay", label: "Replay Modu", icon: Rewind },
       { href: "/sektorler", label: "Sektör Analizi", icon: Layers },
       { href: "/karsilastir", label: "Hisse Karşılaştır", icon: GitCompareArrows },
       { href: "/heatmap", label: "Isı Haritası", icon: Flame },
