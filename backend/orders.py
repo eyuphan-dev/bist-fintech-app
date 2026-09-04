@@ -21,7 +21,7 @@ Tasarım notları:
   transaction'ı içinde, execute_trade ile aynı atomiklik deseniyle işlenir.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 import models
@@ -63,7 +63,22 @@ def _should_execute(order: "models.PendingOrder", current_price: float, now_utc:
     return False
 
 
+RECURRENCE_DAYS = {"WEEKLY": 7, "MONTHLY": 30}
+
+
 def _fail_order(db: Session, order: "models.PendingOrder", reason: str) -> None:
+    # Periyodik (DCA) emir kalıcı olarak FAILED sayılmaz -- ör. o ay bakiye
+    # yetersizdi diye tüm otomasyonun sessizce ölmesi istenmez. Bir sonraki
+    # döneme ertelenir, kullanıcı fail_reason'dan neden atlandığını görür.
+    if order.order_type == "SCHEDULED_BUY" and order.recurrence:
+        gun = RECURRENCE_DAYS.get(order.recurrence, 30)
+        order.status = "PENDING"
+        order.fail_reason = f"{reason} (bir sonraki döneme ertelendi)"
+        order.execution_time = (order.execution_time or datetime.utcnow()) + timedelta(days=gun)
+        db.commit()
+        print(f"[Orders] Periyodik emir #{order.id} ertelendi: {reason}")
+        return
+
     order.status = "FAILED"
     order.fail_reason = reason
     order.executed_at = datetime.utcnow()
@@ -149,8 +164,19 @@ def _execute_single_order(db: Session, order_id: int) -> None:
                 commission=komisyon,
             )
 
-        order.status = "EXECUTED"
-        order.executed_at = datetime.utcnow()
+        if order.order_type == "SCHEDULED_BUY" and order.recurrence:
+            # Periyodik otomatik yatırım (DCA): terminal duruma geçmez, bir
+            # sonraki dönem için PENDING'de kalır. executed_at burada SON
+            # gerçekleşme anını tutar (terminal "bitiş" anlamına gelmez).
+            gun = RECURRENCE_DAYS.get(order.recurrence, 30)
+            order.execution_count = (order.execution_count or 0) + 1
+            order.executed_at = datetime.utcnow()
+            order.fail_reason = None
+            order.execution_time = order.execution_time + timedelta(days=gun)
+            order.status = "PENDING"
+        else:
+            order.status = "EXECUTED"
+            order.executed_at = datetime.utcnow()
 
         # OCO (one-cancels-other): bir satış emri gerçekleştiğinde, aynı hisse için
         # bekleyen DİĞER satış emirleri artık karşılanamayacak kadar lot bırakmış

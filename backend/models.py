@@ -37,6 +37,13 @@ class User(Base):
     referral_code = Column(String(12), unique=True, nullable=True, index=True)
     referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
+    # Herkese açık profil sayfası (bkz. main.py get_public_profile). Liderlik
+    # tablosu (kullanıcı adı + toplam değer) zaten kimliği doğrulanmış her
+    # kullanıcıya açık olduğu için varsayılan AÇIKTIR; bu alan yalnızca
+    # başarımların ve en büyük pozisyonların (ağırlık %) EK olarak gösterilip
+    # gösterilmeyeceğini kontrol eder. Kullanıcı ayarlar sayfasından kapatabilir.
+    profile_public = Column(Boolean, default=True, nullable=False)
+
     # Relationships
     portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
     bot_logs = relationship("BotLog", back_populates="user", cascade="all, delete-orphan")
@@ -831,6 +838,15 @@ class PendingOrder(Base):
     # düşürülmez. Efektif stop = highest_price_seen * (1 - trail_pct/100).
     trail_pct = Column(Numeric(5, 2), nullable=True)
     highest_price_seen = Column(Numeric(10, 2), nullable=True)
+
+    # Periyodik otomatik yatırım (DCA): yalnızca SCHEDULED_BUY için anlamlıdır.
+    # Dolu ise emir gerçekleştiğinde TERMINAL (EXECUTED) duruma geçmez -- bunun
+    # yerine execution_time bir sonraki döneme kaydırılıp status PENDING'de
+    # kalır (bkz. orders.py _execute_single_order). NULL = tek seferlik emir.
+    recurrence = Column(String(10), nullable=True)  # 'WEEKLY' | 'MONTHLY'
+    # Periyodik emrin şimdiye kadar kaç kez BAŞARIYLA gerçekleştiği. Tek
+    # seferlik emirlerde her zaman 0 kalır.
+    execution_count = Column(Integer, default=0, nullable=False)
 
     user = relationship("User")
     stock = relationship("Stock")

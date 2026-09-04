@@ -454,7 +454,13 @@ export default function Home() {
                     </span>
                     <div>
                       <span className="text-white flex items-center">
-                        {player.is_bot ? player.username : `@${player.username}`}
+                        {player.is_bot ? (
+                          player.username
+                        ) : (
+                          <Link href={`/profil/${player.username}`} className="hover:text-[#10B981] transition">
+                            @{player.username}
+                          </Link>
+                        )}
                         {player.is_bot && (
                           <span className="ml-1 bg-[#F59E0B]/10 text-[#F59E0B] text-[8px] uppercase tracking-wider px-1 rounded font-bold">
                             BOT

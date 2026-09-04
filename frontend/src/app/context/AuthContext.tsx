@@ -15,6 +15,7 @@ interface User {
   is_bot: boolean;
   terms_accepted: boolean;
   created_at: string;
+  profile_public: boolean;
 }
 
 interface AuthContextValue {

@@ -19,7 +19,11 @@ interface PendingOrder {
   executed_at: string | null;
   trail_pct: number | null;
   highest_price_seen: number | null;
+  recurrence: "WEEKLY" | "MONTHLY" | null;
+  execution_count: number;
 }
+
+const RECURRENCE_LABELS: Record<string, string> = { WEEKLY: "Haftalık", MONTHLY: "Aylık" };
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
   LIMIT_BUY: "Limit Alış",
@@ -195,7 +199,14 @@ export default function PendingOrdersSection() {
                       {o.symbol}
                     </Link>
                   </td>
-                  <td className="py-3 text-gray-300">{ORDER_TYPE_LABELS[o.order_type] || o.order_type}</td>
+                  <td className="py-3 text-gray-300">
+                    {ORDER_TYPE_LABELS[o.order_type] || o.order_type}
+                    {o.recurrence && (
+                      <span className="block text-[10px] text-[#10B981] font-semibold">
+                        {RECURRENCE_LABELS[o.recurrence]} tekrar{o.execution_count ? ` — ${o.execution_count}. kez` : ""}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-3 text-gray-300 tabular-nums">{o.quantity}</td>
                   <td className="py-3 text-gray-300 tabular-nums">
                     {o.order_type === "TRAILING_STOP_SELL"

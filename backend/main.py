@@ -47,6 +47,7 @@ from schemas import (
     PushSubscribeRequest, PushStatusResponse,
     ScorecardResponse, BacktestResponse, ExtraIndicatorsResponse, IndicatorSeriesResponse,
     CustomFormulaRequest, CustomFormulaResponse,
+    PublicProfileHolding, PublicProfileResponse, ProfileVisibilityUpdateRequest,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -2199,6 +2200,7 @@ def create_pending_order(
         status="PENDING",
         trail_pct=order.trail_pct,
         highest_price_seen=baslangic_en_yuksek,
+        recurrence=order.recurrence,
     )
     db.add(new_order)
     db.commit()
@@ -2219,6 +2221,7 @@ def create_pending_order(
         executed_at=new_order.executed_at,
         trail_pct=float(new_order.trail_pct) if new_order.trail_pct is not None else None,
         highest_price_seen=float(new_order.highest_price_seen) if new_order.highest_price_seen is not None else None,
+        recurrence=new_order.recurrence, execution_count=new_order.execution_count or 0,
     )
 
 
@@ -2244,6 +2247,7 @@ def list_pending_orders(
             fail_reason=o.fail_reason, created_at=o.created_at, executed_at=o.executed_at,
             trail_pct=float(o.trail_pct) if o.trail_pct is not None else None,
             highest_price_seen=float(o.highest_price_seen) if o.highest_price_seen is not None else None,
+            recurrence=o.recurrence, execution_count=o.execution_count or 0,
         ) for o in orders
     ]
 
@@ -2303,6 +2307,7 @@ def update_pending_order(
             executed_at=order.executed_at,
             trail_pct=float(order.trail_pct) if order.trail_pct is not None else None,
             highest_price_seen=float(order.highest_price_seen) if order.highest_price_seen is not None else None,
+            recurrence=order.recurrence, execution_count=order.execution_count or 0,
         )
     except HTTPException:
         raise
@@ -4451,6 +4456,87 @@ def get_achievements(current_user: models.User = Depends(get_current_user), db: 
         )
         for tanim in basarim_tanimlari()
     ]
+
+
+# --- HERKESE AÇIK PROFİL SAYFASI ---
+
+@app.get("/api/users/{username}/profile", response_model=PublicProfileResponse)
+def get_public_profile(
+    username: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Herkese açık profil vitrini: toplam değer/getiri (liderlik tablosunda zaten
+    açık), kazanılmış rozetler ve en büyük 5 pozisyonun AĞIRLIK YÜZDESİ (adet/TL
+    tutarı değil). `profile_public=False` ise yalnızca sahibi görebilir.
+    """
+    target = db.query(models.User).filter_by(username=username, is_bot=False).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+    if not target.profile_public and target.id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bu kullanıcı profilini gizli tutuyor.")
+
+    pozisyonlar = (
+        db.query(models.Portfolio)
+        .join(models.Stock, models.Stock.id == models.Portfolio.stock_id)
+        .filter(models.Portfolio.user_id == target.id, models.Portfolio.is_bot_portfolio.is_(False))
+        .all()
+    )
+    fiyat_haritasi = _bulk_price_and_change(db, [p.stock_id for p in pozisyonlar]) if pozisyonlar else {}
+
+    total_value = float(target.virtual_balance)
+    holding_degerleri = []
+    for p in pozisyonlar:
+        fiyat, _ = fiyat_haritasi.get(p.stock_id, (0.0, None))
+        deger = float(p.quantity) * (fiyat or float(p.average_cost))
+        total_value += deger
+        holding_degerleri.append((p.stock, deger))
+
+    top_holdings = []
+    if total_value > 0 and holding_degerleri:
+        holding_degerleri.sort(key=lambda x: x[1], reverse=True)
+        top_holdings = [
+            PublicProfileHolding(
+                symbol=stock.symbol, company_name=stock.company_name,
+                weight_pct=round((deger / total_value) * 100, 2),
+            )
+            for stock, deger in holding_degerleri[:5]
+        ]
+
+    baseline = float(target.baseline_value or 100000.0)
+    profit_loss_pct = ((total_value - baseline) / baseline) * 100 if baseline else 0.0
+
+    kazanilan_harita = {
+        r.achievement_id: r.earned_at
+        for r in db.query(models.UserAchievement).filter_by(user_id=target.id).all()
+    }
+    achievements = [
+        AchievementResponse(
+            id=tanim["id"], isim=tanim["isim"], aciklama=tanim["aciklama"],
+            kazanildi=True, kazanilma_tarihi=kazanilan_harita[tanim["id"]],
+        )
+        for tanim in basarim_tanimlari()
+        if tanim["id"] in kazanilan_harita
+    ]
+
+    return PublicProfileResponse(
+        username=target.username, created_at=target.created_at,
+        total_portfolio_value=round(total_value, 2), profit_loss_pct=round(profit_loss_pct, 2),
+        achievements=achievements, top_holdings=top_holdings, profile_public=target.profile_public,
+    )
+
+
+@app.post("/api/user/profile-visibility")
+def update_profile_visibility(
+    body: ProfileVisibilityUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Kullanıcının kendi profil vitrinini (rozetler + en büyük pozisyonlar) açıp kapatmasını sağlar."""
+    current_user.profile_public = body.profile_public
+    db.commit()
+    return {"profile_public": current_user.profile_public}
 
 
 # --- TEMATİK SEPETLER ---

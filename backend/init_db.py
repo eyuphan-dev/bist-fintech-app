@@ -206,11 +206,16 @@ MIGRATIONS = {
         # Referans/davet sistemi (bkz. models.User, main.py register)
         "referral_code": "VARCHAR(12)",
         "referred_by_id": "INTEGER",
+        # Herkese açık profil sayfası (bkz. models.User.profile_public)
+        "profile_public": "BOOLEAN DEFAULT 1",
     },
     "pending_orders": {
         # Takip eden stop (TRAILING_STOP_SELL) — bkz. models.PendingOrder, orders.py
         "trail_pct": "NUMERIC(5, 2)",
         "highest_price_seen": "NUMERIC(10, 2)",
+        # Periyodik otomatik yatırım (DCA) -- bkz. models.PendingOrder.recurrence
+        "recurrence": "VARCHAR(10)",
+        "execution_count": "INTEGER DEFAULT 0",
     },
     "watchlist": {
         "target_price": "NUMERIC(10, 2)",

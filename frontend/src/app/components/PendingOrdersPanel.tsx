@@ -18,7 +18,11 @@ interface PendingOrder {
   executed_at: string | null;
   trail_pct: number | null;
   highest_price_seen: number | null;
+  recurrence: "WEEKLY" | "MONTHLY" | null;
+  execution_count: number;
 }
+
+const RECURRENCE_LABELS: Record<string, string> = { WEEKLY: "Haftalık", MONTHLY: "Aylık" };
 
 const ORDER_TYPES = ["LIMIT_BUY", "LIMIT_SELL", "STOP_LOSS_SELL", "TRAILING_STOP_SELL", "SCHEDULED_BUY"] as const;
 
@@ -45,6 +49,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
   const [targetPrice, setTargetPrice] = useState<number>(currentPrice);
   const [trailPct, setTrailPct] = useState<number>(5);
   const [executionTime, setExecutionTime] = useState("");
+  const [recurrence, setRecurrence] = useState<"" | "WEEKLY" | "MONTHLY">("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -80,6 +85,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
           return;
         }
         payload.execution_time = new Date(executionTime).toISOString();
+        if (recurrence) payload.recurrence = recurrence;
       } else if (orderType === "TRAILING_STOP_SELL") {
         payload.trail_pct = trailPct;
       } else {
@@ -95,6 +101,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
       if (res.ok) {
         setMessage({ text: "Emir oluşturuldu.", isError: false });
         setShowForm(false);
+        setRecurrence("");
         fetchOrders();
       } else {
         setMessage({ text: data.detail || "Emir oluşturulamadı.", isError: true });
@@ -170,15 +177,34 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
           </div>
 
           {orderType === "SCHEDULED_BUY" ? (
-            <div className="flex items-center justify-between text-xs gap-2">
-              <span className="text-gray-400 font-medium shrink-0">Tarih/Saat:</span>
-              <input
-                type="datetime-local"
-                className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white outline-none focus:border-[#10B981] text-xs flex-1"
-                value={executionTime}
-                onChange={(e) => setExecutionTime(e.target.value)}
-              />
-            </div>
+            <>
+              <div className="flex items-center justify-between text-xs gap-2">
+                <span className="text-gray-400 font-medium shrink-0">Tarih/Saat:</span>
+                <input
+                  type="datetime-local"
+                  className="bg-[#151921] border border-[#242B35] rounded px-2.5 py-1.5 text-white outline-none focus:border-[#10B981] text-xs flex-1 min-w-0"
+                  value={executionTime}
+                  onChange={(e) => setExecutionTime(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 font-medium">Tekrar:</span>
+                <div className="flex gap-1">
+                  {([["", "Tek Sefer"], ["WEEKLY", "Haftalık"], ["MONTHLY", "Aylık"]] as const).map(([val, label]) => (
+                    <button
+                      key={val || "none"}
+                      type="button"
+                      onClick={() => setRecurrence(val)}
+                      className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition min-h-[32px] ${
+                        recurrence === val ? "bg-[#10B981] text-[#0B0E14]" : "bg-[#151921] text-gray-400 border border-[#242B35]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           ) : orderType === "TRAILING_STOP_SELL" ? (
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-400 font-medium flex items-center gap-1">
@@ -218,7 +244,9 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
             {orderType === "LIMIT_SELL" && "Fiyat bu değere veya üstüne çıkarsa otomatik satış yapılır (kâr al)."}
             {orderType === "STOP_LOSS_SELL" && "Fiyat bu değere veya altına DÜŞERSE otomatik satış yapılır (zararı sınırlar). Aynı pozisyona hem kâr-al hem zarar-kes koyabilirsiniz; biri gerçekleşince diğeri otomatik iptal olur."}
             {orderType === "TRAILING_STOP_SELL" && "Stop seviyesi, gördüğü EN YÜKSEK fiyattan bu yüzde kadar geride otomatik olarak yükselir. Fiyat düşerken bu seviyeye değerse satılır — kârı korurken yükseliş potansiyelini bırakır."}
-            {orderType === "SCHEDULED_BUY" && "Seçilen zaman geldiğinde (borsa açıkken) piyasa fiyatından alım yapılır."}
+            {orderType === "SCHEDULED_BUY" && (recurrence
+              ? `Seçilen zamandan başlayarak ${recurrence === "WEEKLY" ? "her hafta" : "her ay"} otomatik olarak piyasa fiyatından alım yapılır (DCA). Bakiye yetersizse o dönem atlanır, bir sonrakinde tekrar denenir.`
+              : "Seçilen zaman geldiğinde (borsa açıkken) piyasa fiyatından alım yapılır.")}
             {" "}
             Kontroller yalnızca borsa açıkken (hafta içi 10:00-18:15) birkaç dakikada bir çalışır.
           </p>
@@ -254,6 +282,7 @@ export default function PendingOrdersPanel({ symbol, currentPrice }: { symbol: s
                   {o.order_type === "TRAILING_STOP_SELL" && o.trail_pct
                     ? ` — %${o.trail_pct} iz sürüyor${o.highest_price_seen ? ` (en yüksek: ${o.highest_price_seen} TL)` : ""}`
                     : ""}
+                  {o.recurrence ? ` — ${RECURRENCE_LABELS[o.recurrence]} tekrar${o.execution_count ? ` (${o.execution_count}. kez)` : ""}` : ""}
                 </span>
               </div>
               <button

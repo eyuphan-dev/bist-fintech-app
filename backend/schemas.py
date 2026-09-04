@@ -34,6 +34,7 @@ class UserResponse(BaseModel):
     is_bot: bool
     terms_accepted: bool
     created_at: datetime
+    profile_public: bool = True
 
     @field_serializer("created_at")
     def _serialize_created_at(self, value: datetime) -> Optional[str]:
@@ -673,6 +674,36 @@ class AchievementResponse(BaseModel):
     kazanilma_tarihi: Optional[datetime] = None
 
 
+# --- HERKESE AÇIK PROFİL SAYFASI ---
+
+class PublicProfileHolding(BaseModel):
+    symbol: str
+    company_name: str
+    weight_pct: float
+
+
+class PublicProfileResponse(BaseModel):
+    username: str
+    created_at: datetime
+    total_portfolio_value: float
+    profit_loss_pct: float
+    # Yalnızca KAZANILMIŞ rozetler — kendi başarımlar sayfasından farklı olarak
+    # burası bir "vitrin", kazanılmamışları listelemek anlamlı değil.
+    achievements: List[AchievementResponse]
+    # En büyük 5 pozisyon, yalnızca portföy içi AĞIRLIK YÜZDESİ ile (adet/TL
+    # tutarı gösterilmez) — stratejiyi büyük ölçüde ifşa etmeden fikir verir.
+    top_holdings: List[PublicProfileHolding]
+    profile_public: bool
+
+    @field_serializer("created_at")
+    def _serialize_created_at(self, value: datetime) -> Optional[str]:
+        return _utc_iso(value)
+
+
+class ProfileVisibilityUpdateRequest(BaseModel):
+    profile_public: bool
+
+
 # --- TEMATİK SEPETLER ---
 
 class BasketHolding(BaseModel):
@@ -876,6 +907,10 @@ class PendingOrderCreate(BaseModel):
     # %X düşerse sat". %50 üst sınır -- bunun üstü pratikte hiç tetiklenmeyen,
     # anlamsız bir emir olurdu.
     trail_pct: Optional[float] = Field(None, gt=0, le=50, allow_inf_nan=False)
+    # Periyodik otomatik yatırım (DCA): yalnızca SCHEDULED_BUY için geçerlidir.
+    # İlk çalışma execution_time'da olur, sonrasında her başarılı gerçekleşmede
+    # otomatik olarak bir sonraki döneme kaydırılır (bkz. orders.py).
+    recurrence: Optional[Literal["WEEKLY", "MONTHLY"]] = None
 
     @model_validator(mode="after")
     def _validate_type_specific_fields(self):
@@ -883,11 +918,15 @@ class PendingOrderCreate(BaseModel):
         if self.order_type in ("LIMIT_BUY", "LIMIT_SELL", "STOP_LOSS_SELL"):
             if self.target_price is None:
                 raise ValueError("Fiyat şartlı emirler için target_price zorunludur.")
+            if self.recurrence is not None:
+                raise ValueError("recurrence yalnızca SCHEDULED_BUY emirlerinde kullanılabilir.")
         elif self.order_type == "TRAILING_STOP_SELL":
             if self.trail_pct is None:
                 raise ValueError("TRAILING_STOP_SELL emirleri için trail_pct zorunludur.")
             if self.target_price is not None:
                 raise ValueError("TRAILING_STOP_SELL emirlerinde target_price kullanılmaz, trail_pct kullanın.")
+            if self.recurrence is not None:
+                raise ValueError("recurrence yalnızca SCHEDULED_BUY emirlerinde kullanılabilir.")
         elif self.order_type == "SCHEDULED_BUY":
             if self.execution_time is None:
                 raise ValueError("SCHEDULED_BUY emirleri için execution_time zorunludur.")
@@ -929,6 +968,8 @@ class PendingOrderResponse(BaseModel):
     executed_at: Optional[datetime]
     trail_pct: Optional[float] = None
     highest_price_seen: Optional[float] = None
+    recurrence: Optional[str] = None
+    execution_count: int = 0
 
     class Config:
         from_attributes = True
