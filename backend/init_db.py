@@ -207,7 +207,12 @@ MIGRATIONS = {
         "referral_code": "VARCHAR(12)",
         "referred_by_id": "INTEGER",
         # Herkese açık profil sayfası (bkz. models.User.profile_public)
-        "profile_public": "BOOLEAN DEFAULT 1",
+        # DİKKAT: Postgres'te "BOOLEAN DEFAULT 1" DatatypeMismatch ile patlar
+        # (integer literal boolean sütuna atanamıyor) -- SQLite'ta 1/0 kabul
+        # edilir ama Postgres TRUE/FALSE ister. TRUE her iki dialektte de
+        # çalışır (bu hata production'da 2026-09-06'da çöküş döngüsüne
+        # sebep oldu, deploy sonrası hemen fark edilip düzeltildi).
+        "profile_public": "BOOLEAN DEFAULT TRUE",
     },
     "pending_orders": {
         # Takip eden stop (TRAILING_STOP_SELL) — bkz. models.PendingOrder, orders.py
