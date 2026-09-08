@@ -1,0 +1,48 @@
+"""
+shop.py
+-------
+Sanal ödül mağazası: haftalık görevlerden (quests.py) ve Şampiyonlar
+Duvarı'ndan (hall_of_fame.py, achievements.py) kazanılan "oyun puanı"
+(User.game_points) ile satın alınan KOZMETİK eşyalar. GERÇEK PARAYLA hiçbir
+ilişkisi yoktur -- virtual_balance'tan tamamen ayrı, sıfırdan başlayan bir
+ikinci sayaç harcanır.
+
+Katalog kodda SABİTTİR (baskets.py/achievements.py ile aynı desen) -- ayrı
+bir DB tablosu gerekmez. Yalnızca kullanıcının SAHİP OLDUĞU eşyalar
+(models.UserInventory) ve o an TAKILI olan seçim (User.equipped_frame_id /
+equipped_title_id) veritabanında tutulur.
+"""
+
+from typing import List, Optional, TypedDict
+
+
+class MagazaEsyasi(TypedDict):
+    id: str
+    isim: str
+    aciklama: str
+    kategori: str   # 'CERCEVE' | 'UNVAN'
+    maliyet: int    # oyun puanı
+    deger: str      # CERCEVE için hex renk, UNVAN için gösterilecek metin
+
+
+MAGAZA_ESYALARI: List[MagazaEsyasi] = [
+    {"id": "cerceve-altin", "isim": "Altın Çerçeve", "aciklama": "Profilinde avatarının etrafında altın bir çerçeve.", "kategori": "CERCEVE", "maliyet": 50, "deger": "#F59E0B"},
+    {"id": "cerceve-zumrut", "isim": "Zümrüt Çerçeve", "aciklama": "Profilinde avatarının etrafında zümrüt yeşili bir çerçeve.", "kategori": "CERCEVE", "maliyet": 40, "deger": "#10B981"},
+    {"id": "cerceve-safir", "isim": "Safir Çerçeve", "aciklama": "Profilinde avatarının etrafında safir mavisi bir çerçeve.", "kategori": "CERCEVE", "maliyet": 75, "deger": "#38BDF8"},
+    {"id": "cerceve-yakut", "isim": "Yakut Çerçeve", "aciklama": "Profilinde avatarının etrafında yakut kırmızısı bir çerçeve.", "kategori": "CERCEVE", "maliyet": 60, "deger": "#F43F5E"},
+    {"id": "unvan-kurt", "isim": "Borsa Kurdu", "aciklama": "Kullanıcı adının yanında 'Borsa Kurdu' unvanı.", "kategori": "UNVAN", "maliyet": 30, "deger": "Borsa Kurdu"},
+    {"id": "unvan-usta", "isim": "Yatırım Ustası", "aciklama": "Kullanıcı adının yanında 'Yatırım Ustası' unvanı.", "kategori": "UNVAN", "maliyet": 60, "deger": "Yatırım Ustası"},
+    {"id": "unvan-efsane", "isim": "Efsane Trader", "aciklama": "Kullanıcı adının yanında 'Efsane Trader' unvanı.", "kategori": "UNVAN", "maliyet": 100, "deger": "Efsane Trader"},
+]
+
+_ESYA_HARITASI = {e["id"]: e for e in MAGAZA_ESYALARI}
+
+
+def magaza_esyalari() -> List[MagazaEsyasi]:
+    return MAGAZA_ESYALARI
+
+
+def esya_bul(item_id: Optional[str]) -> Optional[MagazaEsyasi]:
+    if not item_id:
+        return None
+    return _ESYA_HARITASI.get(item_id)

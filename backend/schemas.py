@@ -35,6 +35,7 @@ class UserResponse(BaseModel):
     terms_accepted: bool
     created_at: datetime
     profile_public: bool = True
+    game_points: int = 0
 
     @field_serializer("created_at")
     def _serialize_created_at(self, value: datetime) -> Optional[str]:
@@ -695,6 +696,33 @@ class AchievementResponse(BaseModel):
     kazanilma_tarihi: Optional[datetime] = None
 
 
+# --- HAFTALIK GÖREVLER & OYUN PUANI ---
+
+class QuestResponse(BaseModel):
+    id: str
+    isim: str
+    aciklama: str
+    puan: int
+    tamamlandi: bool
+
+
+class GamePointsResponse(BaseModel):
+    game_points: int
+
+
+# --- SANAL ÖDÜL MAĞAZASI ---
+
+class ShopItemResponse(BaseModel):
+    id: str
+    isim: str
+    aciklama: str
+    kategori: str      # 'CERCEVE' | 'UNVAN'
+    maliyet: int
+    deger: str
+    sahip_mi: bool
+    takili_mi: bool
+
+
 # --- HERKESE AÇIK PROFİL SAYFASI ---
 
 class PublicProfileHolding(BaseModel):
@@ -727,6 +755,11 @@ class PublicProfileResponse(BaseModel):
     career_points: int = 0
     career_rank_label: str = "Yeni Başlayan"
     hall_of_fame_placements: List[HallOfFamePlacement] = []
+    game_points: int = 0
+    # Mağazadan takılı kozmetikler (bkz. shop.py) -- ham ID değil, doğrudan
+    # gösterilebilecek çözümlenmiş değer (frontend katalog bilmek zorunda kalmasın).
+    equipped_frame_color: Optional[str] = None
+    equipped_title_text: Optional[str] = None
 
     @field_serializer("created_at")
     def _serialize_created_at(self, value: datetime) -> Optional[str]:

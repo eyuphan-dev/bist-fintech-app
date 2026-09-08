@@ -7,6 +7,7 @@ import {
   LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays,
   Star, SlidersHorizontal, MoreHorizontal, GitCompareArrows, History, Settings,
   ChevronDown, Radar, Layers, ShoppingBasket, Rewind, Trophy, Calculator, Crown,
+  ListChecks, Store,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
@@ -40,6 +41,8 @@ const USER_MENU_LINKS = [
   { href: "/favoriler", label: "Favori Hisselerim", icon: Star },
   { href: "/islemlerim", label: "İşlem Geçmişim", icon: History },
   { href: "/basarimlar", label: "Başarımlarım", icon: Trophy },
+  { href: "/gorevler", label: "Haftalık Görevler", icon: ListChecks },
+  { href: "/magaza", label: "Ödül Mağazası", icon: Store },
   { href: "/ayarlar", label: "Hesap Ayarları", icon: Settings },
 ];
 

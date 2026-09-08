@@ -49,6 +49,7 @@ from schemas import (
     CustomFormulaRequest, CustomFormulaResponse,
     PublicProfileHolding, PublicProfileResponse, ProfileVisibilityUpdateRequest,
     CategoryLeaderboardItem, HallOfFameEntryResponse, HallOfFamePlacement,
+    QuestResponse, GamePointsResponse, ShopItemResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -66,6 +67,8 @@ from achievements import basarim_tanimlari, kazanilanlari_hesapla, Baglam
 from leaderboard_categories import (
     istikrar_siralamasi, aktiflik_siralamasi, kahin_siralamasi, rutbe_hesapla, RUTBE_PUANLARI,
 )
+from quests import gorev_tanimlari, tamamlananlari_hesapla, GorevBaglami
+from shop import magaza_esyalari, esya_bul
 from market_hours import get_market_status_dict, is_market_open, bugun_tr, TR_TZ
 from transactions import record_transaction, alim_maliyeti, satim_geliri
 from analysis_engine import (
@@ -4484,6 +4487,186 @@ def get_hall_of_fame(period: str = "weekly", category: str = "GETIRI", limit: in
     ]
 
 
+# --- HAFTALIK GÖREVLER & OYUN PUANI ---
+
+@app.get("/api/quests", response_model=List[QuestResponse])
+def get_quests(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Bu haftanın görev durumunu döner. Her çağrıda güncel bağlam hesaplanır,
+    yeni tamamlanan görevler `user_quest_completions`e YAZILIR ve karşılığı
+    kadar `User.game_points` artırılır (bkz. quests.py -- achievements.py'nin
+    aksine bir görev HER HAFTA yeniden değerlendirilir).
+    """
+    hafta_basi = bugun_tr() - timedelta(days=bugun_tr().weekday())
+
+    alim_satirlari = (
+        db.query(models.Transaction)
+        .join(models.Stock, models.Stock.id == models.Transaction.stock_id)
+        .filter(
+            models.Transaction.user_id == current_user.id,
+            func.date(models.Transaction.created_at) >= hafta_basi,
+        )
+        .all()
+    )
+    islem_sayisi_bu_hafta = len(alim_satirlari)
+    alimlar = [t for t in alim_satirlari if t.action_type == "AL"]
+    sektor_sayisi_bu_hafta = len({t.stock.sector for t in alimlar if t.stock.sector})
+    farkli_hisse_alinan_bu_hafta = len({t.stock_id for t in alimlar})
+
+    favori_eklenen_bu_hafta = (
+        db.query(func.count(models.Watchlist.id))
+        .filter(models.Watchlist.user_id == current_user.id, func.date(models.Watchlist.created_at) >= hafta_basi)
+        .scalar() or 0
+    )
+    yorum_sayisi_bu_hafta = (
+        db.query(func.count(models.StockComment.id))
+        .filter(models.StockComment.user_id == current_user.id, func.date(models.StockComment.created_at) >= hafta_basi)
+        .scalar() or 0
+    )
+    bes_gun_once = datetime.utcnow() - timedelta(days=5)
+    uzun_tutulan_pozisyon_var_mi = (
+        db.query(models.Portfolio.id)
+        .filter(
+            models.Portfolio.user_id == current_user.id,
+            models.Portfolio.is_bot_portfolio.is_(False),
+            models.Portfolio.opened_at <= bes_gun_once,
+        )
+        .first() is not None
+    )
+
+    baglam: GorevBaglami = {
+        "sektor_sayisi_bu_hafta": sektor_sayisi_bu_hafta,
+        "islem_sayisi_bu_hafta": islem_sayisi_bu_hafta,
+        "farkli_hisse_alinan_bu_hafta": farkli_hisse_alinan_bu_hafta,
+        "favori_eklenen_bu_hafta": favori_eklenen_bu_hafta,
+        "yorum_sayisi_bu_hafta": yorum_sayisi_bu_hafta,
+        "uzun_tutulan_pozisyon_var_mi": uzun_tutulan_pozisyon_var_mi,
+    }
+
+    tamamlanan_idler = set(tamamlananlari_hesapla(baglam))
+    mevcut_kayitlar = {
+        r.quest_id
+        for r in db.query(models.UserQuestCompletion).filter_by(
+            user_id=current_user.id, week_start_date=hafta_basi
+        ).all()
+    }
+
+    yeni_tamamlananlar = tamamlanan_idler - mevcut_kayitlar
+    if yeni_tamamlananlar:
+        harita = {t["id"]: t for t in gorev_tanimlari()}
+        kazanilan_puan = 0
+        for qid in yeni_tamamlananlar:
+            db.add(models.UserQuestCompletion(user_id=current_user.id, quest_id=qid, week_start_date=hafta_basi))
+            kazanilan_puan += harita[qid]["puan"]
+            mevcut_kayitlar.add(qid)
+        current_user.game_points = (current_user.game_points or 0) + kazanilan_puan
+        db.commit()
+
+    return [
+        QuestResponse(
+            id=tanim["id"], isim=tanim["isim"], aciklama=tanim["aciklama"], puan=tanim["puan"],
+            tamamlandi=tanim["id"] in mevcut_kayitlar,
+        )
+        for tanim in gorev_tanimlari()
+    ]
+
+
+@app.get("/api/user/game-points", response_model=GamePointsResponse)
+def get_game_points(current_user: models.User = Depends(get_current_user)):
+    return GamePointsResponse(game_points=current_user.game_points or 0)
+
+
+# --- SANAL ÖDÜL MAĞAZASI ---
+
+@app.get("/api/shop", response_model=List[ShopItemResponse])
+def get_shop(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    sahip_olunanlar = {
+        r.item_id for r in db.query(models.UserInventory).filter_by(user_id=current_user.id).all()
+    }
+    return [
+        ShopItemResponse(
+            id=e["id"], isim=e["isim"], aciklama=e["aciklama"], kategori=e["kategori"],
+            maliyet=e["maliyet"], deger=e["deger"],
+            sahip_mi=e["id"] in sahip_olunanlar,
+            takili_mi=(current_user.equipped_frame_id == e["id"] or current_user.equipped_title_id == e["id"]),
+        )
+        for e in magaza_esyalari()
+    ]
+
+
+@app.post("/api/shop/{item_id}/buy")
+@limiter.limit("10/minute")
+def buy_shop_item(
+    request: Request, item_id: str,
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    esya = esya_bul(item_id)
+    if not esya:
+        raise HTTPException(status_code=404, detail="Eşya bulunamadı.")
+
+    db.rollback()
+    begin_write_transaction(db)
+    try:
+        zaten_var = db.query(models.UserInventory).filter_by(
+            user_id=current_user.id, item_id=item_id
+        ).first()
+        if zaten_var:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Bu eşyaya zaten sahipsin.")
+
+        mevcut_puan = current_user.game_points or 0
+        if mevcut_puan < esya["maliyet"]:
+            db.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Yetersiz oyun puanı. Gerekli: {esya['maliyet']}, mevcut: {mevcut_puan}.",
+            )
+
+        current_user.game_points = mevcut_puan - esya["maliyet"]
+        db.add(models.UserInventory(user_id=current_user.id, item_id=item_id))
+        db.commit()
+        return {"message": "Satın alındı.", "game_points": current_user.game_points}
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+
+@app.post("/api/shop/{item_id}/equip")
+def equip_shop_item(
+    item_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    esya = esya_bul(item_id)
+    if not esya:
+        raise HTTPException(status_code=404, detail="Eşya bulunamadı.")
+    sahip = db.query(models.UserInventory).filter_by(user_id=current_user.id, item_id=item_id).first()
+    if not sahip:
+        raise HTTPException(status_code=400, detail="Bu eşyaya sahip değilsin.")
+
+    if esya["kategori"] == "CERCEVE":
+        current_user.equipped_frame_id = item_id
+    else:
+        current_user.equipped_title_id = item_id
+    db.commit()
+    return {"message": "Takıldı."}
+
+
+@app.post("/api/shop/{item_id}/unequip")
+def unequip_shop_item(
+    item_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    esya = esya_bul(item_id)
+    if not esya:
+        raise HTTPException(status_code=404, detail="Eşya bulunamadı.")
+    if esya["kategori"] == "CERCEVE" and current_user.equipped_frame_id == item_id:
+        current_user.equipped_frame_id = None
+    elif esya["kategori"] == "UNVAN" and current_user.equipped_title_id == item_id:
+        current_user.equipped_title_id = None
+    db.commit()
+    return {"message": "Çıkarıldı."}
+
+
 # --- BAŞARIM/ROZET SİSTEMİ ---
 
 @app.get("/api/achievements", response_model=List[AchievementResponse])
@@ -4674,7 +4857,9 @@ def get_public_profile(
         total_portfolio_value=round(total_value, 2), profit_loss_pct=round(profit_loss_pct, 2),
         achievements=achievements, top_holdings=top_holdings, profile_public=target.profile_public,
         career_points=career_points, career_rank_label=rutbe_hesapla(career_points),
-        hall_of_fame_placements=hall_of_fame_placements,
+        hall_of_fame_placements=hall_of_fame_placements, game_points=target.game_points or 0,
+        equipped_frame_color=(esya_bul(target.equipped_frame_id) or {}).get("deger"),
+        equipped_title_text=(esya_bul(target.equipped_title_id) or {}).get("deger"),
     )
 
 

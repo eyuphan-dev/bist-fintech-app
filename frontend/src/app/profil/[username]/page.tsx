@@ -41,6 +41,9 @@ interface PublicProfile {
   career_points: number;
   career_rank_label: string;
   hall_of_fame_placements: HallOfFamePlacement[];
+  game_points: number;
+  equipped_frame_color: string | null;
+  equipped_title_text: string | null;
 }
 
 const KATEGORI_ETIKETI: Record<string, string> = {
@@ -146,7 +149,10 @@ export default function PublicProfilePage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
       <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5 flex items-center gap-4">
-        <span className="w-14 h-14 rounded-full bg-[#C46D2C]/15 border border-[#C46D2C]/30 flex items-center justify-center shrink-0">
+        <span
+          className="w-14 h-14 rounded-full bg-[#C46D2C]/15 border-2 flex items-center justify-center shrink-0"
+          style={{ borderColor: profile.equipped_frame_color || "rgba(196,109,44,0.3)" }}
+        >
           <UserIcon className="w-7 h-7 text-[#C46D2C]" strokeWidth={1.5} />
         </span>
         <div className="min-w-0">
@@ -155,6 +161,11 @@ export default function PublicProfilePage() {
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${RUTBE_RENGI[profile.career_rank_label] || RUTBE_RENGI["Yeni Başlayan"]}`}>
               {profile.career_rank_label}
             </span>
+            {profile.equipped_title_text && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 text-[#C46D2C] bg-[#C46D2C]/10 border-[#C46D2C]/30">
+                {profile.equipped_title_text}
+              </span>
+            )}
           </div>
           <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
             <Calendar className="w-3 h-3" />
@@ -163,8 +174,8 @@ export default function PublicProfilePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4 col-span-2 sm:col-span-1">
           <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wide mb-1">Portföy Değeri</p>
           <p className="text-lg font-bold text-white tabular-nums">
             {profile.total_portfolio_value.toLocaleString("tr-TR")} TL
@@ -175,6 +186,10 @@ export default function PublicProfilePage() {
           <p className={`text-lg font-bold tabular-nums ${marketTextClass(profile.profit_loss_pct)}`}>
             {profile.profit_loss_pct > 0 ? "+" : ""}{profile.profit_loss_pct.toFixed(2)}%
           </p>
+        </div>
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-4">
+          <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wide mb-1">Oyun Puanı</p>
+          <p className="text-lg font-bold text-white tabular-nums">{profile.game_points}</p>
         </div>
       </div>
 

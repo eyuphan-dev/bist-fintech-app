@@ -44,6 +44,17 @@ class User(Base):
     # gösterilmeyeceğini kontrol eder. Kullanıcı ayarlar sayfasından kapatabilir.
     profile_public = Column(Boolean, default=True, nullable=False)
 
+    # Oyunlaştırma puanı: haftalık görevlerden (bkz. quests.py) kazanılır,
+    # sanal ödül mağazasında (bkz. shop.py) kozmetik eşyalara harcanır.
+    # GERÇEK PARAYLA hiçbir ilişkisi yoktur -- virtual_balance'tan tamamen
+    # ayrı, sıfırdan başlayan ikinci bir sayaçtır.
+    game_points = Column(Integer, default=0, nullable=False)
+    # Mağazadan alınan, o an TAKILI olan kozmetikler (bkz. shop.py SHOP_ITEMS).
+    # Envanterdeki eşya (UserInventory) ile "takılı" ayrı kavramlardır: bir
+    # eşyayı satın almak onu otomatik takmaz, kullanıcı seçer.
+    equipped_frame_id = Column(String(30), nullable=True)
+    equipped_title_id = Column(String(30), nullable=True)
+
     # Relationships
     portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
     bot_logs = relationship("BotLog", back_populates="user", cascade="all, delete-orphan")
@@ -958,6 +969,37 @@ class HallOfFameEntry(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     metric_value = Column(Numeric(12, 4), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+
+
+class UserQuestCompletion(Base):
+    """
+    Haftalık görev tamamlama kaydı (bkz. quests.py). Başarımlardan (kalıcı,
+    tek seferlik) FARKLI olarak bir görev HER HAFTA yeniden değerlendirilir
+    ve hafta başına yalnızca BİR KEZ tamamlanabilir (bkz. UniqueConstraint).
+    """
+    __tablename__ = "user_quest_completions"
+    __table_args__ = (UniqueConstraint("user_id", "quest_id", "week_start_date", name="uq_quest_user_week"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    quest_id = Column(String(50), nullable=False)
+    week_start_date = Column(Date, nullable=False, index=True)
+    completed_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+
+
+class UserInventory(Base):
+    """Kullanıcının sanal ödül mağazasından (bkz. shop.py) satın aldığı kozmetikler."""
+    __tablename__ = "user_inventory"
+    __table_args__ = (UniqueConstraint("user_id", "item_id", name="uq_inventory_user_item"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id = Column(String(30), nullable=False)
+    purchased_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")
 

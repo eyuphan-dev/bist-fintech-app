@@ -213,6 +213,10 @@ MIGRATIONS = {
         # çalışır (bu hata production'da 2026-09-06'da çöküş döngüsüne
         # sebep oldu, deploy sonrası hemen fark edilip düzeltildi).
         "profile_public": "BOOLEAN DEFAULT TRUE",
+        # Oyunlaştırma puanı + mağaza kozmetikleri (bkz. models.User, quests.py, shop.py)
+        "game_points": "INTEGER DEFAULT 0",
+        "equipped_frame_id": "VARCHAR(30)",
+        "equipped_title_id": "VARCHAR(30)",
     },
     "pending_orders": {
         # Takip eden stop (TRAILING_STOP_SELL) — bkz. models.PendingOrder, orders.py
