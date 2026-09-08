@@ -7,7 +7,7 @@ import {
   LineChart, Wallet, TrendingUp, Bot, PiggyBank, LogOut, Flame, CalendarDays,
   Star, SlidersHorizontal, MoreHorizontal, GitCompareArrows, History, Settings,
   ChevronDown, Radar, Layers, ShoppingBasket, Rewind, Trophy, Calculator, Crown,
-  ListChecks, Store,
+  ListChecks, Store, Swords,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
@@ -26,6 +26,7 @@ const PRIMARY_NAV_LINKS = [
 const MORE_NAV_LINKS = [
   { href: "/sinyaller", label: "Teknik Sinyaller", icon: Radar },
   { href: "/sampiyonlar", label: "Şampiyonlar Duvarı", icon: Crown },
+  { href: "/duello", label: "1v1 Düello", icon: Swords },
   { href: "/sepetler", label: "Tematik Sepetler", icon: ShoppingBasket },
   { href: "/replay", label: "Replay Modu", icon: Rewind },
   { href: "/risk-hesaplayici", label: "Risk Hesaplayıcı", icon: Calculator },

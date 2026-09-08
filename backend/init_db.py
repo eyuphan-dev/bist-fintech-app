@@ -217,6 +217,8 @@ MIGRATIONS = {
         "game_points": "INTEGER DEFAULT 0",
         "equipped_frame_id": "VARCHAR(30)",
         "equipped_title_id": "VARCHAR(30)",
+        # 1v1 düello galibiyet sayısı (bkz. models.Duel, duels.py)
+        "duel_wins": "INTEGER DEFAULT 0",
     },
     "pending_orders": {
         # Takip eden stop (TRAILING_STOP_SELL) — bkz. models.PendingOrder, orders.py

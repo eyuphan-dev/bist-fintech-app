@@ -723,6 +723,30 @@ class ShopItemResponse(BaseModel):
     takili_mi: bool
 
 
+# --- 1V1 DÜELLO ---
+
+class DuelCreateRequest(BaseModel):
+    opponent_username: str = Field(..., min_length=3, max_length=50)
+
+
+class DuelResponse(BaseModel):
+    id: int
+    challenger_username: str
+    opponent_username: str
+    status: str  # PENDING | ACTIVE | COMPLETED | DECLINED | CANCELLED
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
+    winner_username: Optional[str] = None
+    created_at: datetime
+    # Yalnızca ACTIVE/COMPLETED durumdayken dolu -- adayken henüz baseline yok.
+    challenger_getiri_pct: Optional[float] = None
+    opponent_getiri_pct: Optional[float] = None
+
+    @field_serializer("starts_at", "ends_at", "created_at")
+    def _ser_dt(self, value: Optional[datetime]) -> Optional[str]:
+        return _utc_iso(value) if value else None
+
+
 # --- HERKESE AÇIK PROFİL SAYFASI ---
 
 class PublicProfileHolding(BaseModel):
@@ -760,6 +784,7 @@ class PublicProfileResponse(BaseModel):
     # gösterilebilecek çözümlenmiş değer (frontend katalog bilmek zorunda kalmasın).
     equipped_frame_color: Optional[str] = None
     equipped_title_text: Optional[str] = None
+    duel_wins: int = 0
 
     @field_serializer("created_at")
     def _serialize_created_at(self, value: datetime) -> Optional[str]:

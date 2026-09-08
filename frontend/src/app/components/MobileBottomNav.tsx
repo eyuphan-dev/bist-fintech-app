@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Wallet, TrendingUp, Bot, PiggyBank, Flame, Menu, X, Star, History,
   Settings, SlidersHorizontal, GitCompareArrows, CalendarDays, LogOut, Radar, Layers,
-  ShoppingBasket, Rewind, Trophy, Calculator, Crown, ListChecks, Store,
+  ShoppingBasket, Rewind, Trophy, Calculator, Crown, ListChecks, Store, Swords,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -30,6 +30,7 @@ const MENU_GROUPS: {
       { href: "/tarayici", label: "Tarayıcı", icon: SlidersHorizontal },
       { href: "/sinyaller", label: "Teknik Sinyaller", icon: Radar },
       { href: "/sampiyonlar", label: "Şampiyonlar Duvarı", icon: Crown },
+      { href: "/duello", label: "1v1 Düello", icon: Swords },
       { href: "/sepetler", label: "Tematik Sepetler", icon: ShoppingBasket },
       { href: "/replay", label: "Replay Modu", icon: Rewind },
       { href: "/risk-hesaplayici", label: "Risk Hesaplayıcı", icon: Calculator },

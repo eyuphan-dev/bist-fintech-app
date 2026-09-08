@@ -577,6 +577,28 @@ def snapshot_user_portfolios_job():
 
 
 # ---------------------------------------------------------------------------
+# 1v1 Düello Sonuçlandırma
+# ---------------------------------------------------------------------------
+def duel_resolve_job():
+    """
+    Süresi dolmuş (ends_at geçmiş) ACTIVE düelloları sonuçlandırır (bkz.
+    duels.py). Borsa saatlerinden bağımsız her 15 dakikada bir çalışır --
+    bir düello hafta sonu da bitebilir.
+    """
+    db = SessionLocal()
+    try:
+        from duels import resolve_bitenler
+        n = resolve_bitenler(db)
+        if n:
+            print(f"[Scheduler] {n} düello sonuçlandı.")
+    except Exception as e:
+        print(f"[Scheduler] Düello sonuçlandırma hatası: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # Şampiyonlar Duvarı — Haftalık/Aylık Dönem Arşivleme
 # ---------------------------------------------------------------------------
 def hall_of_fame_archive_job():
@@ -788,6 +810,17 @@ def start_scheduler():
         hour=2,
         minute=0,
         id="deep_analysis_sync",
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # ── Görev 4.5: 1v1 Düello Sonuçlandırma ──────────────────────────────
+    # Her 15 dakikada bir, borsa saatlerinden bağımsız.
+    scheduler.add_job(
+        duel_resolve_job,
+        "cron",
+        minute="*/15",
+        id="duel_resolver",
         max_instances=1,
         coalesce=True,
     )

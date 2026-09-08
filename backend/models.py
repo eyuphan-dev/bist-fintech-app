@@ -54,6 +54,9 @@ class User(Base):
     # eşyayı satın almak onu otomatik takmaz, kullanıcı seçer.
     equipped_frame_id = Column(String(30), nullable=True)
     equipped_title_id = Column(String(30), nullable=True)
+    # 1v1 düello galibiyet sayısı (bkz. models.Duel, duels.py). Tam geçmiş
+    # duels tablosunda sorgulanabilir; bu yalnızca hızlı gösterim içindir.
+    duel_wins = Column(Integer, default=0, nullable=False)
 
     # Relationships
     portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
@@ -1002,6 +1005,32 @@ class UserInventory(Base):
     purchased_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")
+
+
+class Duel(Base):
+    """
+    1v1 meydan okuma: iki kullanıcı arasında, KABUL ANINDAKİ portföy
+    değerleriyle başlayan sabit 7 günlük bir yarış (bkz. duels.py). Kazanan,
+    dönem içindeki GETİRİ YÜZDESİ daha yüksek olan taraftır -- ana liderlik
+    tablosuyla aynı adillik ilkesi (mutlak TL değil, yüzde).
+    """
+    __tablename__ = "duels"
+
+    id = Column(Integer, primary_key=True)
+    challenger_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    opponent_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(12), default="PENDING", nullable=False, index=True)  # PENDING|ACTIVE|COMPLETED|DECLINED|CANCELLED
+    challenger_baseline = Column(Numeric(15, 2), nullable=True)
+    opponent_baseline = Column(Numeric(15, 2), nullable=True)
+    starts_at = Column(DateTime, nullable=True)
+    ends_at = Column(DateTime, nullable=True)
+    winner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    challenger = relationship("User", foreign_keys=[challenger_id])
+    opponent = relationship("User", foreign_keys=[opponent_id])
+    winner = relationship("User", foreign_keys=[winner_id])
 
 
 class Notification(Base):

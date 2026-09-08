@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import {
   User as UserIcon, RefreshCw, Lock, Calendar, Trophy, PieChart,
   Footprints, Activity, Layers, TrendingUp, ShieldCheck, Coins, CalendarCheck, Award,
-  PiggyBank, Target, Eye, MessageCircle, Compass, ListChecks, UserPlus, Moon,
+  PiggyBank, Target, Eye, MessageCircle, Compass, ListChecks, UserPlus, Moon, Swords,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../../context/AuthContext";
 import { marketTextClass } from "../../../lib/marketColor";
@@ -44,6 +44,7 @@ interface PublicProfile {
   game_points: number;
   equipped_frame_color: string | null;
   equipped_title_text: string | null;
+  duel_wins: number;
 }
 
 const KATEGORI_ETIKETI: Record<string, string> = {
@@ -164,6 +165,11 @@ export default function PublicProfilePage() {
             {profile.equipped_title_text && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 text-[#C46D2C] bg-[#C46D2C]/10 border-[#C46D2C]/30">
                 {profile.equipped_title_text}
+              </span>
+            )}
+            {profile.duel_wins > 0 && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 flex items-center gap-1 text-[#F43F5E] bg-[#F43F5E]/10 border-[#F43F5E]/30">
+                <Swords className="w-3 h-3" /> {profile.duel_wins} düello galibiyeti
               </span>
             )}
           </div>

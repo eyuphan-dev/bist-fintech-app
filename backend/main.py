@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, and_
 from sqlalchemy.exc import IntegrityError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -50,6 +50,7 @@ from schemas import (
     PublicProfileHolding, PublicProfileResponse, ProfileVisibilityUpdateRequest,
     CategoryLeaderboardItem, HallOfFameEntryResponse, HallOfFamePlacement,
     QuestResponse, GamePointsResponse, ShopItemResponse,
+    DuelCreateRequest, DuelResponse,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -69,6 +70,7 @@ from leaderboard_categories import (
 )
 from quests import gorev_tanimlari, tamamlananlari_hesapla, GorevBaglami
 from shop import magaza_esyalari, esya_bul
+from duels import portfoy_degeri as duel_portfoy_degeri, getiri_pct as duel_getiri_pct, DUEL_SURESI_GUN
 from market_hours import get_market_status_dict, is_market_open, bugun_tr, TR_TZ
 from transactions import record_transaction, alim_maliyeti, satim_geliri
 from analysis_engine import (
@@ -4667,6 +4669,118 @@ def unequip_shop_item(
     return {"message": "Çıkarıldı."}
 
 
+# --- 1V1 DÜELLO ---
+
+def _duel_response(db: Session, d: models.Duel) -> DuelResponse:
+    challenger_pct = opponent_pct = None
+    if d.status in ("ACTIVE", "COMPLETED") and d.challenger_baseline is not None:
+        challenger_pct = round(duel_getiri_pct(float(d.challenger_baseline), duel_portfoy_degeri(db, d.challenger_id)), 2)
+        opponent_pct = round(duel_getiri_pct(float(d.opponent_baseline), duel_portfoy_degeri(db, d.opponent_id)), 2)
+    return DuelResponse(
+        id=d.id, challenger_username=d.challenger.username, opponent_username=d.opponent.username,
+        status=d.status, starts_at=d.starts_at, ends_at=d.ends_at,
+        winner_username=d.winner.username if d.winner else None,
+        created_at=d.created_at,
+        challenger_getiri_pct=challenger_pct, opponent_getiri_pct=opponent_pct,
+    )
+
+
+@app.post("/api/duels", response_model=DuelResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
+def create_duel(
+    request: Request, body: DuelCreateRequest,
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """Bir kullanıcıya 7 günlük 1v1 düello daveti gönderir (bkz. duels.py)."""
+    opponent_username = body.opponent_username.strip()
+    if opponent_username.lower() == current_user.username.lower():
+        raise HTTPException(status_code=400, detail="Kendine meydan okuyamazsın.")
+
+    opponent = db.query(models.User).filter_by(username=opponent_username, is_bot=False).first()
+    if not opponent:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+    mevcut = db.query(models.Duel).filter(
+        models.Duel.status.in_(("PENDING", "ACTIVE")),
+        or_(
+            and_(models.Duel.challenger_id == current_user.id, models.Duel.opponent_id == opponent.id),
+            and_(models.Duel.challenger_id == opponent.id, models.Duel.opponent_id == current_user.id),
+        ),
+    ).first()
+    if mevcut:
+        raise HTTPException(status_code=400, detail="Bu kullanıcıyla zaten bekleyen veya aktif bir düellon var.")
+
+    yeni = models.Duel(challenger_id=current_user.id, opponent_id=opponent.id, status="PENDING")
+    db.add(yeni)
+    db.commit()
+    db.refresh(yeni)
+
+    _log_user_action(db, current_user.id, "DUEL_CREATE", f"{opponent.username} kullanıcısına düello daveti gönderildi.")
+    db.commit()
+    return _duel_response(db, yeni)
+
+
+@app.get("/api/duels", response_model=List[DuelResponse])
+def list_duels(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Giriş yapan kullanıcının (davet eden veya davet edilen) tüm düelloları."""
+    duellolar = (
+        db.query(models.Duel)
+        .filter(or_(models.Duel.challenger_id == current_user.id, models.Duel.opponent_id == current_user.id))
+        .order_by(models.Duel.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return [_duel_response(db, d) for d in duellolar]
+
+
+@app.post("/api/duels/{duel_id}/accept", response_model=DuelResponse)
+def accept_duel(duel_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    d = db.query(models.Duel).filter_by(id=duel_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Düello bulunamadı.")
+    if d.opponent_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Yalnızca davet edilen kişi kabul edebilir.")
+    if d.status != "PENDING":
+        raise HTTPException(status_code=400, detail=f"Bu düello artık {d.status} durumunda, kabul edilemez.")
+
+    d.challenger_baseline = duel_portfoy_degeri(db, d.challenger_id)
+    d.opponent_baseline = duel_portfoy_degeri(db, d.opponent_id)
+    d.status = "ACTIVE"
+    d.starts_at = datetime.utcnow()
+    d.ends_at = d.starts_at + timedelta(days=DUEL_SURESI_GUN)
+    db.commit()
+    db.refresh(d)
+    return _duel_response(db, d)
+
+
+@app.post("/api/duels/{duel_id}/decline")
+def decline_duel(duel_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    d = db.query(models.Duel).filter_by(id=duel_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Düello bulunamadı.")
+    if d.opponent_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Yalnızca davet edilen kişi reddedebilir.")
+    if d.status != "PENDING":
+        raise HTTPException(status_code=400, detail=f"Bu düello artık {d.status} durumunda.")
+    d.status = "DECLINED"
+    db.commit()
+    return {"message": "Düello reddedildi."}
+
+
+@app.post("/api/duels/{duel_id}/cancel")
+def cancel_duel(duel_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    d = db.query(models.Duel).filter_by(id=duel_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Düello bulunamadı.")
+    if d.challenger_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Yalnızca daveti gönderen iptal edebilir.")
+    if d.status != "PENDING":
+        raise HTTPException(status_code=400, detail=f"Bu düello artık {d.status} durumunda, iptal edilemez.")
+    d.status = "CANCELLED"
+    db.commit()
+    return {"message": "Düello iptal edildi."}
+
+
 # --- BAŞARIM/ROZET SİSTEMİ ---
 
 @app.get("/api/achievements", response_model=List[AchievementResponse])
@@ -4860,6 +4974,7 @@ def get_public_profile(
         hall_of_fame_placements=hall_of_fame_placements, game_points=target.game_points or 0,
         equipped_frame_color=(esya_bul(target.equipped_frame_id) or {}).get("deger"),
         equipped_title_text=(esya_bul(target.equipped_title_id) or {}).get("deger"),
+        duel_wins=target.duel_wins or 0,
     )
 
 
