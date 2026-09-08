@@ -932,6 +932,36 @@ class Watchlist(Base):
     stock = relationship("Stock")
 
 
+class HallOfFameEntry(Base):
+    """
+    Şampiyonlar Duvarı: haftalık/aylık dönem KAPANDIĞINDA her kategorinin
+    ilk 3'ünü KALICI olarak arşivler (bkz. hall_of_fame.py). Canlı liderlik
+    tablosu (main.py get_leaderboard) yalnızca "şu an"ı gösterir -- dönem
+    bitince o anki sıralama hiçbir yerde kalmıyordu, bu tablo onu kalıcı
+    kılar. `career_puani_hesapla` bu tablodaki satırlardan (1.=3p, 2.=2p,
+    3.=1p) toplanarak kariyer rütbesini oluşturur.
+
+    Yeni tablo olduğu için init_db.py MIGRATIONS'a girmez -- create_all()
+    zaten oluşturur.
+    """
+    __tablename__ = "hall_of_fame"
+    __table_args__ = (
+        UniqueConstraint("period", "period_label", "category", "rank", name="uq_hof_period_cat_rank"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    period = Column(String(10), nullable=False)          # 'weekly' | 'monthly'
+    period_label = Column(String(20), nullable=False)     # '2026-H37' | '2026-09'
+    period_end_date = Column(Date, nullable=False, index=True)
+    category = Column(String(20), nullable=False)         # 'GETIRI' | 'ISTIKRAR' | 'AKTIFLIK'
+    rank = Column(Integer, nullable=False)                # 1, 2, 3
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    metric_value = Column(Numeric(12, 4), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+
+
 class Notification(Base):
     """Kullanıcıya özel, sistem içi bildirim geçmişi (fiyat/KAP/AI sinyal alarmlarının çıktısı)."""
     __tablename__ = "notifications"

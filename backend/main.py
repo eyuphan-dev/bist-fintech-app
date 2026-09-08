@@ -2,7 +2,7 @@ import os
 import re
 import secrets
 import pandas as pd
-from datetime import datetime, date, timedelta, time as dt_time
+from datetime import datetime, date, timedelta, time as dt_time, timezone as dt_timezone
 from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
@@ -48,6 +48,7 @@ from schemas import (
     ScorecardResponse, BacktestResponse, ExtraIndicatorsResponse, IndicatorSeriesResponse,
     CustomFormulaRequest, CustomFormulaResponse,
     PublicProfileHolding, PublicProfileResponse, ProfileVisibilityUpdateRequest,
+    CategoryLeaderboardItem, HallOfFameEntryResponse, HallOfFamePlacement,
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -62,7 +63,10 @@ from bot import (
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from baskets import sepet_tanimlari, sepet_tanimi, sepet_hisseleri
 from achievements import basarim_tanimlari, kazanilanlari_hesapla, Baglam
-from market_hours import get_market_status_dict, is_market_open, bugun_tr
+from leaderboard_categories import (
+    istikrar_siralamasi, aktiflik_siralamasi, kahin_siralamasi, rutbe_hesapla, RUTBE_PUANLARI,
+)
+from market_hours import get_market_status_dict, is_market_open, bugun_tr, TR_TZ
 from transactions import record_transaction, alim_maliyeti, satim_geliri
 from analysis_engine import (
     calculate_deep_analysis, calculate_dividend_goal, calculate_dca_backtest, AnalysisFetchError,
@@ -4389,6 +4393,97 @@ def get_leaderboard(period: str = "all", db: Session = Depends(get_db)):
     return leaderboard
 
 
+@app.get("/api/leaderboard/kategori", response_model=List[CategoryLeaderboardItem])
+def get_category_leaderboard(category: str = "aktiflik", period: str = "all", db: Session = Depends(get_db)):
+    """
+    "Getiri" dışındaki liderlik kategorileri (bkz. leaderboard_categories.py):
+    istikrar (getiri/risk oranı), aktiflik (işlem sayısı), kahin (yön tahmini
+    isabet oranı). Yalnızca gerçek kullanıcıları kapsar, kişisel botlar dahil
+    değildir (bkz. modül başlığı — botların bu verileri anlamlı biçimde
+    karşılaştırılamaz).
+    """
+    category = category if category in ("istikrar", "aktiflik", "kahin") else "aktiflik"
+    period = period if period in ("weekly", "monthly") else "all"
+
+    users = {u.id: u.username for u in db.query(models.User).filter_by(is_bot=False).all()}
+    if not users:
+        return []
+
+    ham_sonuc: List[tuple]
+    if category == "kahin":
+        # Kâhin dönem sekmelerinden bağımsızdır (bkz. kahin_siralamasi).
+        ham_sonuc = [(uid, deger, f"{toplam} oy") for uid, deger, toplam in kahin_siralamasi(db)]
+    else:
+        bugun = bugun_tr()
+        donem_baslangici = None
+        if period == "weekly":
+            donem_baslangici = bugun - timedelta(days=bugun.weekday())
+        elif period == "monthly":
+            donem_baslangici = bugun.replace(day=1)
+
+        user_ids = list(users.keys())
+        if category == "istikrar":
+            ham_sonuc = [
+                (uid, deger, f"{gun} gün veri") for uid, deger, gun in
+                istikrar_siralamasi(db, user_ids, donem_baslangici, bugun)
+            ]
+        else:  # aktiflik
+            ham_sonuc = [
+                (uid, float(adet), f"{adet} işlem") for uid, adet in
+                aktiflik_siralamasi(db, user_ids, donem_baslangici, bugun)
+            ]
+
+    sonuc = [
+        CategoryLeaderboardItem(username=users[uid], deger=round(deger, 4), detay=detay)
+        for uid, deger, detay in ham_sonuc if uid in users
+    ]
+    sonuc.sort(key=lambda x: x.deger, reverse=True)
+    return sonuc[:50]
+
+
+@app.get("/api/hall-of-fame", response_model=List[HallOfFameEntryResponse])
+def get_hall_of_fame(period: str = "weekly", category: str = "GETIRI", limit: int = 12, db: Session = Depends(get_db)):
+    """
+    Şampiyonlar Duvarı: geçmiş dönemlerin arşivlenmiş ilk 3'ü (bkz.
+    hall_of_fame.py). `limit`, en son kaç DÖNEM gösterileceğini sınırlar
+    (dönem başına en fazla 3 satır olduğu için en fazla limit×3 satır döner).
+    """
+    period = period if period in ("weekly", "monthly") else "weekly"
+    category = category.upper() if category.upper() in ("GETIRI", "ISTIKRAR", "AKTIFLIK") else "GETIRI"
+    limit = max(1, min(limit, 52))
+
+    son_donem_etiketleri = [
+        row[0] for row in (
+            db.query(models.HallOfFameEntry.period_label)
+            .filter_by(period=period, category=category)
+            .distinct()
+            .order_by(models.HallOfFameEntry.period_label.desc())
+            .limit(limit)
+            .all()
+        )
+    ]
+    if not son_donem_etiketleri:
+        return []
+
+    kayitlar = (
+        db.query(models.HallOfFameEntry)
+        .filter(
+            models.HallOfFameEntry.period == period,
+            models.HallOfFameEntry.category == category,
+            models.HallOfFameEntry.period_label.in_(son_donem_etiketleri),
+        )
+        .order_by(models.HallOfFameEntry.period_end_date.desc(), models.HallOfFameEntry.rank.asc())
+        .all()
+    )
+    return [
+        HallOfFameEntryResponse(
+            period=k.period, period_label=k.period_label, period_end_date=k.period_end_date,
+            category=k.category, rank=k.rank, username=k.user.username, metric_value=float(k.metric_value),
+        )
+        for k in kayitlar
+    ]
+
+
 # --- BAŞARIM/ROZET SİSTEMİ ---
 
 @app.get("/api/achievements", response_model=List[AchievementResponse])
@@ -4417,7 +4512,32 @@ def get_achievements(current_user: models.User = Depends(get_current_user), db: 
             .scalar() or 0
         )
 
-    islem_sayisi = db.query(func.count(models.Transaction.id)).filter_by(user_id=current_user.id).scalar() or 0
+    islemler = db.query(models.Transaction).filter_by(user_id=current_user.id).all()
+    islem_sayisi = len(islemler)
+
+    # Kârlı satış sayısı ve tek işlemde %50+ kâr -- realized_pnl / (maliyet x adet)
+    # ile hesaplanır; 2026-08-27 öncesi komisyonsuz dönem satırlarında da
+    # average_cost_at_trade dolu olduğu için sorun çıkarmaz.
+    karli_satis_sayisi = 0
+    buyuk_karli_satis_var = False
+    gece_islemi_var_mi = False
+    for t in islemler:
+        if t.action_type == "SAT" and t.realized_pnl is not None:
+            if float(t.realized_pnl) > 0:
+                karli_satis_sayisi += 1
+            maliyet_toplam = float(t.average_cost_at_trade or 0) * float(t.quantity)
+            if maliyet_toplam > 0 and (float(t.realized_pnl) / maliyet_toplam) >= 0.5:
+                buyuk_karli_satis_var = True
+        if not gece_islemi_var_mi and t.created_at:
+            saat_tr = t.created_at.replace(tzinfo=dt_timezone.utc).astimezone(TR_TZ).hour
+            if 0 <= saat_tr < 5:
+                gece_islemi_var_mi = True
+
+    favori_sayisi = db.query(func.count(models.Watchlist.id)).filter_by(user_id=current_user.id).scalar() or 0
+    yorum_sayisi = db.query(func.count(models.StockComment.id)).filter_by(user_id=current_user.id).scalar() or 0
+    oy_sayisi = db.query(func.count(models.StockVote.id)).filter_by(user_id=current_user.id).scalar() or 0
+    bekleyen_emir_var_mi = db.query(models.PendingOrder.id).filter_by(user_id=current_user.id).first() is not None
+    davet_sayisi = db.query(func.count(models.User.id)).filter_by(referred_by_id=current_user.id).scalar() or 0
 
     toplam_deger = _portfolio_value(db, current_user.id, False, float(current_user.virtual_balance))
     baseline = float(current_user.baseline_value or 100000.0)
@@ -4432,6 +4552,14 @@ def get_achievements(current_user: models.User = Depends(get_current_user), db: 
         "tam_katilim_uyumlu": tam_katilim_uyumlu,
         "temettu_hisse_sayisi": temettu_hisse_sayisi,
         "hesap_yasi_gun": hesap_yasi_gun,
+        "karli_satis_sayisi": karli_satis_sayisi,
+        "buyuk_karli_satis_var": buyuk_karli_satis_var,
+        "favori_sayisi": favori_sayisi,
+        "yorum_sayisi": yorum_sayisi,
+        "oy_sayisi": oy_sayisi,
+        "bekleyen_emir_var_mi": bekleyen_emir_var_mi,
+        "davet_sayisi": davet_sayisi,
+        "gece_islemi_var_mi": gece_islemi_var_mi,
     }
 
     kazanilan_idler = set(kazanilanlari_hesapla(baglam))
@@ -4520,10 +4648,33 @@ def get_public_profile(
         if tanim["id"] in kazanilan_harita
     ]
 
+    # Kariyer puanı TÜM zamanların üzerinden hesaplanır; vitrindeki liste ise
+    # (aşağıda) yalnızca en son 20 şampiyonluğu gösterir -- ikisi farklı amaç
+    # taşıdığı için ayrı sorgulanır (kariyer puanını son 20'yle sınırlamak
+    # eski, çok başarılı bir kullanıcının rütbesini haksız yere düşürürdü).
+    tum_hof_ranklari = [
+        r[0] for r in db.query(models.HallOfFameEntry.rank).filter_by(user_id=target.id).all()
+    ]
+    career_points = sum(RUTBE_PUANLARI.get(r, 0) for r in tum_hof_ranklari)
+
+    hof_kayitlari = (
+        db.query(models.HallOfFameEntry)
+        .filter_by(user_id=target.id)
+        .order_by(models.HallOfFameEntry.period_end_date.desc())
+        .limit(20)
+        .all()
+    )
+    hall_of_fame_placements = [
+        HallOfFamePlacement(period_label=k.period_label, category=k.category, rank=k.rank)
+        for k in hof_kayitlari
+    ]
+
     return PublicProfileResponse(
         username=target.username, created_at=target.created_at,
         total_portfolio_value=round(total_value, 2), profit_loss_pct=round(profit_loss_pct, 2),
         achievements=achievements, top_holdings=top_holdings, profile_public=target.profile_public,
+        career_points=career_points, career_rank_label=rutbe_hesapla(career_points),
+        hall_of_fame_placements=hall_of_fame_placements,
     )
 
 

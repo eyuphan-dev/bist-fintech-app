@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import {
   User as UserIcon, RefreshCw, Lock, Calendar, Trophy, PieChart,
   Footprints, Activity, Layers, TrendingUp, ShieldCheck, Coins, CalendarCheck, Award,
+  PiggyBank, Target, Eye, MessageCircle, Compass, ListChecks, UserPlus, Moon,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../../context/AuthContext";
 import { marketTextClass } from "../../../lib/marketColor";
@@ -23,6 +24,12 @@ interface Achievement {
   kazanilma_tarihi: string | null;
 }
 
+interface HallOfFamePlacement {
+  period_label: string;
+  category: string;
+  rank: number;
+}
+
 interface PublicProfile {
   username: string;
   created_at: string;
@@ -31,7 +38,24 @@ interface PublicProfile {
   achievements: Achievement[];
   top_holdings: PublicProfileHolding[];
   profile_public: boolean;
+  career_points: number;
+  career_rank_label: string;
+  hall_of_fame_placements: HallOfFamePlacement[];
 }
+
+const KATEGORI_ETIKETI: Record<string, string> = {
+  GETIRI: "Getiri",
+  ISTIKRAR: "İstikrar",
+  AKTIFLIK: "Aktiflik",
+};
+
+const RUTBE_RENGI: Record<string, string> = {
+  "Elmas": "text-sky-300 bg-sky-400/10 border-sky-400/30",
+  "Altın": "text-[#F59E0B] bg-[#F59E0B]/10 border-[#F59E0B]/30",
+  "Gümüş": "text-slate-300 bg-slate-400/10 border-slate-400/30",
+  "Bronz": "text-orange-400 bg-orange-400/10 border-orange-400/30",
+  "Yeni Başlayan": "text-gray-400 bg-gray-500/10 border-gray-500/30",
+};
 
 const IKON_HARITASI: Record<string, React.ElementType> = {
   "ilk-adim": Footprints,
@@ -42,6 +66,14 @@ const IKON_HARITASI: Record<string, React.ElementType> = {
   "katilim-sadigi": ShieldCheck,
   "temettu-avcisi": Coins,
   "sadik-uye": CalendarCheck,
+  "ilk-kar": PiggyBank,
+  "keskin-nisanci": Target,
+  "takipci": Eye,
+  "sosyal-yatirimci": MessageCircle,
+  "kahin-adayi": Compass,
+  "stratejist": ListChecks,
+  "topluluk-elcisi": UserPlus,
+  "gece-kusu": Moon,
 };
 
 export default function PublicProfilePage() {
@@ -118,7 +150,12 @@ export default function PublicProfilePage() {
           <UserIcon className="w-7 h-7 text-[#C46D2C]" strokeWidth={1.5} />
         </span>
         <div className="min-w-0">
-          <h1 className="text-lg font-bold text-white truncate">@{profile.username}{isSelf && " (Sen)"}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-lg font-bold text-white truncate">@{profile.username}{isSelf && " (Sen)"}</h1>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${RUTBE_RENGI[profile.career_rank_label] || RUTBE_RENGI["Yeni Başlayan"]}`}>
+              {profile.career_rank_label}
+            </span>
+          </div>
           <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
             <Calendar className="w-3 h-3" />
             {new Date(profile.created_at).toLocaleDateString("tr-TR")} tarihinden beri üye
@@ -140,6 +177,24 @@ export default function PublicProfilePage() {
           </p>
         </div>
       </div>
+
+      {profile.hall_of_fame_placements.length > 0 && (
+        <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <Trophy className="w-4 h-4 text-[#F59E0B]" /> Şampiyonluklar ({profile.career_points} puan)
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {profile.hall_of_fame_placements.map((p, i) => (
+              <span
+                key={`${p.period_label}-${p.category}-${i}`}
+                className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#F59E0B]/10 border border-[#F59E0B]/25 text-[#F59E0B]"
+              >
+                {p.rank}. {KATEGORI_ETIKETI[p.category] || p.category} — {p.period_label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
         <h3 className="text-sm font-bold text-white uppercase tracking-wide mb-3 flex items-center gap-1.5">

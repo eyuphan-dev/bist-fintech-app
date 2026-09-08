@@ -28,6 +28,14 @@ class Baglam(TypedDict):
     tam_katilim_uyumlu: bool
     temettu_hisse_sayisi: int
     hesap_yasi_gun: int
+    karli_satis_sayisi: int
+    buyuk_karli_satis_var: bool
+    favori_sayisi: int
+    yorum_sayisi: int
+    oy_sayisi: int
+    bekleyen_emir_var_mi: bool
+    davet_sayisi: int
+    gece_islemi_var_mi: bool
 
 
 class BasarimTanimi(TypedDict):
@@ -85,6 +93,54 @@ BASARIM_TANIMLARI: List[BasarimTanimi] = [
         "isim": "Sadık Üye",
         "aciklama": "Hesabın 30 günden daha eski.",
         "kontrol": lambda b: b["hesap_yasi_gun"] >= 30,
+    },
+    {
+        "id": "ilk-kar",
+        "isim": "İlk Kâr",
+        "aciklama": "İlk kez kârla bir pozisyon kapattın.",
+        "kontrol": lambda b: b["karli_satis_sayisi"] >= 1,
+    },
+    {
+        "id": "keskin-nisanci",
+        "isim": "Keskin Nişancı",
+        "aciklama": "Bir satışta maliyetine göre %50 veya üzeri kâr elde ettin.",
+        "kontrol": lambda b: b["buyuk_karli_satis_var"],
+    },
+    {
+        "id": "takipci",
+        "isim": "Takipçi",
+        "aciklama": "İzleme listende en az 10 hisse bulunduruyorsun.",
+        "kontrol": lambda b: b["favori_sayisi"] >= 10,
+    },
+    {
+        "id": "sosyal-yatirimci",
+        "isim": "Sosyal Yatırımcı",
+        "aciklama": "En az 5 hisseye yorum yaptın.",
+        "kontrol": lambda b: b["yorum_sayisi"] >= 5,
+    },
+    {
+        "id": "kahin-adayi",
+        "isim": "Kâhin Adayı",
+        "aciklama": "En az 10 hissede yükseliş/düşüş yönü tahmini yaptın.",
+        "kontrol": lambda b: b["oy_sayisi"] >= 10,
+    },
+    {
+        "id": "stratejist",
+        "isim": "Stratejist",
+        "aciklama": "İlk limit, zamanlı veya stop emrini oluşturdun.",
+        "kontrol": lambda b: b["bekleyen_emir_var_mi"],
+    },
+    {
+        "id": "topluluk-elcisi",
+        "isim": "Topluluk Elçisi",
+        "aciklama": "Referans kodunla en az 1 arkadaşını davet ettin.",
+        "kontrol": lambda b: b["davet_sayisi"] >= 1,
+    },
+    {
+        "id": "gece-kusu",
+        "isim": "Gece Kuşu",
+        "aciklama": "Gece yarısı ile 05:00 arasında bir işlemin gerçekleşti.",
+        "kontrol": lambda b: b["gece_islemi_var_mi"],
     },
 ]
 

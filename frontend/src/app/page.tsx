@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  TrendingUp, TrendingDown, Wallet, Award, LineChart,
+  TrendingUp, TrendingDown, Wallet, LineChart,
   ArrowRight, UserPlus, LogIn, RefreshCw,
 } from "lucide-react";
 
@@ -16,6 +16,7 @@ import PortfolioRiskPanel from "./components/PortfolioRiskPanel";
 import KatilimKarnesi from "./components/KatilimKarnesi";
 import PortfolioPerformanceChart from "./components/PortfolioPerformanceChart";
 import CounterfactualPanel from "./components/CounterfactualPanel";
+import LeaderboardWidget from "./components/LeaderboardWidget";
 import { useAuth, API_BASE } from "./context/AuthContext";
 import { marketTextClass, formatPct } from "../lib/marketColor";
 import Card from "./components/ui/Card";
@@ -45,13 +46,6 @@ interface Portfolio {
   items: PortfolioItem[];
 }
 
-interface LeaderboardItem {
-  username: string;
-  total_portfolio_value: number;
-  profit_loss_pct: number;
-  is_bot: boolean;
-}
-
 export default function Home() {
   const { token, user, loading, refreshTrigger, login, register } = useAuth();
 
@@ -64,8 +58,6 @@ export default function Home() {
 
   // Dashboard states
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardItem[]>([]);
-  const [leaderboardPeriod, setLeaderboardPeriod] = useState<"all" | "weekly" | "monthly">("all");
   const [dashLoading, setDashLoading] = useState(true);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
 
@@ -75,12 +67,8 @@ export default function Home() {
     const fetchDashboard = async () => {
       try {
         const headers = { Authorization: `Bearer ${token}` };
-        const [portRes, leadRes] = await Promise.all([
-          fetch(`${API_BASE}/portfolio`, { headers }),
-          fetch(`${API_BASE}/leaderboard?period=${leaderboardPeriod}`),
-        ]);
+        const portRes = await fetch(`${API_BASE}/portfolio`, { headers });
         if (portRes.ok) setPortfolio(await portRes.json());
-        if (leadRes.ok) setLeaderboard(await leadRes.json());
       } catch (err) {
         console.error("Anasayfa verisi alınamadı:", err);
       } finally {
@@ -88,7 +76,7 @@ export default function Home() {
       }
     };
     fetchDashboard();
-  }, [token, refreshTrigger, leaderboardPeriod]);
+  }, [token, refreshTrigger]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -410,75 +398,7 @@ export default function Home() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
-            <div className="flex items-center gap-1.5 mb-3">
-              <Award className="w-5 h-5 text-[#F59E0B]" />
-              <h3 className="text-sm font-bold text-white tracking-wide uppercase">Liderlik Tablosu</h3>
-            </div>
-
-            <div className="flex items-center gap-1 mb-4 bg-[#0B0E14] border border-[#242B35] rounded-lg p-1">
-              {([
-                { key: "all", label: "Tümü" },
-                { key: "weekly", label: "Bu Hafta" },
-                { key: "monthly", label: "Bu Ay" },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setLeaderboardPeriod(opt.key)}
-                  className={`flex-1 min-h-[36px] text-[11px] font-semibold rounded-md transition ${
-                    leaderboardPeriod === opt.key
-                      ? "bg-[#242B35] text-white"
-                      : "text-gray-500 hover:text-gray-300"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="space-y-3.5">
-              {leaderboard.map((player, idx) => (
-                <div
-                  key={player.username}
-                  className={`flex items-center justify-between text-xs p-2.5 rounded-lg border ${
-                    user && (player.username === user.username || player.username === `${user.username} — Kişisel Bot`)
-                      ? "bg-[#10B981]/10 border-[#10B981]/30 font-semibold"
-                      : "bg-[#0B0E14] border-[#242B35]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      idx === 0 ? "bg-[#F59E0B] text-[#0B0E14]" : idx === 1 ? "bg-slate-300 text-[#0B0E14]" : "bg-[#242B35] text-gray-400"
-                    }`}>
-                      {idx + 1}
-                    </span>
-                    <div>
-                      <span className="text-white flex items-center">
-                        {player.is_bot ? (
-                          player.username
-                        ) : (
-                          <Link href={`/profil/${player.username}`} className="hover:text-[#10B981] transition">
-                            @{player.username}
-                          </Link>
-                        )}
-                        {player.is_bot && (
-                          <span className="ml-1 bg-[#F59E0B]/10 text-[#F59E0B] text-[8px] uppercase tracking-wider px-1 rounded font-bold">
-                            BOT
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-[10px] text-gray-500 tabular-nums">
-                        {player.total_portfolio_value.toLocaleString("tr-TR")} TL
-                      </span>
-                    </div>
-                  </div>
-                  <span className={`font-semibold tabular-nums ${marketTextClass(player.profit_loss_pct)}`}>
-                    {player.profit_loss_pct > 0 ? "+" : ""}{player.profit_loss_pct.toFixed(2)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <LeaderboardWidget />
         </div>
       </div>
     </div>

@@ -577,6 +577,28 @@ def snapshot_user_portfolios_job():
 
 
 # ---------------------------------------------------------------------------
+# Şampiyonlar Duvarı — Haftalık/Aylık Dönem Arşivleme
+# ---------------------------------------------------------------------------
+def hall_of_fame_archive_job():
+    """
+    Bir önceki hafta/ay kapandıysa (bkz. hall_of_fame.py) o dönemin GETİRİ/
+    İSTİKRAR/AKTİFLİK ilk 3'ünü kalıcı olarak arşivler. Idempotent olduğu
+    için her gün çalışması güvenlidir.
+    """
+    db = SessionLocal()
+    try:
+        from hall_of_fame import arsivle
+        eklenen = arsivle(db)
+        if eklenen:
+            print(f"[Scheduler] Şampiyonlar Duvarı: {eklenen} yeni kayıt arşivlendi.")
+    except Exception as e:
+        print(f"[Scheduler] Şampiyonlar Duvarı arşivleme hatası: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # MODÜL 2: Log Temizleme Görevi (90 günden eski kayıtları sil)
 # ---------------------------------------------------------------------------
 def log_cleanup_job():
@@ -770,6 +792,18 @@ def start_scheduler():
         coalesce=True,
     )
 
+    # ── Görev 5: Şampiyonlar Duvarı Arşivleme ────────────────────────────
+    # Her gün 04:00 UTC — hafta içi/hafta sonu ayrımı YAPILMAZ çünkü ay
+    # bitişi hafta sonuna denk gelebilir (bkz. hall_of_fame.py başlığı).
+    scheduler.add_job(
+        hall_of_fame_archive_job,
+        "cron",
+        hour=4,
+        minute=0,
+        id="hall_of_fame_archive",
+        max_instances=1,
+    )
+
     scheduler.start()
     print("APScheduler başlatıldı.")
     print("  • deep_analysis_sync: Her gün 02:00 UTC (en bayat 40 hissenin bilanço analizi)")
@@ -778,4 +812,5 @@ def start_scheduler():
     print("  • tr_quotes_sync   : Her 15 dakika (dolar/euro/gram altın + seansta BIST 100)")
     print("  • stock_news_sync  : Her gün 07:30 UTC (Hisse haberleri, 24 saatlik döngü)")
     print("  • log_cleaner      : Her Pazar 03:00 UTC (90 günden eski logları siler)")
+    print("  • hall_of_fame_archive: Her gün 04:00 UTC (kapanan hafta/ayı arşivler)")
     return scheduler

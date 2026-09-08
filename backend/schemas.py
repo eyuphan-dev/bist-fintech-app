@@ -656,6 +656,27 @@ class LeaderboardItem(BaseModel):
     is_bot: bool
 
 
+class CategoryLeaderboardItem(BaseModel):
+    """İstikrar / Aktiflik / Kâhin kategorileri için genel amaçlı satır."""
+    username: str
+    deger: float          # kategoriye göre: getiri/risk oranı, işlem adedi, isabet %
+    detay: Optional[str] = None
+
+
+class HallOfFameEntryResponse(BaseModel):
+    period: str                 # 'weekly' | 'monthly'
+    period_label: str           # '2026-H37' | '2026-09'
+    period_end_date: date
+    category: str                # 'GETIRI' | 'ISTIKRAR' | 'AKTIFLIK'
+    rank: int
+    username: str
+    metric_value: float
+
+    @field_serializer("period_end_date")
+    def _ser_date(self, value: date) -> Optional[str]:
+        return value.isoformat() if value else None
+
+
 # --- REFERANS/DAVET SİSTEMİ ---
 
 class ReferralInfoResponse(BaseModel):
@@ -682,6 +703,13 @@ class PublicProfileHolding(BaseModel):
     weight_pct: float
 
 
+class HallOfFamePlacement(BaseModel):
+    """Kullanıcının kazandığı bir şampiyonluğun profil vitrinindeki kısa özeti."""
+    period_label: str
+    category: str
+    rank: int
+
+
 class PublicProfileResponse(BaseModel):
     username: str
     created_at: datetime
@@ -694,6 +722,11 @@ class PublicProfileResponse(BaseModel):
     # tutarı gösterilmez) — stratejiyi büyük ölçüde ifşa etmeden fikir verir.
     top_holdings: List[PublicProfileHolding]
     profile_public: bool
+    # Kariyer rütbesi: Şampiyonlar Duvarı'ndaki (bkz. hall_of_fame.py) ilk 3
+    # bitirişlerden (1.=3p, 2.=2p, 3.=1p) toplanan puana göre.
+    career_points: int = 0
+    career_rank_label: str = "Yeni Başlayan"
+    hall_of_fame_placements: List[HallOfFamePlacement] = []
 
     @field_serializer("created_at")
     def _serialize_created_at(self, value: datetime) -> Optional[str]:
