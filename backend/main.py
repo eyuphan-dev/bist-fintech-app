@@ -4712,6 +4712,11 @@ def create_duel(
 
     yeni = models.Duel(challenger_id=current_user.id, opponent_id=opponent.id, status="PENDING")
     db.add(yeni)
+    db.add(models.Notification(
+        user_id=opponent.id, stock_id=None, notif_type="DUEL_INVITE",
+        title="Yeni Düello Daveti",
+        message=f"{current_user.username} sana 1v1 düello için meydan okudu.",
+    ))
     db.commit()
     db.refresh(yeni)
 
@@ -4835,6 +4840,7 @@ def get_achievements(current_user: models.User = Depends(get_current_user), db: 
     oy_sayisi = db.query(func.count(models.StockVote.id)).filter_by(user_id=current_user.id).scalar() or 0
     bekleyen_emir_var_mi = db.query(models.PendingOrder.id).filter_by(user_id=current_user.id).first() is not None
     davet_sayisi = db.query(func.count(models.User.id)).filter_by(referred_by_id=current_user.id).scalar() or 0
+    hall_of_fame_kayit_var_mi = db.query(models.HallOfFameEntry.id).filter_by(user_id=current_user.id).first() is not None
 
     toplam_deger = _portfolio_value(db, current_user.id, False, float(current_user.virtual_balance))
     baseline = float(current_user.baseline_value or 100000.0)
@@ -4857,6 +4863,9 @@ def get_achievements(current_user: models.User = Depends(get_current_user), db: 
         "bekleyen_emir_var_mi": bekleyen_emir_var_mi,
         "davet_sayisi": davet_sayisi,
         "gece_islemi_var_mi": gece_islemi_var_mi,
+        "duel_wins": current_user.duel_wins or 0,
+        "hall_of_fame_kayit_var_mi": hall_of_fame_kayit_var_mi,
+        "game_points": current_user.game_points or 0,
     }
 
     kazanilan_idler = set(kazanilanlari_hesapla(baglam))

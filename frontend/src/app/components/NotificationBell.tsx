@@ -2,13 +2,13 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, TrendingUp, TrendingDown, Percent, Newspaper, Bot as BotIcon } from "lucide-react";
+import { Bell, TrendingUp, TrendingDown, Percent, Newspaper, Bot as BotIcon, Swords } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
 
 interface NotificationItem {
   id: number;
   stock_symbol: string | null;
-  notif_type: "PRICE_ABOVE" | "PRICE_BELOW" | "PCT_CHANGE" | "KAP" | "AI_SIGNAL";
+  notif_type: "PRICE_ABOVE" | "PRICE_BELOW" | "PCT_CHANGE" | "KAP" | "AI_SIGNAL" | "DUEL_INVITE" | "DUEL_RESULT";
   title: string;
   message: string;
   is_read: boolean;
@@ -21,6 +21,8 @@ const TYPE_ICON: Record<string, any> = {
   PCT_CHANGE: Percent,
   KAP: Newspaper,
   AI_SIGNAL: BotIcon,
+  DUEL_INVITE: Swords,
+  DUEL_RESULT: Swords,
 };
 
 /** Navbar'daki bildirim zili: okunmamış sayısı 15sn'de bir tazelenir, tıklayınca son bildirimler açılır. */

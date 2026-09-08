@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
   Trophy, RefreshCw, Lock, Footprints, Activity, Layers, TrendingUp,
   ShieldCheck, Coins, CalendarCheck, Award, PiggyBank, Target, Eye,
-  MessageCircle, Compass, ListChecks, UserPlus, Moon,
+  MessageCircle, Compass, ListChecks, UserPlus, Moon, Swords, Crown, Star,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
 
@@ -33,6 +33,9 @@ const IKON_HARITASI: Record<string, React.ElementType> = {
   "stratejist": ListChecks,
   "topluluk-elcisi": UserPlus,
   "gece-kusu": Moon,
+  "duello-galibi": Swords,
+  "sampiyon": Crown,
+  "puan-avcisi": Star,
 };
 
 export default function AchievementsPage() {

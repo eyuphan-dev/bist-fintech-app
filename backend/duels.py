@@ -74,6 +74,25 @@ def resolve_bitenler(db: Session) -> int:
             kazanan = db.query(models.User).filter_by(id=d.winner_id).first()
             if kazanan:
                 kazanan.duel_wins = (kazanan.duel_wins or 0) + 1
+            kaybeden_id = d.opponent_id if d.winner_id == d.challenger_id else d.challenger_id
+            kazanan_isim = kazanan.username if kazanan else "?"
+            db.add(models.Notification(
+                user_id=d.winner_id, stock_id=None, notif_type="DUEL_RESULT",
+                title="Düelloyu Kazandın!",
+                message=f"%{challenger_getiri if d.winner_id == d.challenger_id else opponent_getiri:.2f} getiriyle düelloyu kazandın.",
+            ))
+            db.add(models.Notification(
+                user_id=kaybeden_id, stock_id=None, notif_type="DUEL_RESULT",
+                title="Düelloyu Kaybettin",
+                message=f"{kazanan_isim} bu düelloyu kazandı. Bir dahaki sefere!",
+            ))
+        else:
+            for uid in (d.challenger_id, d.opponent_id):
+                db.add(models.Notification(
+                    user_id=uid, stock_id=None, notif_type="DUEL_RESULT",
+                    title="Düello Berabere Bitti",
+                    message="İkiniz de aynı getiriyle bitirdiniz -- berabere!",
+                ))
 
     if bitenler:
         db.commit()

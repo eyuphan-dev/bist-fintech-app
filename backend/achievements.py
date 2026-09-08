@@ -36,6 +36,9 @@ class Baglam(TypedDict):
     bekleyen_emir_var_mi: bool
     davet_sayisi: int
     gece_islemi_var_mi: bool
+    duel_wins: int
+    hall_of_fame_kayit_var_mi: bool
+    game_points: int
 
 
 class BasarimTanimi(TypedDict):
@@ -141,6 +144,24 @@ BASARIM_TANIMLARI: List[BasarimTanimi] = [
         "isim": "Gece Kuşu",
         "aciklama": "Gece yarısı ile 05:00 arasında bir işlemin gerçekleşti.",
         "kontrol": lambda b: b["gece_islemi_var_mi"],
+    },
+    {
+        "id": "duello-galibi",
+        "isim": "Düello Galibi",
+        "aciklama": "Bir 1v1 düello kazandın.",
+        "kontrol": lambda b: b["duel_wins"] >= 1,
+    },
+    {
+        "id": "sampiyon",
+        "isim": "Şampiyon",
+        "aciklama": "Şampiyonlar Duvarı'nda ilk 3'e girdin.",
+        "kontrol": lambda b: b["hall_of_fame_kayit_var_mi"],
+    },
+    {
+        "id": "puan-avcisi",
+        "isim": "Puan Avcısı",
+        "aciklama": "100 veya daha fazla oyun puanına ulaştın.",
+        "kontrol": lambda b: b["game_points"] >= 100,
     },
 ]
 

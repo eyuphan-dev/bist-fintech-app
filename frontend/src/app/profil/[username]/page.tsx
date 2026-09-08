@@ -6,6 +6,7 @@ import {
   User as UserIcon, RefreshCw, Lock, Calendar, Trophy, PieChart,
   Footprints, Activity, Layers, TrendingUp, ShieldCheck, Coins, CalendarCheck, Award,
   PiggyBank, Target, Eye, MessageCircle, Compass, ListChecks, UserPlus, Moon, Swords,
+  Crown, Star,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../../context/AuthContext";
 import { marketTextClass } from "../../../lib/marketColor";
@@ -78,6 +79,9 @@ const IKON_HARITASI: Record<string, React.ElementType> = {
   "stratejist": ListChecks,
   "topluluk-elcisi": UserPlus,
   "gece-kusu": Moon,
+  "duello-galibi": Swords,
+  "sampiyon": Crown,
+  "puan-avcisi": Star,
 };
 
 export default function PublicProfilePage() {
