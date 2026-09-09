@@ -20,7 +20,13 @@ def _utc_iso(value: Optional[datetime]) -> Optional[str]:
 
 
 class UserCreate(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
+    # Karakter kümesi kasıtlı olarak kısıtlı: kullanıcı adı leaderboard, profil
+    # linki (/profil/{username}), bildirim ve düello davetlerinde çıplak metin
+    # olarak dolaşıyor. React/Next JSX zaten HTML olarak escape ediyor (XSS
+    # riski yok) ama boşluk/özel karakter kabul etmek profil URL'lerini
+    # bozabilir ve "admin" gibi adları unicode homoglifle taklit etmeye
+    # kapı aralar -- ikisi de saldırı yüzeyini büyütmeden kapatılabilir.
+    username: str = Field(..., min_length=3, max_length=20, pattern=r"^[A-Za-z0-9_]+$")
     email: EmailStr
     password: str = Field(..., min_length=6)
     terms_accepted: bool = Field(..., description="Kullanıcı sözleşmesi, KVKK ve sorumluluk reddi feragatnamesi onayı (zorunlu)")

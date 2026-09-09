@@ -169,6 +169,11 @@ async def add_no_store_to_api(request: Request, call_next):
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
+    # Standart güvenlik başlıkları — tüm yanıtlarda. CSP kasıtlı olarak
+    # eklenmedi: Next.js tarafında ayrı ele alınıyor (bkz. next.config.ts).
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
 # Uygulama başlarken tablo/veri kontrolü + APScheduler

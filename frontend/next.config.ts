@@ -17,6 +17,21 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Tum sayfalara temel guvenlik basliklari. Content-Security-Policy
+        // KASITLI OLARAK eklenmedi -- Next.js hydration/inline script
+        // kullanimini bozma riski var ve nginx uzerinden ayri test edilmeden
+        // uretimde denenmemeli. Burada sadece hicbir mesru kullanimi
+        // bozmayan, sifir riskli standart baslikar var.
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        ],
+      },
+      {
         // Service worker betiği ASLA önbelleklenmemeli. Önbelleklenirse
         // tarayıcı eski sw.js'i tutar ve içindeki önbellek stratejisi
         // güncellenemez hale gelir — sunucudan düzeltmesi imkânsız bir
