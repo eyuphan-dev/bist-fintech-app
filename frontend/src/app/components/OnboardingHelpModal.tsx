@@ -72,6 +72,94 @@ function getHelpContent(pathname: string): HelpContent {
     };
   }
 
+  if (pathname.startsWith("/sampiyonlar")) {
+    return {
+      title: "Şampiyonlar Duvarı Rehberi",
+      sections: [
+        {
+          heading: "Kategoriler Nasıl Hesaplanır?",
+          body: "Getiri, İstikrar, Aktiflik ve Kâhin olmak üzere 4 ayrı kategoride sıralanırsın. Her biri farklı bir başarıyı ölçer: en yüksek getiri, en az dalgalı portföy, en çok işlem hacmi ve en isabetli tahminler.",
+        },
+        {
+          heading: "Kariyer Rütbesi",
+          body: "Geçmiş haftalık/aylık dönemlerdeki sıralamaların birikerek bir rütbe oluşturur. Ne kadar çok üst sıralarda kalırsan rütben o kadar yükselir.",
+        },
+        {
+          heading: "Arşivleme",
+          body: "Her hafta ve ay sonunda o dönemin ilk sıraları kalıcı olarak Şampiyonlar Duvarı'na kaydedilir — geçmiş başarıların burada saklanır.",
+        },
+      ],
+    };
+  }
+
+  if (pathname.startsWith("/gorevler")) {
+    return {
+      title: "Haftalık Görevler Rehberi",
+      sections: [
+        {
+          heading: "Nasıl Oynanır?",
+          body: "Her hafta yenilenen görevler (ör. belirli sayıda işlem yap, kâr elde et, izleme listesine hisse ekle) otomatik olarak ilerlemeni takip eder. Tamamlanan görev anında oyun puanı kazandırır.",
+        },
+        {
+          heading: "Oyun Puanı Ne İşe Yarar?",
+          body: "Görevlerden ve başarımlardan kazandığın oyun puanı, Mağaza'da kozmetik çerçeve ve unvan satın almak için kullanılır. Gerçek bakiyenle hiçbir ilgisi yoktur.",
+        },
+      ],
+    };
+  }
+
+  if (pathname.startsWith("/magaza")) {
+    return {
+      title: "Ödül Mağazası Rehberi",
+      sections: [
+        {
+          heading: "Nasıl Satın Alırım?",
+          body: "Görevler ve başarımlardan biriktirdiğin oyun puanıyla profil çerçevesi veya unvan satın alabilirsin. Satın aldığın eşyalar 'Envanterim' bölümünde kalıcı olarak saklanır.",
+        },
+        {
+          heading: "Nasıl Kuşanırım?",
+          body: "Sahip olduğun bir eşyayı 'Kuşan' butonuyla aktif hale getirirsin — o andan sonra herkese açık profilinde görünür. İstediğin zaman başka bir eşyayla değiştirebilir veya çıkarabilirsin.",
+        },
+      ],
+    };
+  }
+
+  if (pathname.startsWith("/duello")) {
+    return {
+      title: "1v1 Düello Rehberi",
+      sections: [
+        {
+          heading: "Nasıl Davet Yollanır?",
+          body: "'Yeni Düello' butonuyla kullanıcı adını yazarak rakibine meydan okuyabilirsin. Rakip daveti kabul ederse düello başlar, reddederse veya sen iptal edersen iptal olur.",
+        },
+        {
+          heading: "Nasıl Kazanılır?",
+          body: "Düello başladığı andaki portföy değerleriniz baz alınır; belirlenen süre sonunda hangi taraf yüzde olarak daha çok değer kazandıysa o kazanır. Sonuç otomatik hesaplanıp bildirim olarak gönderilir.",
+        },
+        {
+          heading: "Galibiyetlerim Nerede Görünür?",
+          body: "Toplam düello galibiyet sayın profilinde rozet olarak görünür ve belirli eşiklerde yeni başarımlar açar.",
+        },
+      ],
+    };
+  }
+
+  if (pathname.startsWith("/basarimlar")) {
+    return {
+      title: "Başarımlar Rehberi",
+      sections: [
+        {
+          heading: "Başarımlar Nasıl Açılır?",
+          body: "Platformdaki çeşitli hedefleri (ilk işlem, kâr eşikleri, düello galibiyetleri, şampiyonluklar vb.) gerçekleştirdikçe otomatik olarak kilidi açılır — elle talep etmen gerekmez.",
+        },
+        {
+          heading: "Ödülleri Var mı?",
+          body: "Bazı başarımlar oyun puanı da kazandırır; bu puanla Mağaza'dan kozmetik eşya satın alabilirsin.",
+        },
+      ],
+    };
+  }
+
   return {
     title: "BIST Simülasyonu — Genel Bakış",
     sections: [

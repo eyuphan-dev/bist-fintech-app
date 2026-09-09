@@ -19,8 +19,8 @@ export default function LegalDisclaimerModal({ onAccept, onClose }: LegalDisclai
   const [showFullText, setShowFullText] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-2xl bg-[#151921] border border-[#242B35] rounded-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="relative w-full max-w-2xl bg-[#151921] border border-[#242B35] rounded-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
         <div className="bg-[#F59E0B]/10 border-b border-[#F59E0B]/20 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <ShieldAlert className="w-6 h-6 text-[#F59E0B] shrink-0" />

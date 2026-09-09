@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, RefreshCw, Star } from "lucide-react";
+import { Search, RefreshCw, Star, TrendingUp, TrendingDown } from "lucide-react";
 import KatilimBadge from "../components/KatilimBadge";
 import MarketQuotesBar from "../components/MarketQuotesBar";
 import { useAuth, API_BASE } from "../context/AuthContext";
@@ -27,6 +27,7 @@ export default function PiyasalarPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [katilimOnly, setKatilimOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<"none" | "gainers" | "losers">("none");
   const [watchedSymbols, setWatchedSymbols] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -85,13 +86,23 @@ export default function PiyasalarPage() {
     }
   };
 
-  const filteredStocks = stocks.filter((s) => {
-    const matchesQuery =
-      s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.company_name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesKatilim = !katilimOnly || s.is_katilim_compliant;
-    return matchesQuery && matchesKatilim;
-  });
+  const filteredStocks = stocks
+    .filter((s) => {
+      const matchesQuery =
+        s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.company_name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesKatilim = !katilimOnly || s.is_katilim_compliant;
+      return matchesQuery && matchesKatilim;
+    })
+    .sort((a, b) => {
+      if (sortMode === "none") return 0;
+      // Değişim yüzdesi olmayanları (kurumsal işlem vb.) listenin sonuna at.
+      if (a.price_change_pct === null) return 1;
+      if (b.price_change_pct === null) return -1;
+      return sortMode === "gainers"
+        ? b.price_change_pct - a.price_change_pct
+        : a.price_change_pct - b.price_change_pct;
+    });
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
@@ -122,6 +133,31 @@ export default function PiyasalarPage() {
           }`}
         >
           Yalnızca Katılım Uygun
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setSortMode((v) => (v === "gainers" ? "none" : "gainers"))}
+          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition whitespace-nowrap ${
+            sortMode === "gainers"
+              ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
+              : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
+          }`}
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+          En Çok Kazananlar
+        </button>
+        <button
+          onClick={() => setSortMode((v) => (v === "losers" ? "none" : "losers"))}
+          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition whitespace-nowrap ${
+            sortMode === "losers"
+              ? "bg-[#F43F5E]/10 border-[#F43F5E]/30 text-[#F43F5E]"
+              : "bg-[#151921] border-[#242B35] text-gray-400 hover:text-white"
+          }`}
+        >
+          <TrendingDown className="w-3.5 h-3.5" />
+          En Çok Kaybedenler
         </button>
       </div>
 

@@ -30,9 +30,17 @@ MAGAZA_ESYALARI: List[MagazaEsyasi] = [
     {"id": "cerceve-zumrut", "isim": "Zümrüt Çerçeve", "aciklama": "Profilinde avatarının etrafında zümrüt yeşili bir çerçeve.", "kategori": "CERCEVE", "maliyet": 40, "deger": "#10B981"},
     {"id": "cerceve-safir", "isim": "Safir Çerçeve", "aciklama": "Profilinde avatarının etrafında safir mavisi bir çerçeve.", "kategori": "CERCEVE", "maliyet": 75, "deger": "#38BDF8"},
     {"id": "cerceve-yakut", "isim": "Yakut Çerçeve", "aciklama": "Profilinde avatarının etrafında yakut kırmızısı bir çerçeve.", "kategori": "CERCEVE", "maliyet": 60, "deger": "#F43F5E"},
+    {"id": "cerceve-ametist", "isim": "Ametist Çerçeve", "aciklama": "Profilinde avatarının etrafında ametist moru bir çerçeve.", "kategori": "CERCEVE", "maliyet": 65, "deger": "#A855F7"},
+    {"id": "cerceve-gunes", "isim": "Gün Batımı Çerçeve", "aciklama": "Profilinde avatarının etrafında turuncu bir çerçeve.", "kategori": "CERCEVE", "maliyet": 55, "deger": "#FB923C"},
+    {"id": "cerceve-platin", "isim": "Platin Çerçeve", "aciklama": "Profilinde avatarının etrafında gümüş-platin bir çerçeve.", "kategori": "CERCEVE", "maliyet": 90, "deger": "#CBD5E1"},
+    {"id": "cerceve-elmas", "isim": "Elmas Çerçeve", "aciklama": "En nadir çerçeve — profilinde parlak camgöbeği bir çerçeve.", "kategori": "CERCEVE", "maliyet": 150, "deger": "#22D3EE"},
     {"id": "unvan-kurt", "isim": "Borsa Kurdu", "aciklama": "Kullanıcı adının yanında 'Borsa Kurdu' unvanı.", "kategori": "UNVAN", "maliyet": 30, "deger": "Borsa Kurdu"},
     {"id": "unvan-usta", "isim": "Yatırım Ustası", "aciklama": "Kullanıcı adının yanında 'Yatırım Ustası' unvanı.", "kategori": "UNVAN", "maliyet": 60, "deger": "Yatırım Ustası"},
     {"id": "unvan-efsane", "isim": "Efsane Trader", "aciklama": "Kullanıcı adının yanında 'Efsane Trader' unvanı.", "kategori": "UNVAN", "maliyet": 100, "deger": "Efsane Trader"},
+    {"id": "unvan-kahin", "isim": "Piyasa Kâhini", "aciklama": "Kullanıcı adının yanında 'Piyasa Kâhini' unvanı.", "kategori": "UNVAN", "maliyet": 70, "deger": "Piyasa Kâhini"},
+    {"id": "unvan-duellocu", "isim": "Düello Ustası", "aciklama": "Kullanıcı adının yanında 'Düello Ustası' unvanı.", "kategori": "UNVAN", "maliyet": 80, "deger": "Düello Ustası"},
+    {"id": "unvan-istikrarli", "isim": "Sarsılmaz El", "aciklama": "Kullanıcı adının yanında 'Sarsılmaz El' unvanı.", "kategori": "UNVAN", "maliyet": 65, "deger": "Sarsılmaz El"},
+    {"id": "unvan-gozde", "isim": "Halkın Gözdesi", "aciklama": "Kullanıcı adının yanında 'Halkın Gözdesi' unvanı.", "kategori": "UNVAN", "maliyet": 120, "deger": "Halkın Gözdesi"},
 ]
 
 _ESYA_HARITASI = {e["id"]: e for e in MAGAZA_ESYALARI}

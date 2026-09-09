@@ -4389,12 +4389,11 @@ def get_leaderboard(period: str = "all", db: Session = Depends(get_db)):
                 is_bot=True,
             ))
 
-    if donem_baslangici is not None:
-        # Zaman-kutulu yarışma: getiri YÜZDESİNE göre sırala — herkes farklı
-        # sermayeyle başlasa da adil karşılaştırma budur.
-        leaderboard.sort(key=lambda x: x.profit_loss_pct, reverse=True)
-    else:
-        leaderboard.sort(key=lambda x: x.total_portfolio_value, reverse=True)
+    # Getiri YÜZDESİNE göre sırala — herkes farklı sermayeyle başlasa da (ör.
+    # yeni katılan kullanıcı) adil karşılaştırma budur; toplam değere göre
+    # sıralamak sermayesi büyük ama getirisi düşük kullanıcıyı haksız yere
+    # üste taşırdı.
+    leaderboard.sort(key=lambda x: x.profit_loss_pct, reverse=True)
     return leaderboard
 
 
