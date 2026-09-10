@@ -3206,11 +3206,30 @@ def get_user_bot_sessions(
     """
     Kullanıcının kişisel botunun başlatılıp durdurulduğu/süresi dolduğu her dönemi
     (oturum) listeler — en yeni önce. UI'da soldaki oturum listesi buradan gelir.
+
+    Her oturum için başlangıç/güncel (veya bitiş) portföy değeri ve aradaki getiri
+    yüzdesi de hesaplanır. Oturum başına ayrı bir bakiye kaydı TUTULMADIĞI için
+    (bkz. BotSession modeli) günlük `BotPerformanceHistory` anlık görüntüsünden
+    o tarihe en yakın (öncesindeki) kayıt baz alınır — haftalık/aylık liderlik
+    yarışmasında kullanılan yöntemin aynısı.
     """
     sessions = db.query(models.BotSession)\
         .filter_by(user_id=current_user.id)\
         .order_by(models.BotSession.started_at.desc())\
         .all()
+
+    user_bot = db.query(models.UserBot).filter_by(user_id=current_user.id).first()
+    varsayilan_baslangic = float(user_bot.baseline_value) if user_bot and user_bot.baseline_value else 100000.0
+
+    def _en_yakin_deger(nokta: datetime) -> Optional[float]:
+        kayit = (
+            db.query(models.BotPerformanceHistory)
+            .filter(models.BotPerformanceHistory.user_id == current_user.id)
+            .filter(models.BotPerformanceHistory.recorded_date <= nokta.date())
+            .order_by(models.BotPerformanceHistory.recorded_date.desc())
+            .first()
+        )
+        return float(kayit.total_portfolio_value) if kayit else None
 
     result = []
     for s in sessions:
@@ -3222,11 +3241,23 @@ def get_user_bot_sessions(
         ).count()
         config = get_strategy_config(s.time_frame)
         risk_config = get_risk_mode_config(s.risk_mode)
+
+        baslangic_degeri = _en_yakin_deger(s.started_at) or varsayilan_baslangic
+        if s.ended_at is not None:
+            guncel_deger = _en_yakin_deger(s.ended_at) or baslangic_degeri
+        elif user_bot:
+            guncel_deger = _portfolio_value(db, current_user.id, True, float(user_bot.virtual_balance))
+        else:
+            guncel_deger = baslangic_degeri
+        getiri_pct = ((guncel_deger - baslangic_degeri) / baslangic_degeri * 100) if baslangic_degeri else 0.0
+
         result.append(BotSessionResponse(
             id=s.id, time_frame=s.time_frame, time_frame_label=config["label"],
             risk_mode=s.risk_mode, risk_mode_label=risk_config["label"] if s.risk_mode else None,
             started_at=s.started_at, ended_at=s.ended_at, end_reason=s.end_reason,
             is_active=s.ended_at is None, trade_count=trade_count,
+            baslangic_degeri=round(baslangic_degeri, 2), guncel_deger=round(guncel_deger, 2),
+            getiri_pct=round(getiri_pct, 2),
         ))
     return result
 

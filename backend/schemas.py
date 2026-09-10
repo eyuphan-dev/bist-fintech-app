@@ -1173,6 +1173,9 @@ class BotSessionResponse(BaseModel):
     end_reason: Optional[str]
     is_active: bool
     trade_count: int
+    baslangic_degeri: float
+    guncel_deger: float
+    getiri_pct: float
 
     class Config:
         from_attributes = True

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Award } from "lucide-react";
+import { Award, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
 import { marketTextClass } from "../../lib/marketColor";
 
@@ -20,6 +20,9 @@ interface CategoryLeaderboardItem {
 }
 
 type Kategori = "getiri" | "istikrar" | "aktiflik" | "kahin";
+type KatilimciFiltre = "hepsi" | "kullanicilar" | "botlar";
+
+const SAYFA_BOYUTU = 5;
 
 const KATEGORI_SEKMELERI: { key: Kategori; label: string }[] = [
   { key: "getiri", label: "Getiri" },
@@ -49,6 +52,8 @@ export default function LeaderboardWidget() {
   const [getiriListesi, setGetiriListesi] = useState<LeaderboardItem[]>([]);
   const [kategoriListesi, setKategoriListesi] = useState<CategoryLeaderboardItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [katilimciFiltre, setKatilimciFiltre] = useState<KatilimciFiltre>("hepsi");
+  const [sayfa, setSayfa] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +76,27 @@ export default function LeaderboardWidget() {
     })();
     return () => { cancelled = true; };
   }, [kategori, period]);
+
+  // Kategori/donem/filtre degisince sayfa 0'a donsun -- aksi halde ornegin
+  // 3. sayfadayken sekme degistirince bos bir sayfada kalinabilir.
+  useEffect(() => {
+    setSayfa(0);
+  }, [kategori, period, katilimciFiltre]);
+
+  const filtrelenmisGetiri = useMemo(() => {
+    if (katilimciFiltre === "kullanicilar") return getiriListesi.filter((p) => !p.is_bot);
+    if (katilimciFiltre === "botlar") return getiriListesi.filter((p) => p.is_bot);
+    return getiriListesi;
+  }, [getiriListesi, katilimciFiltre]);
+
+  const aktifListeUzunlugu = kategori === "getiri" ? filtrelenmisGetiri.length : kategoriListesi.length;
+  const toplamSayfa = Math.max(1, Math.ceil(aktifListeUzunlugu / SAYFA_BOYUTU));
+  const gecerliSayfa = Math.min(sayfa, toplamSayfa - 1);
+  const sayfalananGetiri = filtrelenmisGetiri.slice(gecerliSayfa * SAYFA_BOYUTU, (gecerliSayfa + 1) * SAYFA_BOYUTU);
+  const sayfalananKategori = kategoriListesi.slice(gecerliSayfa * SAYFA_BOYUTU, (gecerliSayfa + 1) * SAYFA_BOYUTU);
+  // Sayfa numarasi (0-indeksli) siralamayi bozmasin diye ilk elemanin GERCEK
+  // (filtrelenmemis/sayfalanmamis listedeki) sirasi kullanilir.
+  const ilkSiraOfset = gecerliSayfa * SAYFA_BOYUTU;
 
   return (
     <div className="bg-[#151921] border border-[#242B35] rounded-xl p-5">
@@ -114,11 +140,33 @@ export default function LeaderboardWidget() {
       )}
       {kategori === "kahin" && <div className="mb-2" />}
 
+      {kategori === "getiri" && (
+        <div className="flex items-center gap-1 mb-4 bg-[#0B0E14] border border-[#242B35] rounded-lg p-1">
+          {([
+            { key: "hepsi", label: "Hepsi" },
+            { key: "kullanicilar", label: "Kullanıcılar" },
+            { key: "botlar", label: "Botlar" },
+          ] as const).map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setKatilimciFiltre(opt.key)}
+              className={`flex-1 min-h-[32px] text-[11px] font-semibold rounded-md transition ${
+                katilimciFiltre === opt.key ? "bg-[#242B35] text-white" : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <p className="text-center py-6 text-gray-500 text-xs">Yükleniyor...</p>
       ) : kategori === "getiri" ? (
         <div className="space-y-3.5">
-          {getiriListesi.map((player, idx) => (
+          {sayfalananGetiri.map((player, localIdx) => {
+            const idx = ilkSiraOfset + localIdx;
+            return (
             <div
               key={player.username}
               className={`flex items-center justify-between text-xs p-2.5 rounded-lg border ${
@@ -157,12 +205,19 @@ export default function LeaderboardWidget() {
                 {player.profit_loss_pct > 0 ? "+" : ""}{player.profit_loss_pct.toFixed(2)}%
               </span>
             </div>
-          ))}
-          {getiriListesi.length === 0 && <p className="text-center py-6 text-gray-500 text-xs">Henüz veri yok.</p>}
+            );
+          })}
+          {filtrelenmisGetiri.length === 0 && (
+            <p className="text-center py-6 text-gray-500 text-xs">
+              {katilimciFiltre === "hepsi" ? "Henüz veri yok." : "Bu filtrede henüz veri yok."}
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-3.5">
-          {kategoriListesi.map((player, idx) => (
+          {sayfalananKategori.map((player, localIdx) => {
+            const idx = ilkSiraOfset + localIdx;
+            return (
             <div
               key={player.username}
               className={`flex items-center justify-between text-xs p-2.5 rounded-lg border ${
@@ -188,12 +243,35 @@ export default function LeaderboardWidget() {
                 {KATEGORI_BIRIM[kategori](player.deger)}
               </span>
             </div>
-          ))}
+            );
+          })}
           {kategoriListesi.length === 0 && (
             <p className="text-center py-6 text-gray-500 text-xs">
               {kategori === "kahin" ? "Henüz yeterli sayıda çözümlenmiş tahmin yok." : "Bu dönemde henüz veri yok."}
             </p>
           )}
+        </div>
+      )}
+
+      {!loading && aktifListeUzunlugu > SAYFA_BOYUTU && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#242B35]">
+          <button
+            onClick={() => setSayfa((s) => Math.max(0, s - 1))}
+            disabled={gecerliSayfa === 0}
+            className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-md bg-[#0B0E14] border border-[#242B35] text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 transition"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-[11px] text-gray-500 font-semibold tabular-nums">
+            Sayfa {gecerliSayfa + 1} / {toplamSayfa}
+          </span>
+          <button
+            onClick={() => setSayfa((s) => Math.min(toplamSayfa - 1, s + 1))}
+            disabled={gecerliSayfa >= toplamSayfa - 1}
+            className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-md bg-[#0B0E14] border border-[#242B35] text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 transition"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>

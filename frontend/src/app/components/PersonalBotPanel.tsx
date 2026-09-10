@@ -49,6 +49,9 @@ interface BotSessionItem {
   end_reason: string | null;
   is_active: boolean;
   trade_count: number;
+  baslangic_degeri: number;
+  guncel_deger: number;
+  getiri_pct: number;
 }
 
 const TIME_FRAME_OPTIONS: { value: "1D" | "1W" | "1M"; label: string; hint: string }[] = [
@@ -486,6 +489,14 @@ export default function PersonalBotPanel() {
                       {s.ended_at ? ` — ${new Date(s.ended_at).toLocaleDateString("tr-TR")}` : " — devam ediyor"}
                     </p>
                     <p className="text-[10px] text-gray-600 mt-0.5">{s.trade_count} işlem</p>
+                    <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[#242B35]">
+                      <span className="text-[10px] text-gray-600 tabular-nums">
+                        {s.baslangic_degeri.toLocaleString("tr-TR")} TL
+                      </span>
+                      <span className={`text-[10px] font-bold tabular-nums ${marketTextClass(s.getiri_pct)}`}>
+                        {s.getiri_pct > 0 ? "+" : ""}{s.getiri_pct.toFixed(2)}%
+                      </span>
+                    </div>
                   </button>
                 );
               })}
@@ -493,6 +504,34 @@ export default function PersonalBotPanel() {
 
             {/* Sağ: Seçili Oturumun İşlemleri */}
             <div>
+              {(() => {
+                const selectedSession = sessions.find((s) => s.id === selectedSessionId);
+                if (!selectedSession) return null;
+                return (
+                  <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-[#242B35]">
+                    <div>
+                      <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Başlangıç Değeri</p>
+                      <p className="text-xs font-bold text-white tabular-nums">
+                        {selectedSession.baslangic_degeri.toLocaleString("tr-TR")} TL
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">
+                        {selectedSession.is_active ? "Güncel Değer" : "Bitiş Değeri"}
+                      </p>
+                      <p className="text-xs font-bold text-white tabular-nums">
+                        {selectedSession.guncel_deger.toLocaleString("tr-TR")} TL
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Getiri</p>
+                      <p className={`text-xs font-bold tabular-nums ${marketTextClass(selectedSession.getiri_pct)}`}>
+                        {selectedSession.getiri_pct > 0 ? "+" : ""}{selectedSession.getiri_pct.toFixed(2)}%
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
               {(() => {
                 const selectedSession = sessions.find((s) => s.id === selectedSessionId);
                 if (selectedSession?.end_reason) {
