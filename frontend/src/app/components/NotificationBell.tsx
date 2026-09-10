@@ -110,7 +110,13 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-[#151921] border border-[#242B35] rounded-xl z-50 overflow-hidden">
+        // Mobilde `absolute right-0` zil BUTONUNUN saginda hizalar, buton ekranin
+        // sagina degil ortasina yakinsa (kullanici menusu daha sagda oldugundan)
+        // sabit w-80 genislik ekranin SOLUNA tasip logoyu ortuyordu. Mobilde
+        // bunun yerine viewport'a sabit (fixed), sol/sag kenardan esit bosluklu
+        // konumlandirilir; sm+ ekranda eski davranis (butona gore absolute)
+        // degismeden kalir.
+        <div className="fixed left-3 right-3 top-[calc(4rem+env(safe-area-inset-top))] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-w-[90vw] bg-[#151921] border border-[#242B35] rounded-xl z-50 overflow-hidden">
           <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-[#242B35]">
             <span className="text-xs font-bold text-white">Bildirimler</span>
             {unreadCount > 0 && (

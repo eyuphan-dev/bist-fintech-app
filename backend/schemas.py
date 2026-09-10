@@ -42,6 +42,8 @@ class UserResponse(BaseModel):
     created_at: datetime
     profile_public: bool = True
     game_points: int = 0
+    equipped_frame_color: Optional[str] = None
+    equipped_title_text: Optional[str] = None
 
     @field_serializer("created_at")
     def _serialize_created_at(self, value: datetime) -> Optional[str]:

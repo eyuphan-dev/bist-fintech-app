@@ -16,6 +16,8 @@ interface User {
   terms_accepted: boolean;
   created_at: string;
   profile_public: boolean;
+  equipped_frame_color: string | null;
+  equipped_title_text: string | null;
 }
 
 interface AuthContextValue {

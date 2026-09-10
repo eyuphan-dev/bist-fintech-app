@@ -177,7 +177,10 @@ export default function NavBar() {
               aria-expanded={userOpen}
               title="Hesabım"
             >
-              <span className="w-8 h-8 rounded-full bg-[#10B981] text-[#0B0E14] font-bold text-sm flex items-center justify-center shrink-0">
+              <span
+                className="w-8 h-8 rounded-full bg-[#10B981] text-[#0B0E14] font-bold text-sm flex items-center justify-center shrink-0"
+                style={user?.equipped_frame_color ? { border: `2px solid ${user.equipped_frame_color}` } : undefined}
+              >
                 {(user?.username?.[0] ?? "?").toUpperCase()}
               </span>
               <ChevronDown
@@ -189,7 +192,14 @@ export default function NavBar() {
               <div className="absolute top-full right-0 mt-1 w-60 bg-[#151921] border border-[#242B35] rounded-xl py-1.5 z-40">
                 <div className="px-3.5 pt-1 pb-2.5 border-b border-[#242B35] mb-1.5">
                   <p className="text-[10px] text-gray-500">Giriş yapıldı</p>
-                  <p className="text-xs font-bold text-white truncate">@{user?.username}</p>
+                  <p className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                    @{user?.username}
+                    {user?.equipped_title_text && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#C46D2C]/10 text-[#C46D2C] normal-case">
+                        {user.equipped_title_text}
+                      </span>
+                    )}
+                  </p>
                   {user?.email && (
                     <p className="text-[10px] text-gray-500 truncate mt-0.5">{user.email}</p>
                   )}

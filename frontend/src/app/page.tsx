@@ -47,7 +47,7 @@ interface Portfolio {
 }
 
 export default function Home() {
-  const { token, user, loading, refreshTrigger, login, register } = useAuth();
+  const { token, user, loading, refreshTrigger, bumpRefresh, login, register } = useAuth();
 
   // Auth form states
   const [isRegister, setIsRegister] = useState(false);
@@ -60,6 +60,52 @@ export default function Home() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [dashLoading, setDashLoading] = useState(true);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
+  // Tumunu-sat icin iki asamali onay: ilk tiklama "Onayla?" gosterir, ikinci
+  // tiklama gercekten satar -- ayri bir modal bilesenine gerek kalmadan
+  // yanlislikla tum pozisyonu satma riskini azaltir.
+  const [sellConfirmSymbol, setSellConfirmSymbol] = useState<string | null>(null);
+  const [sellingSymbol, setSellingSymbol] = useState<string | null>(null);
+  const [sellToast, setSellToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sellConfirmSymbol) return;
+    const t = setTimeout(() => setSellConfirmSymbol(null), 4000);
+    return () => clearTimeout(t);
+  }, [sellConfirmSymbol]);
+
+  useEffect(() => {
+    if (!sellToast) return;
+    const t = setTimeout(() => setSellToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [sellToast]);
+
+  const handleSellAll = async (item: PortfolioItem) => {
+    if (!token) return;
+    if (sellConfirmSymbol !== item.symbol) {
+      setSellConfirmSymbol(item.symbol);
+      return;
+    }
+    setSellConfirmSymbol(null);
+    setSellingSymbol(item.symbol);
+    try {
+      const res = await fetch(`${API_BASE}/trade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ symbol: item.symbol, action_type: "SAT", quantity: item.quantity }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSellToast(`${item.symbol}: ${item.quantity} lot satıldı.`);
+        bumpRefresh();
+      } else {
+        setSellToast(data.detail || "Satış başarısız.");
+      }
+    } catch {
+      setSellToast("Sunucuya bağlanılamadı.");
+    } finally {
+      setSellingSymbol(null);
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -229,6 +275,11 @@ export default function Home() {
   // --- DASHBOARD (PORTFOLIO) ---
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      {sellToast && (
+        <div className="fixed top-4 right-4 z-50 bg-[#151921] border border-[#242B35] rounded-lg px-4 py-2.5 text-xs text-white">
+          {sellToast}
+        </div>
+      )}
       {showBalanceModal && token && portfolio && (
         <BalanceUpdateModal
           title="Sanal Bakiyem"
@@ -358,6 +409,7 @@ export default function Home() {
                           <th className="pb-3 font-semibold text-right">Değer</th>
                           <th className="pb-3 font-semibold whitespace-nowrap">İlk Alım</th>
                           <th className="pb-3 font-semibold whitespace-nowrap">Son İşlem</th>
+                          <th className="pb-3 font-semibold whitespace-nowrap">İşlem</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#242B35]/60">
@@ -383,6 +435,24 @@ export default function Home() {
                             </td>
                             <td className="py-3 text-gray-400 tabular-nums whitespace-nowrap text-[11px]">
                               {formatDateTime(item.updated_at)}
+                            </td>
+                            <td className="py-3 whitespace-nowrap">
+                              <button
+                                onClick={() => handleSellAll(item)}
+                                disabled={sellingSymbol === item.symbol}
+                                className={`text-[10px] font-bold px-2.5 py-1.5 rounded-md border transition disabled:opacity-50 ${
+                                  sellConfirmSymbol === item.symbol
+                                    ? "bg-[#F43F5E] border-[#F43F5E] text-white"
+                                    : "bg-[#0B0E14] border-[#242B35] text-[#F43F5E] hover:border-[#F43F5E]/40"
+                                }`}
+                                title={`Tüm pozisyonu (${item.quantity} lot) tek seferde sat`}
+                              >
+                                {sellingSymbol === item.symbol
+                                  ? "Satılıyor..."
+                                  : sellConfirmSymbol === item.symbol
+                                  ? "Onayla?"
+                                  : "Tümünü Sat"}
+                              </button>
                             </td>
                           </tr>
                         ))}

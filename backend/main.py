@@ -309,7 +309,20 @@ def login(request: Request, login_data: LoginRequest, background_tasks: Backgrou
 
 @app.get("/api/auth/me", response_model=UserResponse)
 def get_me(current_user: models.User = Depends(get_current_user)):
-    return current_user
+    # Takılı çerçeve/unvan, NavBar'daki avatarda da görünsün diye buradan da
+    # döndürülür -- önceden yalnızca /users/{username}/profile'da vardı, bu
+    # yüzden takılan çerçeve kullanıcının kendi arayüzünde HİÇBİR YERDE
+    # görünmüyordu (herkese açık profiline gitmedikçe).
+    cerceve = esya_bul(current_user.equipped_frame_id)
+    unvan = esya_bul(current_user.equipped_title_id)
+    return UserResponse(
+        id=current_user.id, username=current_user.username, email=current_user.email,
+        virtual_balance=float(current_user.virtual_balance), is_bot=current_user.is_bot,
+        terms_accepted=current_user.terms_accepted, created_at=current_user.created_at,
+        profile_public=current_user.profile_public, game_points=current_user.game_points or 0,
+        equipped_frame_color=cerceve["deger"] if cerceve else None,
+        equipped_title_text=unvan["deger"] if unvan else None,
+    )
 
 
 @app.get("/api/user/referral", response_model=ReferralInfoResponse)

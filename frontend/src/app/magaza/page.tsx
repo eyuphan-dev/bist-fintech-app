@@ -25,7 +25,7 @@ interface ShopItem {
 }
 
 export default function ShopPage() {
-  const { token, loading: authLoading } = useAuth();
+  const { token, loading: authLoading, bumpRefresh } = useAuth();
   const [items, setItems] = useState<ShopItem[]>([]);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [gamePoints, setGamePoints] = useState<number | null>(null);
@@ -97,6 +97,10 @@ export default function ShopPage() {
       if (res.ok) {
         setToast(item.takili_mi ? `${item.isim} çıkarıldı.` : `${item.isim} takıldı.`);
         fetchAll();
+        // NavBar'daki avatar cercevesi AuthContext.user'dan geliyor -- o da
+        // ancak refreshTrigger degisince /auth/me'yi yeniden cagiriyor.
+        // Bu cagri olmadan takilan cerceve navbar'da hemen gorunmuyordu.
+        bumpRefresh();
       }
     } catch {
       setToast("Sunucuya bağlanılamadı.");
