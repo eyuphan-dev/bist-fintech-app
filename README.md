@@ -9,6 +9,18 @@ yapar ve ücretli terminallerde para karşılığı sunulan analiz araçlarına
 
 ---
 
+## Ekran görüntüleri
+
+| Portföy ve liderlik tablosu | Hisse detayı + teknik göstergeler |
+|---|---|
+| ![Anasayfa](docs/screenshots/anasayfa.png) | ![Hisse detayı](docs/screenshots/hisse-detay.png) |
+
+| Piyasa taraması (kazanan/kaybeden filtresi) | Başarımlar (19 rozet) |
+|---|---|
+| ![Piyasalar](docs/screenshots/piyasalar.png) | ![Başarımlar](docs/screenshots/basarimlar.png) |
+
+---
+
 ## Amaç
 
 Borsaya yeni başlayan biri iki şeyle aynı anda uğraşmak zorunda kalıyor:
@@ -197,6 +209,15 @@ göre üretilir.
 - Temettü geliri projeksiyonu, katılım uyum karnesi
 - Bekleyen limit emirleri, kişisel işlem botu
 
+**Oyunlaştırma**
+- 19 rozetlik başarım sistemi (kalıcı — bir kez kazanılan geri alınmaz)
+- Getiri / İstikrar / Aktiflik / Kâhin olmak üzere 4 ayrı liderlik kategorisi
+- Şampiyonlar Duvarı: haftalık/aylık dönem kapanınca ilk 3 kalıcı arşivlenir,
+  kariyer puanına göre Bronz/Gümüş/Altın/Elmas rütbesi
+- Haftalık görevler + oyun puanı → 23 eşyalık sanal ödül mağazası (profil
+  çerçevesi/unvanı, gerçek parayla ilgisi yok)
+- 1v1 düello: bir arkadaşına meydan oku, 7 gün süren getiri-yüzdesi yarışı
+
 **Diğer**
 - Web push bildirimleri (fiyat alarmı, temettü, KAP), PWA
 - Favori listesi, hisse karşılaştırma, ısı haritası, topluluk yorumları
@@ -301,13 +322,20 @@ NEXT_PUBLIC_API_URL=http://localhost:4000/api
 ```bash
 cd backend
 python -m uvicorn main:app --port 4000     # ayrı bir terminalde
-python smoke_test.py                       # 101 test
+python smoke_test.py                       # 110 test
 ```
 
 Duman testi kimlik doğrulamadan işlem kurallarına, veri hatlarından güvenlik
 sınırlarına kadar her özelliği tek tek çalıştırır. Salt-okunur uçlar üretime,
 yazan uçlar yerele gider — testin üretim veritabanına kullanıcı ya da işlem
 yazması kabul edilemez.
+
+Ayrıca elle kapsamlı bir güvenlik testi yapıldı: SQL enjeksiyonu, stored XSS,
+IDOR, sahte JWT (`alg=none`), mass assignment, özel formül motorunda RCE
+denemesi. Savunmalar (SQLAlchemy ORM parametreleme, `nh3` sunucu tarafı HTML
+temizliği, sahiplik kontrolleri, AST whitelist formül yorumlayıcısı, `slowapi`
+hız sınırı) doğrulandı; standart güvenlik başlıkları (X-Frame-Options,
+X-Content-Type-Options, HSTS) sonrasında eklendi.
 
 CI modunda her şey yerel bir örneğe koşar:
 
