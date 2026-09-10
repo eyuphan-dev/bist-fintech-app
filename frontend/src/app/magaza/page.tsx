@@ -1,8 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Store, RefreshCw, Star, Check, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Store, RefreshCw, Star, Check, Loader2, ChevronDown, ChevronUp, ListChecks } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
+
+interface Quest {
+  id: string;
+  isim: string;
+  aciklama: string;
+  puan: number;
+  tamamlandi: boolean;
+}
 
 interface ShopItem {
   id: string;
@@ -18,20 +27,24 @@ interface ShopItem {
 export default function ShopPage() {
   const { token, loading: authLoading } = useAuth();
   const [items, setItems] = useState<ShopItem[]>([]);
+  const [quests, setQuests] = useState<Quest[]>([]);
   const [gamePoints, setGamePoints] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [howToOpen, setHowToOpen] = useState(false);
 
   const fetchAll = async () => {
     if (!token) return;
     try {
-      const [sRes, pRes] = await Promise.all([
+      const [sRes, pRes, qRes] = await Promise.all([
         fetch(`${API_BASE}/shop`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_BASE}/user/game-points`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/quests`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (sRes.ok) setItems(await sRes.json());
       if (pRes.ok) setGamePoints((await pRes.json()).game_points);
+      if (qRes.ok) setQuests(await qRes.json());
     } catch (err) {
       console.error("Mağaza alınamadı:", err);
     } finally {
@@ -170,14 +183,53 @@ export default function ShopPage() {
             <Store className="w-5 h-5 text-[#F59E0B]" /> Sanal Ödül Mağazası
           </h1>
           <p className="text-xs text-gray-500 mt-1">
-            Görevlerden ve Şampiyonlar Duvarı'ndan kazandığın oyun puanıyla
-            profilini süsleyecek kozmetikler al. Gerçek parayla ilgisi yoktur.
+            Haftalık görevlerden kazandığın oyun puanıyla profilini
+            süsleyecek kozmetikler al. Gerçek parayla ilgisi yoktur.
           </p>
         </div>
         <div className="text-right shrink-0">
           <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wide">Oyun Puanı</p>
           <p className="text-lg font-bold text-[#F59E0B] tabular-nums">{gamePoints ?? "—"}</p>
         </div>
+      </div>
+
+      <div className="bg-[#151921] border border-[#242B35] rounded-xl overflow-hidden">
+        <button
+          onClick={() => setHowToOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left"
+        >
+          <span className="flex items-center gap-2 text-xs font-bold text-white">
+            <ListChecks className="w-4 h-4 text-[#10B981]" />
+            Oyun Puanını Nasıl Kazanırım?
+          </span>
+          {howToOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+        </button>
+        {howToOpen && (
+          <div className="px-4 pb-4 space-y-2">
+            <p className="text-[11px] text-gray-500 -mt-1 mb-2">
+              Her hafta Pazartesi sıfırlanan görevleri tamamlayarak puan kazanırsın:
+            </p>
+            {quests.map((q) => (
+              <div key={q.id} className="flex items-center gap-2.5 bg-[#0B0E14] border border-[#242B35] rounded-lg px-3 py-2">
+                {q.tamamlandi ? (
+                  <Check className="w-3.5 h-3.5 text-[#10B981] shrink-0" />
+                ) : (
+                  <span className="w-3.5 h-3.5 rounded-full border border-[#242B35] shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className={`text-[11px] font-semibold ${q.tamamlandi ? "text-gray-500 line-through" : "text-white"}`}>{q.isim}</p>
+                  <p className="text-[10px] text-gray-500">{q.aciklama}</p>
+                </div>
+                <span className="text-[10px] font-bold text-[#F59E0B] shrink-0 flex items-center gap-0.5">
+                  <Star className="w-3 h-3" />+{q.puan}
+                </span>
+              </div>
+            ))}
+            <Link href="/gorevler" className="block text-center text-[11px] font-semibold text-[#10B981] hover:text-[#34d399] pt-1">
+              Tüm görevleri gör →
+            </Link>
+          </div>
+        )}
       </div>
 
       {loading ? (
