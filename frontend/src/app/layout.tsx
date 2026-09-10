@@ -8,6 +8,7 @@ import OnboardingHelpModal from "./components/OnboardingHelpModal";
 import MobileBottomNav from "./components/MobileBottomNav";
 import CacheGuard from "./components/CacheGuard";
 import InstallPrompt from "./components/InstallPrompt";
+import QuestCompletionToast from "./components/QuestCompletionToast";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -85,6 +86,7 @@ export default function RootLayout({
           <MobileBottomNav />
           <InstallPrompt />
           <OnboardingHelpModal />
+          <QuestCompletionToast />
         </AuthProvider>
       </body>
     </html>
