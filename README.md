@@ -145,9 +145,9 @@ kapsadığı.
 
 ## "AI botu" nasıl çalışıyor
 
-Açık olalım: **burada bir dil modeli (LLM) yok.** Arayüzdeki "AI botu",
+Aslında: **burada bir dil modeli (LLM) yok.** Arayüzdeki "AI botu",
 teknik göstergeler üzerine kurulu **kural tabanlı bir strateji motoru.**
-Ne yaptığı tamamen okunabilir ve denetlenebilir — kara kutu değil.
+Ne yaptığı tamamen okunabilir ve denetlenebilir.
 
 ```mermaid
 flowchart TD
@@ -237,7 +237,7 @@ göre üretilir.
 | Grafik | ApexCharts | |
 | İkon | lucide-react | |
 | Teknik analiz | `ta`, pandas, numpy | |
-| Piyasa verisi | yfinance | Proxy zorunlu (aşağıya bak) |
+| Piyasa verisi | yfinance | Proxy zorunlu |
 | Süreç yönetimi | pm2 | İki süreç: frontend + backend |
 | Sunucu | nginx (aaPanel) · Let's Encrypt | DigitalOcean VPS |
 | CI/CD | GitHub Actions | Test + otomatik deploy |
