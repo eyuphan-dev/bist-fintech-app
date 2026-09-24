@@ -34,7 +34,12 @@ jobs:
             pm2 restart borsa-backend
 
             cd /opt/borsa/frontend
-            npm install --no-audit --no-fund
+            # Bagimlilik kurulumu yalnizca lockfile degistiyse (cogu deploy'da atlanir).
+            LOCK_HASH="$(sha256sum package-lock.json | cut -d' ' -f1)"
+            if [ "$LOCK_HASH" != "$(cat .lock-hash 2>/dev/null)" ]; then
+              nice -n 19 npm install --no-audit --no-fund
+              echo "$LOCK_HASH" > .lock-hash
+            fi
 
             # Sıfır kesintili build: çıktı önce geçici bir dizine derlenir,
             # sonra .next ile YER DEĞİŞTİRİLİR.
@@ -46,7 +51,11 @@ jobs:
             # Artık yıkıcı adım iki mv işlemi (milisaniye); kesinti yalnızca
             # pm2 restart anına (~1 sn) iniyor.
             rm -rf .next-build .next-old
-            NEXT_DIST_DIR=.next-build npm run build
+            #
+            # Sunucu, aileplatformu ve aruzor ile PAYLASIMLI (2 cekirdek / 3 GB).
+            # Build diger siteleri yavaslatmasin diye: en dusuk CPU/disk onceligi,
+            # tek cekirdege sabitleme (digeri sitelere kalir) ve Node bellek tavani.
+            NODE_OPTIONS=--max-old-space-size=1280 NEXT_DIST_DIR=.next-build               nice -n 19 ionice -c3 taskset -c 1 npm run build
             # Build başarısızsa .next'e dokunulmaz, eski sürüm ayakta kalır.
             mv .next .next-old
             mv .next-build .next
