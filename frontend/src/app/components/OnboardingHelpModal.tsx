@@ -108,6 +108,26 @@ function getHelpContent(pathname: string): HelpContent {
     };
   }
 
+  if (pathname.startsWith("/takvim")) {
+    return {
+      title: "Takvim Rehberi",
+      sections: [
+        {
+          heading: "Ekonomik Takvim Nedir?",
+          body: "Borsayı etkileyebilecek makro veri açıklamalarını (enflasyon, büyüme, cari denge, ABD verileri) ve borsa tatillerini gösterir. Bir satıra dokunursan verinin piyasa için ne anlama geldiğini okursun.",
+        },
+        {
+          heading: "'Tahmini Tarih' Ne Demek?",
+          body: "Bazı verilerin günü her ay değişir. Bunlar yaklaşık gün olarak gösterilir; kesin tarih için resmi kurumun (TÜİK, TCMB, ABD BLS) takvimine bak.",
+        },
+        {
+          heading: "Diğer Bölümler",
+          body: "Temettü takvimi yaklaşan nakit temettü ödemelerini, bilanço tarihleri şirketlerin sonuç açıklama günlerini, KAP bölümü ise şirketlerin son resmi bildirimlerini listeler.",
+        },
+      ],
+    };
+  }
+
   if (pathname.startsWith("/sepetler")) {
     return {
       title: "Sepetler Rehberi",

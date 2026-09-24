@@ -5,6 +5,7 @@ import Link from "next/link";
 import { RefreshCw, CalendarDays, Newspaper, ExternalLink, Landmark, Search, X } from "lucide-react";
 import { API_BASE } from "../context/AuthContext";
 import TemettuTakvimi from "../components/TemettuTakvimi";
+import MakroTakvim from "../components/MakroTakvim";
 
 interface EarningsItem {
   symbol: string;
@@ -83,11 +84,13 @@ export default function TakvimPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-8">
       <div>
-        <h1 className="text-xl font-bold text-white">Bilanço, Temettü & KAP Takvimi</h1>
+        <h1 className="text-xl font-bold text-white">Ekonomik, Bilanço, Temettü & KAP Takvimi</h1>
         <p className="text-xs text-gray-500 mt-1">
-          Yaklaşan bilanço açıklamaları, nakit temettü ödemeleri ve şirketlerin son KAP bildirimleri.
+          Makro veri açıklamaları, borsa tatilleri, yaklaşan bilanço açıklamaları, nakit temettü ödemeleri ve şirketlerin son KAP bildirimleri.
         </p>
       </div>
+
+      <MakroTakvim />
 
       {/* Temettü takvimi en üstte: katılım finansı odaklı bir uygulamada
           temettü merkezî bir kavram ve kullanıcı bugüne kadar yalnızca

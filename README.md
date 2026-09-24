@@ -222,6 +222,7 @@ göre üretilir.
 
 **Diğer**
 - Web push bildirimleri (fiyat alarmı, temettü, KAP), PWA
+- Ekonomik takvim: enflasyon, büyüme, ABD verileri ve borsa tatilleri; her olay için kısa "piyasa için ne anlama gelir" açıklaması
 - Favori listesi, hisse karşılaştırma, ısı haritası, topluluk yorumları
 
 ---

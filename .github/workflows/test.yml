@@ -114,6 +114,10 @@ jobs:
           pip install -q httpx
           python test_marketplace.py
 
+      - name: Ekonomik takvim testi
+        working-directory: backend
+        run: python test_macro_calendar.py
+
       - name: Basarisizlikta uygulama loglari
         if: failure()
         working-directory: backend

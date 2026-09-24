@@ -31,6 +31,7 @@ from schemas import (
     TechnicalSignalItem, SectorSummaryItem, StockSectorComparison, WatchlistUpdateRequest,
     DividendPaymentItem, DividendHistoryResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
+    MacroEventItem,
     BasketSummary, BasketHolding, BasketInvestRequest, BasketInvestResponse,
     MarketplacePublishRequest, MarketplaceItemOut, MarketplaceBasketOut, MarketplaceCopyRequest,
     AchievementResponse, ReferralInfoResponse,
@@ -65,6 +66,7 @@ from bot import (
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from baskets import sepet_tanimlari, sepet_tanimi, sepet_hisseleri
+from macro_calendar import etkinlikler as makro_etkinlikler
 from marketplace import sepet_getirisi, kopya_puani, MAX_AKTIF_SEPET, KOPYA_PUANI as KOPYA_PUANI_BASINA
 from achievements import basarim_tanimlari, kazanilanlari_hesapla, Baglam
 from leaderboard_categories import (
@@ -1504,6 +1506,19 @@ def cast_stock_vote(
             db.commit()
 
     return _build_vote_response(db, stock, current_user.id)
+
+
+# --- MAKRO TAKVİM ---
+
+@app.get("/api/macro-calendar", response_model=List[MacroEventItem])
+@limiter.limit("60/minute")
+def get_macro_calendar(request: Request, days: int = Query(45, ge=1, le=120)):
+    """
+    Önümüzdeki `days` gündeki makro veri açıklamaları ve borsa tatilleri
+    (bkz. macro_calendar.py). Tarihler kural tabanlıdır; kesin olmayanlar
+    `tahmini=true` işaretlidir. Faiz kararı satırı KASITLI olarak yoktur.
+    """
+    return makro_etkinlikler(bugun_tr(), days)
 
 
 # --- KAP GENEL HABER AKIŞI ---

@@ -169,6 +169,14 @@ class EarningsCalendarItem(BaseModel):
     company_name: str
     next_earnings_date: date
 
+class MacroEventItem(BaseModel):
+    tarih: date
+    baslik: str
+    kategori: str          # TURKIYE | ABD | TATIL
+    onem: int              # 1-3
+    tahmini: bool
+    aciklama: str
+
 class PivotLevelsResponse(BaseModel):
     symbol: str
     as_of_date: Optional[str] = None
