@@ -61,7 +61,9 @@ fi
 prune() {
   local dir="$1" keep="$2"
   local n
-  n="$(ls -1t "$dir"/*.dump 2>/dev/null | wc -l)"
+  # `|| true`: klasor bos olunca ls 2 doner; pipefail + set -e yuzunden betik
+  # (yeni sunucuda bos weekly/ ile) rotasyondan once oluyordu.
+  n="$(ls -1t "$dir"/*.dump 2>/dev/null | wc -l || true)"
   if [ "$n" -gt "$keep" ]; then
     ls -1t "$dir"/*.dump | tail -n +$((keep + 1)) | while read -r f; do
       log "Siliniyor: $(basename "$f")"
