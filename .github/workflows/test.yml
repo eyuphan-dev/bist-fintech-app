@@ -109,7 +109,10 @@ jobs:
 
       - name: Pazaryeri testi (kendi gecici veritabaniyla)
         working-directory: backend
-        run: python test_marketplace.py
+        run: |
+          # TestClient httpx ister; yalnizca test icin, uretim requirements'ina girmez.
+          pip install -q httpx
+          python test_marketplace.py
 
       - name: Basarisizlikta uygulama loglari
         if: failure()
