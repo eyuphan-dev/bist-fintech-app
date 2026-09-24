@@ -108,6 +108,30 @@ function getHelpContent(pathname: string): HelpContent {
     };
   }
 
+  if (pathname.startsWith("/sepetler")) {
+    return {
+      title: "Sepetler Rehberi",
+      sections: [
+        {
+          heading: "Tematik Sepetler",
+          body: "Hazır hisse gruplarına (Temettü Kralları, Katılım Uyumlu vb.) tek seferde yatırım yaparsın. Yatırdığın tutar sepetteki hisselere eşit bölünür.",
+        },
+        {
+          heading: "Pazaryeri Nedir?",
+          body: "Diğer kullanıcıların yayınladığı sepetleri görürsün. Getiri, sepetin yayınlandığı andaki fiyatlardan itibaren hesaplanır ve sonradan değiştirilemez; yani sıralama dürüsttür.",
+        },
+        {
+          heading: "Sepet Nasıl Kopyalanır?",
+          body: "'Kopyala' ile ayıracağın tutarı girersin; tutar yayıncının ağırlıklarına göre hisselere dağıtılır ve sanal bakiyenden alınır. Kopyaladıktan sonra hisseler normal pozisyonların olur. Yalnızca borsa seansında çalışır.",
+        },
+        {
+          heading: "Kendi Sepetimi Nasıl Yayınlarım?",
+          body: "'Sepet Yayınla' ile 2-10 hisse seç, ağırlıkların toplamı %100 olsun. En fazla 5 aktif sepetin olabilir. Başkaları ilk kez kopyalayınca oyun puanı kazanırsın.",
+        },
+      ],
+    };
+  }
+
   if (pathname.startsWith("/magaza")) {
     return {
       title: "Ödül Mağazası Rehberi",

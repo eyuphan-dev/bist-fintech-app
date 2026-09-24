@@ -3,7 +3,7 @@ import re
 import secrets
 import pandas as pd
 from datetime import datetime, date, timedelta, time as dt_time, timezone as dt_timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, Response, Query
@@ -32,6 +32,7 @@ from schemas import (
     DividendPaymentItem, DividendHistoryResponse,
     BotLogResponse, BotSessionResponse, BotPerformancePoint, LeaderboardItem,
     BasketSummary, BasketHolding, BasketInvestRequest, BasketInvestResponse,
+    MarketplacePublishRequest, MarketplaceItemOut, MarketplaceBasketOut, MarketplaceCopyRequest,
     AchievementResponse, ReferralInfoResponse,
     CounterfactualResponse,
     SeasonalityResponse,
@@ -64,6 +65,7 @@ from bot import (
 )
 from kap_client import fetch_kap_disclosures, get_kap_search_url
 from baskets import sepet_tanimlari, sepet_tanimi, sepet_hisseleri
+from marketplace import sepet_getirisi, kopya_puani, MAX_AKTIF_SEPET, KOPYA_PUANI as KOPYA_PUANI_BASINA
 from achievements import basarim_tanimlari, kazanilanlari_hesapla, Baglam
 from leaderboard_categories import (
     istikrar_siralamasi, aktiflik_siralamasi, kahin_siralamasi, rutbe_hesapla, RUTBE_PUANLARI,
@@ -5084,6 +5086,56 @@ def get_basket_detail(basket_id: str, db: Session = Depends(get_db)):
     return _basket_holdings_response(db, tanim)
 
 
+def _dilimlere_alim_yap(
+    db: Session, current_user: models.User,
+    dilimler: List[tuple], atlananlar: List[str],
+) -> tuple:
+    """
+    (stock, fiyat, pay_tl) dilimlerine SANAL bakiyeden alım yapar. Komisyon
+    dahil toplam maliyet TAM OLARAK pay_tl'ye eşit olsun diye adet tersinden
+    çözülür. /api/trade ile aynı komisyon/bakiye/kayıt mantığı; çağıran
+    begin_write_transaction + commit/rollback'i yönetir. Bakiyesi yetmeyen
+    dilim atlananlar'a eklenir. Döner: (toplam_maliyet, toplam_komisyon, alinanlar).
+    """
+    komisyon_carpani = 1 + (KOMISYON_ORANI_PCT / 100.0)
+    toplam_maliyet = 0.0
+    toplam_komisyon = 0.0
+    alinanlar: List[str] = []
+    for stock, fiyat, pay in dilimler:
+        adet = pay / (fiyat * komisyon_carpani)
+        brut_tutar, komisyon, total_cost = alim_maliyeti(adet, fiyat)
+
+        if float(current_user.virtual_balance) < total_cost:
+            atlananlar.append(f"{stock.symbol} (yetersiz bakiye)")
+            continue
+
+        current_user.virtual_balance = float(current_user.virtual_balance) - total_cost
+
+        portfolio_entry = db.query(models.Portfolio).filter_by(
+            user_id=current_user.id, stock_id=stock.id, is_bot_portfolio=False
+        ).first()
+        if portfolio_entry:
+            old_qty = float(portfolio_entry.quantity)
+            old_cost = float(portfolio_entry.average_cost)
+            new_qty = old_qty + adet
+            portfolio_entry.quantity = new_qty
+            portfolio_entry.average_cost = ((old_qty * old_cost) + total_cost) / new_qty
+        else:
+            db.add(models.Portfolio(
+                user_id=current_user.id, stock_id=stock.id, quantity=adet,
+                average_cost=total_cost / adet, is_bot_portfolio=False,
+            ))
+
+        record_transaction(
+            db, user_id=current_user.id, stock_id=stock.id, action_type="AL",
+            quantity=adet, price=fiyat, source="MANUAL", commission=komisyon,
+        )
+        toplam_maliyet += total_cost
+        toplam_komisyon += komisyon
+        alinanlar.append(stock.symbol)
+    return toplam_maliyet, toplam_komisyon, alinanlar
+
+
 @app.post("/api/baskets/{basket_id}/invest", response_model=BasketInvestResponse)
 @limiter.limit("5/minute")
 def invest_in_basket(
@@ -5126,50 +5178,15 @@ def invest_in_basket(
         raise HTTPException(status_code=400, detail="Sepetteki hiçbir hissenin güncel fiyatı yok.")
 
     pay = body.amount / len(fiyatli)
-    # Komisyon dahil toplam maliyet TAM OLARAK `pay`e eşit olsun diye miktar
-    # tersinden çözülür: total_cost = adet * fiyat * (1 + oran/100).
-    komisyon_carpani = 1 + (KOMISYON_ORANI_PCT / 100.0)
 
     db.rollback()
     begin_write_transaction(db)
     try:
         current_user = db.query(models.User).filter_by(id=current_user.id).first()
 
-        toplam_maliyet = 0.0
-        toplam_komisyon = 0.0
-        alinanlar: List[str] = []
-        for stock, fiyat in fiyatli:
-            adet = pay / (fiyat * komisyon_carpani)
-            brut_tutar, komisyon, total_cost = alim_maliyeti(adet, fiyat)
-
-            if float(current_user.virtual_balance) < total_cost:
-                atlananlar.append(f"{stock.symbol} (yetersiz bakiye)")
-                continue
-
-            current_user.virtual_balance = float(current_user.virtual_balance) - total_cost
-
-            portfolio_entry = db.query(models.Portfolio).filter_by(
-                user_id=current_user.id, stock_id=stock.id, is_bot_portfolio=False
-            ).first()
-            if portfolio_entry:
-                old_qty = float(portfolio_entry.quantity)
-                old_cost = float(portfolio_entry.average_cost)
-                new_qty = old_qty + adet
-                portfolio_entry.quantity = new_qty
-                portfolio_entry.average_cost = ((old_qty * old_cost) + total_cost) / new_qty
-            else:
-                db.add(models.Portfolio(
-                    user_id=current_user.id, stock_id=stock.id, quantity=adet,
-                    average_cost=total_cost / adet, is_bot_portfolio=False,
-                ))
-
-            record_transaction(
-                db, user_id=current_user.id, stock_id=stock.id, action_type="AL",
-                quantity=adet, price=fiyat, source="MANUAL", commission=komisyon,
-            )
-            toplam_maliyet += total_cost
-            toplam_komisyon += komisyon
-            alinanlar.append(stock.symbol)
+        toplam_maliyet, toplam_komisyon, alinanlar = _dilimlere_alim_yap(
+            db, current_user, [(stock, fiyat, pay) for stock, fiyat in fiyatli], atlananlar,
+        )
 
         db.commit()
         return BasketInvestResponse(
@@ -5178,6 +5195,189 @@ def invest_in_basket(
             toplam_komisyon=round(toplam_komisyon, 2),
             alinanlar=alinanlar,
             atlananlar=atlananlar,
+            balance=round(float(current_user.virtual_balance), 2),
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+
+# --- SEPET PAZARYERİ (kullanıcı sepetleri) ---
+
+def _pazaryeri_cikti(db: Session, sepet: models.UserBasket, kopya_sayisi: int, kullanici_id: int) -> MarketplaceBasketOut:
+    kalemler = []
+    ogeler = []
+    for it in sepet.items:
+        guncel = _get_latest_db_price(db, it.stock_id) or None
+        giris = float(it.entry_price)
+        agirlik = float(it.weight_pct)
+        kalemler.append((agirlik, giris, guncel))
+        ogeler.append(MarketplaceItemOut(
+            symbol=it.stock.symbol, company_name=it.stock.company_name,
+            weight_pct=agirlik, entry_price=giris, current_price=guncel,
+            getiri_pct=round((guncel / giris - 1) * 100, 2) if guncel and giris > 0 else None,
+        ))
+    return MarketplaceBasketOut(
+        id=sepet.id, name=sepet.name, description=sepet.description,
+        owner_username=sepet.owner.username, created_at=sepet.created_at,
+        getiri_pct=sepet_getirisi(kalemler), kopya_sayisi=kopya_sayisi,
+        is_mine=sepet.owner_id == kullanici_id, items=ogeler,
+    )
+
+
+def _kopya_sayilari(db: Session, sepet_idleri: List[int]) -> Dict[int, int]:
+    """Sepet başına TEKİL (yayıncı dışı) kopyalayan sayısı -- sayaç şişirilemesin."""
+    if not sepet_idleri:
+        return {}
+    satirlar = (
+        db.query(models.UserBasketCopy.basket_id, func.count(func.distinct(models.UserBasketCopy.user_id)))
+        .join(models.UserBasket, models.UserBasket.id == models.UserBasketCopy.basket_id)
+        .filter(models.UserBasketCopy.basket_id.in_(sepet_idleri),
+                models.UserBasketCopy.user_id != models.UserBasket.owner_id)
+        .group_by(models.UserBasketCopy.basket_id)
+        .all()
+    )
+    return {b: n for b, n in satirlar}
+
+
+@app.get("/api/marketplace", response_model=List[MarketplaceBasketOut])
+@limiter.limit("60/minute")
+def list_marketplace(
+    request: Request, sort: Literal["getiri", "populer", "yeni"] = "getiri", mine: bool = False,
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    sorgu = db.query(models.UserBasket).filter(models.UserBasket.is_active.is_(True))
+    if mine:
+        sorgu = sorgu.filter(models.UserBasket.owner_id == current_user.id)
+    sepetler = sorgu.order_by(models.UserBasket.created_at.desc()).limit(100).all()
+    sayilar = _kopya_sayilari(db, [b.id for b in sepetler])
+    cikti = [_pazaryeri_cikti(db, b, sayilar.get(b.id, 0), current_user.id) for b in sepetler]
+    if sort == "getiri":
+        cikti.sort(key=lambda x: x.getiri_pct if x.getiri_pct is not None else float("-inf"), reverse=True)
+    elif sort == "populer":
+        cikti.sort(key=lambda x: x.kopya_sayisi, reverse=True)
+    return cikti
+
+
+@app.get("/api/marketplace/{basket_id}", response_model=MarketplaceBasketOut)
+def get_marketplace_basket(
+    basket_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    sepet = db.query(models.UserBasket).filter_by(id=basket_id, is_active=True).first()
+    if not sepet:
+        raise HTTPException(status_code=404, detail="Sepet bulunamadı.")
+    return _pazaryeri_cikti(db, sepet, _kopya_sayilari(db, [sepet.id]).get(sepet.id, 0), current_user.id)
+
+
+@app.post("/api/marketplace", response_model=MarketplaceBasketOut)
+@limiter.limit("5/minute")
+def publish_marketplace_basket(
+    request: Request, body: MarketplacePublishRequest,
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """
+    Sepeti YAYINLAR: yayın anındaki fiyatlar kaydedilir ve getiri buradan
+    itibaren izlenir. Yayınlandıktan sonra düzenlenemez (yalnızca silinebilir).
+    """
+    aktif = db.query(func.count(models.UserBasket.id)).filter_by(owner_id=current_user.id, is_active=True).scalar() or 0
+    if aktif >= MAX_AKTIF_SEPET:
+        raise HTTPException(status_code=400, detail=f"En fazla {MAX_AKTIF_SEPET} aktif sepetiniz olabilir. Birini silip tekrar deneyin.")
+
+    isim = nh3.clean(body.name, tags=set()).strip()
+    aciklama = nh3.clean(body.description, tags=set()).strip() if body.description else None
+    if len(isim) < 3:
+        raise HTTPException(status_code=400, detail="Sepet adı en az 3 karakter olmalı.")
+
+    sembol_agirlik = {i.symbol.upper(): i.weight_pct for i in body.items}
+    hisseler = db.query(models.Stock).filter(models.Stock.symbol.in_(list(sembol_agirlik)), models.Stock.is_active.is_(True)).all()
+    bulunan = {h.symbol for h in hisseler}
+    eksik = [sy for sy in sembol_agirlik if sy not in bulunan]
+    if eksik:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen hisse: {', '.join(eksik)}")
+
+    sepet = models.UserBasket(owner_id=current_user.id, name=isim, description=aciklama or None)
+    for h in hisseler:
+        fiyat = _get_latest_db_price(db, h.id)
+        if not fiyat:
+            raise HTTPException(status_code=400, detail=f"{h.symbol} için güncel fiyat yok, sepete eklenemez.")
+        sepet.items.append(models.UserBasketItem(stock_id=h.id, weight_pct=sembol_agirlik[h.symbol], entry_price=fiyat))
+    db.add(sepet)
+    db.commit()
+    db.refresh(sepet)
+    return _pazaryeri_cikti(db, sepet, 0, current_user.id)
+
+
+@app.delete("/api/marketplace/{basket_id}")
+@limiter.limit("10/minute")
+def delete_marketplace_basket(
+    request: Request, basket_id: int,
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    sepet = db.query(models.UserBasket).filter_by(id=basket_id, is_active=True).first()
+    # Başkasının sepeti için de 404: varlığı sızdırılmaz.
+    if not sepet or sepet.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Sepet bulunamadı.")
+    sepet.is_active = False
+    db.commit()
+    return {"message": "Sepet kaldırıldı."}
+
+
+@app.post("/api/marketplace/{basket_id}/copy", response_model=BasketInvestResponse)
+@limiter.limit("5/minute")
+def copy_marketplace_basket(
+    request: Request, basket_id: int, body: MarketplaceCopyRequest,
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """
+    Sepeti SANAL bakiyeden, yayıncının ağırlıklarına göre alır. Kopyalama sonrası
+    sepetle bağ kalmaz (normal pozisyonlar). Yayıncı, başka bir kullanıcı ilk
+    kez kopyaladığında küçük bir oyun puanı kazanır (tavanlı).
+    """
+    open_flag, _ = is_market_open()
+    if not open_flag:
+        raise HTTPException(status_code=400, detail="Borsa şu an kapalı. Sepet kopyalama yalnızca seans saatlerinde yapılabilir.")
+
+    sepet = db.query(models.UserBasket).filter_by(id=basket_id, is_active=True).first()
+    if not sepet:
+        raise HTTPException(status_code=404, detail="Sepet bulunamadı.")
+
+    fiyatli: List[tuple] = []
+    atlananlar: List[str] = []
+    for it in sepet.items:
+        fiyat = _get_latest_db_price(db, it.stock_id)
+        if fiyat:
+            fiyatli.append((it.stock, fiyat, body.amount * float(it.weight_pct) / 100.0))
+        else:
+            atlananlar.append(it.stock.symbol)
+    if not fiyatli:
+        raise HTTPException(status_code=400, detail="Sepetteki hiçbir hissenin güncel fiyatı yok.")
+
+    db.rollback()
+    begin_write_transaction(db)
+    try:
+        current_user = db.query(models.User).filter_by(id=current_user.id).first()
+        toplam_maliyet, toplam_komisyon, alinanlar = _dilimlere_alim_yap(db, current_user, fiyatli, atlananlar)
+        if not alinanlar:
+            raise HTTPException(status_code=400, detail="Bakiyeniz bu tutar için yetersiz.")
+
+        ilk_kopya = (
+            current_user.id != sepet.owner_id
+            and db.query(models.UserBasketCopy).filter_by(basket_id=sepet.id, user_id=current_user.id).first() is None
+        )
+        db.add(models.UserBasketCopy(basket_id=sepet.id, user_id=current_user.id, amount=body.amount))
+        if ilk_kopya:
+            onceki = _kopya_sayilari(db, [sepet.id]).get(sepet.id, 0) * KOPYA_PUANI_BASINA
+            kazanc = kopya_puani(onceki)
+            if kazanc:
+                yayinci = db.query(models.User).filter_by(id=sepet.owner_id).first()
+                if yayinci:
+                    yayinci.game_points = (yayinci.game_points or 0) + kazanc
+        db.commit()
+        return BasketInvestResponse(
+            message=f"{sepet.name} sepetinden {len(alinanlar)} hisse alındı.",
+            toplam_harcanan=round(toplam_maliyet, 2),
+            toplam_komisyon=round(toplam_komisyon, 2),
+            alinanlar=alinanlar, atlananlar=atlananlar,
             balance=round(float(current_user.virtual_balance), 2),
         )
     except Exception:

@@ -217,6 +217,8 @@ göre üretilir.
 - Haftalık görevler + oyun puanı → 23 eşyalık sanal ödül mağazası (profil
   çerçevesi/unvanı, gerçek parayla ilgisi yok)
 - 1v1 düello: bir arkadaşına meydan oku, 7 gün süren getiri-yüzdesi yarışı
+- Sepet pazaryeri: kendi hisse sepetini yayınla, getirisi yayın anından itibaren
+  değiştirilemez şekilde izlensin; başkalarının sepetini sanal bakiyenle tek tıkla kopyala
 
 **Diğer**
 - Web push bildirimleri (fiyat alarmı, temettü, KAP), PWA

@@ -1332,3 +1332,50 @@ class CustomFormulaResponse(BaseModel):
     reason: Optional[str] = None
     dates: List[str] = Field(default_factory=list)
     values: List[Optional[float]] = Field(default_factory=list)
+
+
+# --- SEPET PAZARYERİ ---
+
+class MarketplaceItemIn(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=10, pattern=r"^[A-Za-z0-9.]+$")
+    weight_pct: float = Field(..., gt=0, le=100, allow_inf_nan=False)
+
+
+class MarketplacePublishRequest(BaseModel):
+    name: str = Field(..., min_length=3, max_length=40)
+    description: Optional[str] = Field(None, max_length=200)
+    items: List[MarketplaceItemIn] = Field(..., min_length=2, max_length=10)
+
+    @model_validator(mode="after")
+    def _agirliklar(self):
+        semboller = [i.symbol.upper() for i in self.items]
+        if len(set(semboller)) != len(semboller):
+            raise ValueError("Aynı hisse iki kez eklenemez.")
+        if abs(sum(i.weight_pct for i in self.items) - 100.0) > 0.01:
+            raise ValueError("Ağırlıkların toplamı %100 olmalı.")
+        return self
+
+
+class MarketplaceItemOut(BaseModel):
+    symbol: str
+    company_name: str
+    weight_pct: float
+    entry_price: float
+    current_price: Optional[float] = None
+    getiri_pct: Optional[float] = None
+
+
+class MarketplaceBasketOut(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    owner_username: str
+    created_at: datetime
+    getiri_pct: Optional[float] = None
+    kopya_sayisi: int
+    is_mine: bool
+    items: List[MarketplaceItemOut]
+
+
+class MarketplaceCopyRequest(BaseModel):
+    amount: float = Field(..., gt=0, le=10_000_000, allow_inf_nan=False)

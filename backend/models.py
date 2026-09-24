@@ -1048,3 +1048,48 @@ class Notification(Base):
 
     user = relationship("User")
     stock = relationship("Stock")
+
+
+class UserBasket(Base):
+    """
+    Pazaryeri sepeti: bir kullanıcının YAYINLADIĞI hisse+ağırlık listesi
+    (bkz. marketplace.py). Yayınlandıktan sonra DEĞİŞTİRİLEMEZ -- getiri,
+    yayın anındaki fiyatlardan (UserBasketItem.entry_price) itibaren hesaplanır;
+    geçmişi sonradan süslemek mümkün olmasın diye düzenleme yolu yoktur,
+    yalnızca silinebilir (is_active=False).
+    """
+    __tablename__ = "user_baskets"
+
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(40), nullable=False)
+    description = Column(String(200), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    owner = relationship("User")
+    items = relationship("UserBasketItem", cascade="all, delete-orphan", lazy="selectin")
+
+
+class UserBasketItem(Base):
+    __tablename__ = "user_basket_items"
+    __table_args__ = (UniqueConstraint("basket_id", "stock_id", name="uq_basket_item_stock"),)
+
+    id = Column(Integer, primary_key=True)
+    basket_id = Column(Integer, ForeignKey("user_baskets.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    weight_pct = Column(Numeric(6, 2), nullable=False)      # ağırlıkların toplamı 100
+    entry_price = Column(Numeric(15, 4), nullable=False)    # yayın anındaki fiyat
+
+    stock = relationship("Stock")
+
+
+class UserBasketCopy(Base):
+    """Bir sepetin bir kullanıcı tarafından kopyalanma kaydı (sayaç + puan tekilliği için)."""
+    __tablename__ = "user_basket_copies"
+
+    id = Column(Integer, primary_key=True)
+    basket_id = Column(Integer, ForeignKey("user_baskets.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount = Column(Numeric(15, 2), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

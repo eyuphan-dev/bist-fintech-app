@@ -107,6 +107,10 @@ jobs:
           SMOKE_CI: "1"
         run: python smoke_test.py
 
+      - name: Pazaryeri testi (kendi gecici veritabaniyla)
+        working-directory: backend
+        run: python test_marketplace.py
+
       - name: Basarisizlikta uygulama loglari
         if: failure()
         working-directory: backend

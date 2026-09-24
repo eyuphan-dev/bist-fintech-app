@@ -6,6 +6,7 @@ import {
   ShoppingBasket, RefreshCw, TrendingUp, ShieldCheck, Building2, Coins, Info, X,
 } from "lucide-react";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import MarketplacePanel from "../components/MarketplacePanel";
 
 interface BasketHolding {
   symbol: string;
@@ -33,6 +34,7 @@ export default function BasketsPage() {
   const { token, loading: authLoading, refreshTrigger, bumpRefresh } = useAuth();
   const [baskets, setBaskets] = useState<Basket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sekme, setSekme] = useState<"tematik" | "pazaryeri">("tematik");
   const [activeBasket, setActiveBasket] = useState<Basket | null>(null);
   const [amount, setAmount] = useState("1000");
   const [investLoading, setInvestLoading] = useState(false);
@@ -113,14 +115,32 @@ export default function BasketsPage() {
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-white flex items-center gap-2">
-          <ShoppingBasket className="w-5 h-5 text-[#F59E0B]" /> Tematik Sepetler
+          <ShoppingBasket className="w-5 h-5 text-[#F59E0B]" /> Sepetler
         </h1>
         <p className="text-xs text-gray-500 mt-1">
-          Küratörlü hisse gruplarına tek seferde yatırım yapın — tutarınız sepetteki
-          hisselere eşit olarak bölünür. Sepetler, gerçek katılım/temettü/bilanço
-          verisine göre otomatik güncellenir.
+          {sekme === "tematik"
+            ? "Küratörlü hisse gruplarına tek seferde yatırım yapın — tutarınız sepetteki hisselere eşit olarak bölünür. Sepetler, gerçek katılım/temettü/bilanço verisine göre otomatik güncellenir."
+            : "Diğer kullanıcıların yayınladığı sepetleri getirilerine göre karşılaştırın, beğendiğinizi sanal bakiyenizle tek tıkla kopyalayın veya kendi sepetinizi yayınlayın."}
         </p>
       </div>
+
+      <div className="flex gap-2">
+        {([["tematik", "Tematik Sepetler"], ["pazaryeri", "Pazaryeri"]] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setSekme(id)}
+            className={`min-h-[40px] px-4 rounded-lg text-xs font-bold border transition ${
+              sekme === id ? "bg-[#242B35] border-[#3A4452] text-white" : "border-[#242B35] text-gray-400 hover:text-white"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {sekme === "pazaryeri" && <MarketplacePanel />}
+
+      {sekme === "tematik" && (<>
 
       {loading ? (
         <div className="bg-[#151921] border border-[#242B35] rounded-xl p-8 text-center">
@@ -183,6 +203,7 @@ export default function BasketsPage() {
           tavsiyesi değildir.
         </span>
       </p>
+      </>)}
 
       {activeBasket && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
