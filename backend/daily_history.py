@@ -79,43 +79,49 @@ def refresh_daily_history(db: Session, stock_codes: Optional[list] = None) -> in
 
 
 # ---------------------------------------------------------------------------
-# BIST 100 (XU100) endeks geçmişi — portföy/endeks kıyaslaması için
+# Endeks geçmişi (BIST 100 + BIST 30 + Banka + Katılım) — kıyaslama ve şerit için
 # ---------------------------------------------------------------------------
 BENCHMARK_SYMBOL = "XU100"
 BENCHMARK_YAHOO = "XU100.IS"
 
+# Uygulamanın izlediği endeksler: iç sembol -> Yahoo sembolü. XU100 portföy
+# kıyaslamasının referansıdır (bkz. main.py get_portfolio_benchmark); diğerleri
+# yalnızca piyasa şeridinde gösterilir.
+#
+# NOT: Yahoo, katılım endekslerinde (XKTUM, XK030) GEÇMİŞ vermiyor, yalnızca son
+# değeri veriyor (3 aylık istekte tek bar döner). Bu yüzden onların günlük
+# değişimi kendi biriktirdiğimiz satırlardan hesaplanır ve ilk gün boş kalır --
+# değişim uydurulmaz.
+ENDEKSLER = {
+    "XU100": "XU100.IS",
+    "XU030": "XU030.IS",
+    "XBANK": "XBANK.IS",
+    "XKTUM": "XKTUM.IS",
+    "XK030": "XK030.IS",
+}
 
-def refresh_index_history(db, period: str = "1y") -> int:
-    """
-    BIST 100 endeksinin günlük kapanışlarını çeker ve index_history'e yazar.
 
-    Kullanıcının portföy getirisini endekse karşı kıyaslamak için gerekir
-    ("endeksi yenebiliyor muyum?"). Endeks bir hisse olmadığı için stocks
-    tablosuna değil kendi tablosuna yazılır.
-
-    Idempotent: aynı (symbol, trade_date) için tekrar çalıştırılırsa kapanış
-    güncellenir, yeni satır açılmaz (UNIQUE kısıtı bunu garanti eder).
-    """
+def _endeks_gecmisi_yaz(db, symbol: str, yahoo: str, period: str) -> int:
     import yfinance as yf
     import models
     from yf_retry import call_with_retry
 
     try:
         hist = call_with_retry(
-            lambda: yf.Ticker(BENCHMARK_YAHOO).history(period=period, interval="1d"),
-            attempts=2, label="XU100.history",
+            lambda: yf.Ticker(yahoo).history(period=period, interval="1d"),
+            attempts=2, label=f"{symbol}.history",
         )
     except Exception as e:
-        print(f"[IndexHistory] XU100 verisi çekilemedi: {e}")
+        print(f"[IndexHistory] {symbol} verisi çekilemedi: {e}")
         return 0
 
     if hist is None or hist.empty:
-        print("[IndexHistory] XU100 için veri dönmedi.")
+        print(f"[IndexHistory] {symbol} için veri dönmedi.")
         return 0
 
     existing = {
         row.trade_date: row
-        for row in db.query(models.IndexHistory).filter_by(symbol=BENCHMARK_SYMBOL).all()
+        for row in db.query(models.IndexHistory).filter_by(symbol=symbol).all()
     }
 
     written = 0
@@ -132,12 +138,30 @@ def refresh_index_history(db, period: str = "1y") -> int:
         if current:
             current.close = close
         else:
-            db.add(models.IndexHistory(symbol=BENCHMARK_SYMBOL, trade_date=d, close=close))
+            db.add(models.IndexHistory(symbol=symbol, trade_date=d, close=close))
         written += 1
 
     db.commit()
-    print(f"[IndexHistory] XU100: {written} günlük kapanış işlendi.")
+    print(f"[IndexHistory] {symbol}: {written} günlük kapanış işlendi.")
     return written
+
+
+def refresh_index_history(db, period: str = "1y") -> int:
+    """
+    İzlenen endekslerin günlük kapanışlarını çeker ve index_history'e yazar.
+
+    XU100, kullanıcının portföy getirisini endekse karşı kıyaslamak için gerekir
+    ("endeksi yenebiliyor muyum?"). Endeksler bir hisse olmadığı için stocks
+    tablosuna değil kendi tablosuna yazılır. Bir endeksin çekilememesi diğerlerini
+    ETKİLEMEZ.
+
+    Idempotent: aynı (symbol, trade_date) için tekrar çalıştırılırsa kapanış
+    güncellenir, yeni satır açılmaz (UNIQUE kısıtı bunu garanti eder).
+    """
+    toplam = 0
+    for symbol, yahoo in ENDEKSLER.items():
+        toplam += _endeks_gecmisi_yaz(db, symbol, yahoo, period)
+    return toplam
 
 
 # ---------------------------------------------------------------------------

@@ -239,46 +239,57 @@ def store_tr_quotes(db) -> int:
 
 def store_index_intraday(db) -> int:
     """
-    BIST 100'ün gün içi değeri.
+    Endekslerin (BIST 100, BIST 30, Banka, Katılım) gün içi değeri.
 
     Bu ayrı duruyor çünkü kaynağı farklı (yfinance, proxy üzerinden) ve yalnızca
     seans saatlerinde anlamlı. Eskiden XU100 de günde bir kez, TR 11:00'de
     yazılıyordu; BİST 18:00'de kapandığı için kaydedilen "kapanış" aslında
     yarım günlük bir ara değerdi ve günlük yüzde bunun üzerinden hesaplanıyordu.
     Ölçüldü: site %+0,54 gösterirken gerçek değişim %+0,28 idi.
+
+    Her endeks kendi try/except'inde: biri alınamazsa diğerleri yazılır.
     """
     import models
+    from daily_history import ENDEKSLER
     from yf_retry import call_with_retry
 
     try:
         import yfinance as yf
-        fiyat = call_with_retry(
-            lambda: yf.Ticker("XU100.IS").fast_info["lastPrice"],
-            attempts=2, label="XU100.fast_info",
-        )
     except Exception as e:
-        print(f"[TRMarket] XU100 alinamadi: {e}")
+        print(f"[TRMarket] yfinance yuklenemedi: {e}")
         return 0
 
-    if not fiyat or float(fiyat) <= 0:
-        return 0
+    yazilan = 0
+    for symbol, yahoo in ENDEKSLER.items():
+        try:
+            fiyat = call_with_retry(
+                lambda y=yahoo: yf.Ticker(y).fast_info["lastPrice"],
+                attempts=2, label=f"{symbol}.fast_info",
+            )
+        except Exception as e:
+            print(f"[TRMarket] {symbol} alinamadi: {e}")
+            continue
 
-    gun = datetime.utcnow().date()
-    satir = (
-        db.query(models.IndexHistory)
-        .filter_by(symbol="XU100", trade_date=gun)
-        .one_or_none()
-    )
-    if satir is None:
-        satir = models.IndexHistory(symbol="XU100", trade_date=gun)
-        db.add(satir)
-    satir.close = round(float(fiyat), 2)
-    satir.updated_at = datetime.utcnow()
-    satir.source = "yfinance"
-    # XU100'ün günlük değişimi uçta bir önceki İŞLEM GÜNÜ satırından hesaplanır;
-    # kaynak hazır bir değişim vermiyor.
-    satir.change_1d_pct = None
+        if not fiyat or float(fiyat) <= 0:
+            continue
 
-    db.commit()
-    print(f"[TRMarket] XU100 guncellendi: {float(fiyat):.2f}")
-    return 1
+        gun = datetime.utcnow().date()
+        satir = (
+            db.query(models.IndexHistory)
+            .filter_by(symbol=symbol, trade_date=gun)
+            .one_or_none()
+        )
+        if satir is None:
+            satir = models.IndexHistory(symbol=symbol, trade_date=gun)
+            db.add(satir)
+        satir.close = round(float(fiyat), 2)
+        satir.updated_at = datetime.utcnow()
+        satir.source = "yfinance"
+        # Günlük değişim uçta bir önceki İŞLEM GÜNÜ satırından hesaplanır;
+        # kaynak hazır bir değişim vermiyor.
+        satir.change_1d_pct = None
+
+        db.commit()
+        yazilan += 1
+        print(f"[TRMarket] {symbol} guncellendi: {float(fiyat):.2f}")
+    return yazilan

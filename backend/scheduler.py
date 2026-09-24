@@ -376,7 +376,7 @@ def refresh_tr_quotes_job():
             try:
                 store_index_intraday(db)
             except Exception as e:
-                print(f"[Scheduler] XU100 gün içi tazeleme hatası: {e}")
+                print(f"[Scheduler] Endeks gün içi tazeleme hatası: {e}")
                 db.rollback()
     finally:
         db.close()

@@ -3645,6 +3645,10 @@ MARKET_QUOTE_LABELS = {
     "EURTRY": "Euro / TL",
     "GRAMALTIN": "Gram Altın",
     "XU100": "BIST 100",
+    "XU030": "BIST 30",
+    "XBANK": "BIST Banka",
+    "XKTUM": "Katılım Tüm",
+    "XK030": "Katılım 30",
 }
 
 

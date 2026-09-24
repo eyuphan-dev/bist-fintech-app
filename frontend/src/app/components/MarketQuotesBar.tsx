@@ -16,7 +16,8 @@ interface Quote {
 
 /** Sembole göre ondalık: kur/altın kuruş hassasiyetinde, endeks tam sayı okunur. */
 function fmtPrice(symbol: string, v: number): string {
-  const digits = symbol === "XU100" ? 0 : 2;
+  // Endeks sembolleri X ile başlar (XU100, XU030, XBANK, XKTUM, XK030): tam sayı okunur.
+  const digits = symbol.startsWith("X") ? 0 : 2;
   return v.toLocaleString("tr-TR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
@@ -50,7 +51,7 @@ const KAYNAK_ADI: Record<string, string> = {
 const TAZELEME_MS = 5 * 60 * 1000;
 
 /**
- * Döviz kurları, gram altın ve BIST 100 şeridi.
+ * Döviz kurları, gram altın ve endeks (BIST 100/30/Banka, Katılım) şeridi.
  *
  * Değerler 15 dakikada bir yurt içi kaynaktan tazelenir (bkz. tr_market.py).
  * Eskiden günde tek sefer, TR 11:00'de yazılıyordu ve sayı ertesi sabaha kadar
