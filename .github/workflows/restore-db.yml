@@ -1,0 +1,43 @@
+name: Restore DB (one-off)
+
+# Tek seferlik: sifreli off-site yedegi runner'da cozup yeni sunucuya kopyalar.
+# Parola (BACKUP_PASSPHRASE) yalnizca GitHub secret'inda oldugu icin sunucu
+# tasima sirasinda yedegi acmanin tek yolu bu. Kullanildiktan sonra silinir.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Yedek artifact'ini indir
+        uses: actions/download-artifact@v4
+        with:
+          name: db-backup-20
+          run-id: 34580542371
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifacts
+
+      - name: Coz ve sunucuya kopyala
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          f=$(find artifacts -name '*.gpg' | head -1)
+          echo "Sifreli yedek: $f"
+          gpg --batch --yes --decrypt --pinentry-mode loopback \
+              --passphrase "$PASSPHRASE" --output restore.dump "$f"
+          ls -lh restore.dump
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_key
+          chmod 600 ~/.ssh/id_key
+          scp -i ~/.ssh/id_key -o StrictHostKeyChecking=no restore.dump "$USER@$HOST:/root/restore.dump"
+          shred -u restore.dump 2>/dev/null || rm -f restore.dump
+          echo "Kopyalandi: /root/restore.dump"
